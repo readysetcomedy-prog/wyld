@@ -32,7 +32,7 @@ export default function Landing() {
             </Pressable>
           </Link>
           <Link href="/sign-up" asChild>
-            <Pressable style={[styles.navBtn, styles.navBtnPrimary]}>
+            <Pressable style={StyleSheet.flatten([styles.navBtn, styles.navBtnPrimary])}>
               <Text style={[styles.navBtnText, styles.navBtnTextPrimary]}>Get started</Text>
             </Pressable>
           </Link>
@@ -50,7 +50,7 @@ export default function Landing() {
           </Text>
           <View style={styles.heroCtas}>
             <Link href="/sign-up" asChild>
-              <Pressable style={[styles.cta, styles.ctaPrimary]}>
+              <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary])}>
                 <Text style={styles.ctaPrimaryText}>Get your gym set up</Text>
               </Pressable>
             </Link>
