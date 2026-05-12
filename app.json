@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "WyLD Pass",
+    "slug": "wyld-pass",
+    "scheme": "wyldpass",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wyld.pass"
+    },
+    "android": {
+      "package": "com.wyld.pass",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
