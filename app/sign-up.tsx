@@ -54,7 +54,7 @@ export default function SignUp() {
         <Text style={styles.sub}>
           We sent a confirmation link to {email}. Click it to finish creating your account.
         </Text>
-        <Link href="/sign-in" style={[styles.link, { marginTop: theme.spacing.lg }]}>
+        <Link href="/sign-in" style={styles.doneLink}>
           Back to sign in
         </Link>
       </ScrollView>
@@ -191,4 +191,5 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   footer: { marginTop: theme.spacing.lg, color: theme.colors.textSecondary, fontSize: 14 },
   link: { color: theme.colors.teal, fontWeight: '600' },
+  doneLink: { color: theme.colors.teal, fontWeight: '600', marginTop: theme.spacing.lg },
 });
