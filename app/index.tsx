@@ -130,26 +130,28 @@ export default function Landing() {
         </View>
       </View>
 
-      <View style={styles.gymTypes}>
-        <Text style={styles.gymTypesLabel}>Built for any kind of gym</Text>
-        <View style={styles.gymTypesPills}>
-          {[
-            'Martial arts',
-            'Rock climbing',
-            'CrossFit',
-            'Weight lifting',
-            'Yoga',
-            'Pilates',
-            'Dance',
-            'Boxing',
-            'Jiu-jitsu',
-            'Functional fitness',
-            'and more',
-          ].map((g) => (
-            <View key={g} style={styles.gymPill}>
-              <Text style={styles.gymPillText}>{g}</Text>
-            </View>
-          ))}
+      <View style={[styles.gymTypes]}>
+        <View style={styles.gymTypesInner}>
+          <Text style={styles.gymTypesLabel}>Built for any kind of gym</Text>
+          <View style={styles.gymTypesPills}>
+            {[
+              'Martial arts',
+              'Rock climbing',
+              'CrossFit',
+              'Weight lifting',
+              'Yoga',
+              'Pilates',
+              'Dance',
+              'Boxing',
+              'Jiu-jitsu',
+              'Functional fitness',
+              'and more',
+            ].map((g) => (
+              <View key={g} style={styles.gymPill}>
+                <Text style={styles.gymPillText}>{g}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -180,6 +182,7 @@ export default function Landing() {
       </View>
 
       <View style={[styles.mathBand, isWide && styles.mathBandWide]}>
+        <View style={styles.mathInner}>
         <Text style={styles.mathEyebrow}>Run your gym on autopilot.</Text>
         <Text style={styles.mathHeadline}>
           {fmt(DOOR_MONTHLY)}/mo.{'\n'}
@@ -247,6 +250,7 @@ export default function Landing() {
             title="Fewer (or zero) employees."
             body="Self-serve signup, payment, and access means you don't need someone behind a desk. Use the calculator above."
           />
+        </View>
         </View>
       </View>
 
@@ -506,7 +510,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
   },
-  navWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: theme.spacing.lg },
+  navWide: {
+    paddingHorizontal: theme.spacing.xxl,
+    paddingVertical: theme.spacing.lg,
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+  },
   brand: { flexDirection: 'row', alignItems: 'center' },
   logoSmall: { width: 96, height: 96 },
   logoSmallMobile: { width: 56, height: 56 },
@@ -544,6 +554,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xxl,
     paddingVertical: 80,
     gap: theme.spacing.xxl,
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroText: { gap: theme.spacing.md, width: '100%' },
   heroTextWide: { flex: 1, width: 'auto' },
@@ -588,7 +601,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xl,
     gap: theme.spacing.md,
   },
-  sectionWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 72 },
+  sectionWide: {
+    paddingHorizontal: theme.spacing.xxl,
+    paddingVertical: 72,
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+  },
   eyebrow: {
     color: theme.colors.teal,
     fontWeight: '700',
@@ -634,6 +653,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   mathBandWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 80 },
+  mathInner: { maxWidth: 1240, width: '100%', alignSelf: 'center', gap: theme.spacing.sm },
   mathEyebrow: {
     color: theme.colors.teal,
     fontWeight: '700',
@@ -753,7 +773,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xl,
     gap: theme.spacing.md,
   },
-  pricingSectionWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 72 },
+  pricingSectionWide: {
+    paddingHorizontal: theme.spacing.xxl,
+    paddingVertical: 72,
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+  },
 
   billingToggle: {
     flexDirection: 'row',
@@ -846,7 +872,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.md,
   },
-  finalCtaWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 72 },
+  finalCtaWide: {
+    paddingHorizontal: theme.spacing.xxl,
+    paddingVertical: 72,
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+  },
   finalCtaTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -862,6 +894,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: theme.colors.border,
+  },
+  gymTypesInner: {
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
     alignItems: 'center',
     gap: theme.spacing.sm,
   },
