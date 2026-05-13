@@ -67,21 +67,30 @@ export default function Landing() {
     <ScrollView ref={scrollRef} style={styles.root} contentContainerStyle={styles.container}>
       <View style={[styles.nav, isWide && styles.navWide]}>
         <View style={styles.brand}>
-          <Image source={{ uri: LOGO_URL }} style={styles.logoSmall} resizeMode="contain" />
+          <Image
+            source={{ uri: LOGO_URL }}
+            style={isWide ? styles.logoSmall : styles.logoSmallMobile}
+            resizeMode="contain"
+          />
         </View>
         <View style={styles.navLinks}>
           <Link href="/portfolio" asChild>
-            <Pressable style={styles.navBtn}>
+            <Pressable style={isWide ? styles.navBtn : styles.navBtnMobile}>
               <Text style={styles.navBtnText}>Portfolio</Text>
             </Pressable>
           </Link>
           <Link href="/sign-in" asChild>
-            <Pressable style={styles.navBtn}>
+            <Pressable style={isWide ? styles.navBtn : styles.navBtnMobile}>
               <Text style={styles.navBtnText}>Sign in</Text>
             </Pressable>
           </Link>
           <Link href="/sign-up" asChild>
-            <Pressable style={StyleSheet.flatten([styles.navBtn, styles.navBtnPrimary])}>
+            <Pressable
+              style={StyleSheet.flatten([
+                isWide ? styles.navBtn : styles.navBtnMobile,
+                styles.navBtnPrimary,
+              ])}
+            >
               <Text style={[styles.navBtnText, styles.navBtnTextPrimary]}>Get started</Text>
             </Pressable>
           </Link>
@@ -500,10 +509,23 @@ const styles = StyleSheet.create({
   navWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: theme.spacing.lg },
   brand: { flexDirection: 'row', alignItems: 'center' },
   logoSmall: { width: 96, height: 96 },
-  navLinks: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'center' },
+  logoSmallMobile: { width: 56, height: 56 },
+  navLinks: {
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    alignItems: 'center',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
   navBtn: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+  },
+  navBtnMobile: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
     borderRadius: theme.radius.md,
   },
   navBtnText: { color: theme.colors.charcoal, fontWeight: '600' },
@@ -755,8 +777,10 @@ const styles = StyleSheet.create({
   plans: { gap: theme.spacing.md, marginTop: theme.spacing.lg },
   plansWide: { flexDirection: 'row', alignItems: 'stretch', gap: theme.spacing.lg },
   plan: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 'auto',
     minWidth: 0,
+    width: '100%',
     padding: theme.spacing.lg,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
