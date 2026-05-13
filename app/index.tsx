@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, Redirect } from 'expo-router';
 import {
   View,
@@ -8,7 +8,7 @@ import {
   ScrollView,
   Pressable,
   useWindowDimensions,
-  Platform,
+  findNodeHandle,
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, LOGO_URL } from '@/lib/theme';
@@ -34,47 +34,6 @@ function fmt(n: number) {
   return '$' + (Number.isInteger(n) ? n.toString() : n.toFixed(2));
 }
 
-function scrollToHowItWorks() {
-  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-  const el = document.getElementById('how-it-works');
-  if (!el) return;
-
-  // Walk up to find the first ancestor that is actually scrolling.
-  let scroller: HTMLElement | null = null;
-  let parent: HTMLElement | null = el.parentElement;
-  while (parent) {
-    const style = window.getComputedStyle(parent);
-    const canScroll =
-      /(auto|scroll|overlay)/.test(style.overflowY) &&
-      parent.scrollHeight > parent.clientHeight;
-    if (canScroll) {
-      scroller = parent;
-      break;
-    }
-    parent = parent.parentElement;
-  }
-
-  if (scroller) {
-    const top =
-      scroller.scrollTop +
-      el.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top;
-    scroller.scrollTo({ top, behavior: 'smooth' });
-    return;
-  }
-
-  // Fallbacks: window scroll, then scrollIntoView.
-  const targetY = el.getBoundingClientRect().top + window.scrollY;
-  if (typeof window.scrollTo === 'function') {
-    window.scrollTo({ top: targetY, behavior: 'smooth' });
-  }
-  try {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch {
-    // no-op
-  }
-}
-
 export default function Landing() {
   const { session, loading } = useAuth();
   const { width } = useWindowDimensions();
@@ -83,11 +42,29 @@ export default function Landing() {
   const [billing, setBilling] = useState<Billing>('monthly');
   const monthlySavings = BASE_SAVINGS + employees * PER_EMPLOYEE_SAVINGS;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const howItWorksRef = useRef<View>(null);
+
+  const scrollToHowItWorks = () => {
+    const sv = scrollRef.current;
+    const view = howItWorksRef.current;
+    if (!sv || !view) return;
+    const handle = findNodeHandle(sv);
+    if (handle == null) return;
+    view.measureLayout(
+      handle,
+      (_x, y) => {
+        sv.scrollTo({ y, animated: true });
+      },
+      () => undefined,
+    );
+  };
+
   if (loading) return null;
   if (session) return <Redirect href="/dashboard" />;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+    <ScrollView ref={scrollRef} style={styles.root} contentContainerStyle={styles.container}>
       <View style={[styles.nav, isWide && styles.navWide]}>
         <View style={styles.brand}>
           <Image source={{ uri: LOGO_URL }} style={styles.logoSmall} resizeMode="contain" />
@@ -168,6 +145,7 @@ export default function Landing() {
       </View>
 
       <View
+        ref={howItWorksRef}
         nativeID="how-it-works"
         style={[styles.section, isWide && styles.sectionWide]}
       >
@@ -352,8 +330,8 @@ export default function Landing() {
             features={[
               'Everything in WyLD Pass Door',
               'Everything in WyLD Pass Site',
-              'One dashboard for all of it',
-              'One bill instead of two',
+              'Members can pay from the app OR your website — either counts as paid and unlocks the door',
+              'One dashboard, one bill',
               `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
             ]}
           />
@@ -366,7 +344,8 @@ export default function Landing() {
             features={[
               'Custom design or redesign of your site',
               'Hosting included',
-              'Payment collection',
+              'Free .com domain — or we transfer your existing one for free',
+              'Payment collection with built-in waiver at checkout',
               'Class schedule & booking',
               'Online retail store',
               'Staff management with time cards',
