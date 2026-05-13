@@ -57,7 +57,7 @@ export default function Landing() {
       </View>
 
       <View style={[styles.hero, isWide && styles.heroWide]}>
-        <View style={styles.heroText}>
+        <View style={[styles.heroText, isWide && styles.heroTextWide]}>
           <Text style={styles.heroTitle}>
             Turnkey gym access.{'\n'}No front desk needed.
           </Text>
@@ -83,7 +83,7 @@ export default function Landing() {
             <Text style={styles.trustText}>$49/mo flat</Text>
           </View>
         </View>
-        <View style={styles.heroVisual}>
+        <View style={[styles.heroVisual, isWide && styles.heroVisualWide]}>
           <Image source={{ uri: LOGO_URL }} style={styles.logoBig} resizeMode="contain" />
         </View>
       </View>
@@ -297,9 +297,11 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
     gap: theme.spacing.xxl,
   },
-  heroText: { flex: 1, gap: theme.spacing.md },
-  heroVisual: { flex: 1, alignItems: 'center' },
-  logoBig: { width: 280, height: 280 },
+  heroText: { gap: theme.spacing.md, width: '100%' },
+  heroTextWide: { flex: 1, width: 'auto' },
+  heroVisual: { alignItems: 'center', width: '100%' },
+  heroVisualWide: { flex: 1, width: 'auto' },
+  logoBig: { width: '100%', maxWidth: 280, aspectRatio: 1 },
   heroTitle: {
     fontSize: 40,
     fontWeight: '800',
