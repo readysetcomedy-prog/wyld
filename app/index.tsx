@@ -318,6 +318,7 @@ export default function Landing() {
 
         <View style={[styles.plans, isWide && styles.plansWide]}>
           <PlanCard
+            isWide={isWide}
             name="WyLD Pass Door"
             tagline="Self-serve access for your existing gym."
             setup={DOOR_SETUP}
@@ -333,6 +334,7 @@ export default function Landing() {
             ]}
           />
           <PlanCard
+            isWide={isWide}
             highlight
             name="Both · Best Value"
             tagline="The door plus a full gym website."
@@ -349,6 +351,7 @@ export default function Landing() {
             ]}
           />
           <PlanCard
+            isWide={isWide}
             name="WyLD Pass Site"
             tagline="A website for your gym, designed by us, hosted by us."
             setup={SITE_SETUP}
@@ -422,6 +425,7 @@ function PlanCard({
   features,
   savingsNote,
   highlight,
+  isWide,
 }: {
   name: string;
   tagline: string;
@@ -431,6 +435,7 @@ function PlanCard({
   features: string[];
   savingsNote?: string;
   highlight?: boolean;
+  isWide: boolean;
 }) {
   const isYearly = billing === 'yearly';
   const displayedMonthly = isYearly ? monthly * (1 - YEARLY_OFF) : monthly;
@@ -438,7 +443,13 @@ function PlanCard({
   const yearlyTotal = monthly * 12 * (1 - YEARLY_OFF);
 
   return (
-    <View style={[styles.plan, highlight && styles.planHighlight]}>
+    <View
+      style={[
+        styles.plan,
+        isWide ? styles.planWide : styles.planMobile,
+        highlight && styles.planHighlight,
+      ]}
+    >
       {highlight ? (
         <View style={styles.planBadge}>
           <Text style={styles.planBadgeText}>Best value</Text>
@@ -803,10 +814,6 @@ const styles = StyleSheet.create({
   plans: { gap: theme.spacing.md, marginTop: theme.spacing.lg },
   plansWide: { flexDirection: 'row', alignItems: 'stretch', gap: theme.spacing.lg },
   plan: {
-    flexGrow: 1,
-    flexBasis: 'auto',
-    minWidth: 0,
-    width: '100%',
     padding: theme.spacing.lg,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
@@ -814,6 +821,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     gap: theme.spacing.xs,
   },
+  planMobile: { width: '100%' },
+  planWide: { flex: 1, flexBasis: 0, minWidth: 0 },
   planHighlight: {
     backgroundColor: theme.colors.charcoal,
     borderColor: theme.colors.teal,
