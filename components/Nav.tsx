@@ -25,9 +25,11 @@ const MENU_ITEMS: Item[] = [
 
 export function Nav({
   logoUrl = LOGO_URL,
+  secondaryLogoUrl,
   accent = theme.colors.teal,
 }: {
   logoUrl?: string;
+  secondaryLogoUrl?: string;
   accent?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,6 +51,16 @@ export function Nav({
             style={isWide ? styles.logo : styles.logoMobile}
             resizeMode="contain"
           />
+          {secondaryLogoUrl ? (
+            <>
+              <Text style={isWide ? styles.brandPlus : styles.brandPlusMobile}>+</Text>
+              <Image
+                source={{ uri: secondaryLogoUrl }}
+                style={isWide ? styles.logo : styles.logoMobile}
+                resizeMode="contain"
+              />
+            </>
+          ) : null}
         </Pressable>
       </Link>
       <View style={styles.right}>
@@ -127,9 +139,11 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  brand: { flexDirection: 'row', alignItems: 'center' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   logo: { width: 96, height: 96 },
   logoMobile: { width: 56, height: 56 },
+  brandPlus: { fontSize: 24, fontWeight: '800', color: theme.colors.textSecondary },
+  brandPlusMobile: { fontSize: 16, fontWeight: '800', color: theme.colors.textSecondary },
   right: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   cta: {
     paddingHorizontal: theme.spacing.md,

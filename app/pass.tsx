@@ -223,7 +223,7 @@ export default function Pass() {
           />
           <Feature
             title="We handle the payments"
-            body="Members pay you in-app. We collect membership dues, deposit them to your account, and chase no one — if they don't pay, the door doesn't open."
+            body="Members pay you in-app. We collect membership dues, deposit them to your account, and chase no one — if they don't pay, the door doesn't open. Merchant processor fees not included."
           />
           <Feature
             title="Liability handled"
