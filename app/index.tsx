@@ -21,9 +21,23 @@ function formatMoney(n: number) {
 }
 
 function scrollToHowItWorks() {
-  if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  const el = document.getElementById('how-it-works');
+  if (!el) return;
+  let parent: HTMLElement | null = el.parentElement;
+  while (parent && parent !== document.body) {
+    const style = window.getComputedStyle(parent);
+    if (/(auto|scroll)/.test(style.overflowY)) {
+      const top =
+        parent.scrollTop +
+        el.getBoundingClientRect().top -
+        parent.getBoundingClientRect().top;
+      parent.scrollTo({ top, behavior: 'smooth' });
+      return;
+    }
+    parent = parent.parentElement;
   }
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 export default function Landing() {
@@ -218,11 +232,6 @@ export default function Landing() {
 
       <View style={[styles.finalCta, isWide && styles.finalCtaWide]}>
         <Text style={styles.finalCtaTitle}>Set up your gym in under an hour.</Text>
-        <Link href="/sign-up" asChild>
-          <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary])}>
-            <Text style={styles.ctaPrimaryText}>Get your gym set up</Text>
-          </Pressable>
-        </Link>
       </View>
 
       <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Pass</Text>
