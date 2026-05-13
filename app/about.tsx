@@ -17,7 +17,7 @@ import {
 } from '@/lib/theme';
 import { Nav } from '@/components/Nav';
 
-export default function Home() {
+export default function About() {
   const { session, loading } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -32,13 +32,33 @@ export default function Home() {
       <View style={[styles.hero, isWide && styles.heroWide]}>
         <Image
           source={{ uri: WYLD_INC_LOGO_URL }}
-          style={styles.bigLogo}
+          style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Software for gyms that runs itself.</Text>
+        <Text style={styles.eyebrow}>About</Text>
+        <Text style={styles.title}>WyLD Inc</Text>
         <Text style={styles.sub}>
-          WyLD Inc builds the tools small gyms actually use. Two products, one umbrella —
-          pick what your gym needs.
+          The umbrella company behind WyLD Pass and WyLD Site. We build software for the
+          gyms the big platforms ignore.
+        </Text>
+      </View>
+
+      <View style={[styles.section, isWide && styles.sectionWide]}>
+        <Text style={styles.h2}>What we're about</Text>
+        <Text style={styles.body}>
+          Small and mid-sized gyms spend hundreds of dollars a month, and hours of their
+          week, on stuff that should just happen on its own. Members forgetting to pay.
+          Lost keys. Front-desk shifts that exist only to let people in. Spreadsheets at
+          tax time. Websites that look like they were built in 2009.
+        </Text>
+        <Text style={styles.body}>
+          WyLD Inc builds the boring software that fixes those problems. We're not trying
+          to be Mindbody. We don't have a 20-person sales team and we don't want one. We
+          want a gym owner to sign up on a Sunday night, install a lock on Monday, and
+          stop chasing membership payments by Tuesday.
+        </Text>
+        <Text style={styles.body}>
+          Two products today. More when our customers ask for them.
         </Text>
       </View>
 
@@ -54,10 +74,8 @@ export default function Home() {
             <Image source={{ uri: LOGO_URL }} style={styles.productLogo} resizeMode="contain" />
             <Text style={[styles.productName, { color: theme.colors.teal }]}>WyLD Pass</Text>
             <Text style={styles.productTagline}>
-              Self-serve gym access. Smart lock, in-app payments, built-in waiver. Members
-              let themselves in — the door enforces payment.
+              Self-serve gym access. Smart lock, in-app payments, built-in waiver.
             </Text>
-            <Text style={[styles.productPrice, { color: theme.colors.teal }]}>$49/mo</Text>
             <Text style={[styles.productLink, { color: theme.colors.teal }]}>
               Learn about WyLD Pass →
             </Text>
@@ -79,31 +97,13 @@ export default function Home() {
             />
             <Text style={[styles.productName, { color: theme.colors.siteRed }]}>WyLD Site</Text>
             <Text style={styles.productTagline}>
-              A real website for your gym. Custom design, free domain, payments, schedule,
-              booking, retail, staff management — every module toggleable.
+              A real gym website. Schedule, booking, payments, retail, staff time cards.
             </Text>
-            <Text style={[styles.productPrice, { color: theme.colors.siteRed }]}>$29/mo</Text>
             <Text style={[styles.productLink, { color: theme.colors.siteRed }]}>
               Learn about WyLD Site →
             </Text>
           </Pressable>
         </Link>
-      </View>
-
-      <View style={[styles.aboutBand, isWide && styles.aboutBandWide]}>
-        <View style={styles.aboutInner}>
-          <Text style={styles.aboutEyebrow}>WyLD Inc</Text>
-          <Text style={styles.aboutTitle}>One company. Two products. Built for gyms.</Text>
-          <Text style={styles.aboutBody}>
-            We're not trying to be everything. We're trying to make running a gym feel like
-            running a business — not a front desk.
-          </Text>
-          <Link href="/about" asChild>
-            <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPurple])}>
-              <Text style={styles.ctaText}>About WyLD Inc</Text>
-            </Pressable>
-          </Link>
-        </View>
       </View>
 
       <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Inc</Text>
@@ -119,23 +119,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xl,
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   heroWide: {
     paddingHorizontal: theme.spacing.xxl,
-    paddingVertical: 80,
+    paddingVertical: 72,
     maxWidth: 1240,
     width: '100%',
     alignSelf: 'center',
   },
-  bigLogo: { width: '100%', maxWidth: 240, aspectRatio: 1 },
+  logo: { width: '100%', maxWidth: 160, aspectRatio: 1, marginBottom: theme.spacing.sm },
+  eyebrow: {
+    color: theme.colors.wyldPurple,
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
   title: {
-    fontSize: 36,
+    fontSize: 48,
     fontWeight: '800',
     color: theme.colors.charcoal,
     textAlign: 'center',
-    maxWidth: 720,
-    lineHeight: 44,
   },
   sub: {
     fontSize: 17,
@@ -145,16 +150,31 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
 
+  section: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  sectionWide: {
+    paddingHorizontal: theme.spacing.xxl,
+    paddingVertical: theme.spacing.xl,
+    maxWidth: 880,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  h2: { fontSize: 26, fontWeight: '800', color: theme.colors.charcoal },
+  body: { fontSize: 16, color: theme.colors.textSecondary, lineHeight: 26 },
+
   products: {
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    paddingVertical: theme.spacing.xl,
     gap: theme.spacing.md,
   },
   productsWide: {
     flexDirection: 'row',
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.xxl,
-    paddingBottom: 72,
+    paddingVertical: 72,
     maxWidth: 1240,
     width: '100%',
     alignSelf: 'center',
@@ -169,64 +189,16 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   productCardWide: { flex: 1, flexBasis: 0, minWidth: 0 },
-  productLogo: { width: 96, height: 96 },
-  productName: { fontSize: 28, fontWeight: '800' },
+  productLogo: { width: 80, height: 80 },
+  productName: { fontSize: 24, fontWeight: '800' },
   productTagline: {
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 360,
+    lineHeight: 20,
+    maxWidth: 320,
   },
-  productPrice: { fontSize: 20, fontWeight: '800', marginTop: theme.spacing.sm },
-  productLink: { fontSize: 15, fontWeight: '700', marginTop: theme.spacing.xs },
-
-  aboutBand: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.xl,
-    backgroundColor: theme.colors.charcoal,
-  },
-  aboutBandWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 72 },
-  aboutInner: {
-    maxWidth: 1240,
-    width: '100%',
-    alignSelf: 'center',
-    gap: theme.spacing.sm,
-  },
-  aboutEyebrow: {
-    color: theme.colors.wyldPurple,
-    fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  aboutTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#fff',
-    lineHeight: 36,
-    maxWidth: 720,
-  },
-  aboutBody: {
-    fontSize: 15,
-    color: '#cbd5e1',
-    lineHeight: 22,
-    maxWidth: 720,
-    marginBottom: theme.spacing.md,
-  },
-
-  cta: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
-  ctaPurple: {
-    backgroundColor: theme.colors.wyldPurple,
-    borderColor: theme.colors.wyldPurple,
-  },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  productLink: { fontSize: 14, fontWeight: '700', marginTop: theme.spacing.xs },
 
   footer: {
     textAlign: 'center',
