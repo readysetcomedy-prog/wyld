@@ -12,7 +12,7 @@ import {
 import { Link, Redirect, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { theme, LOGO_URL } from '@/lib/theme';
+import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 
 export default function SignIn() {
   const { session, loading: authLoading } = useAuth();
@@ -43,11 +43,11 @@ export default function SignIn() {
     <ScrollView contentContainerStyle={styles.container}>
       <Link href="/" asChild>
         <Pressable>
-          <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
+          <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.logo} resizeMode="contain" />
         </Pressable>
       </Link>
       <Text style={styles.title}>Welcome back</Text>
-      <Text style={styles.sub}>Sign in to your WyLD Pass account.</Text>
+      <Text style={styles.sub}>Sign in to your WyLD account.</Text>
 
       <View style={styles.field}>
         <Text style={styles.label}>Email</Text>
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   button: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: theme.colors.teal,
+    backgroundColor: theme.colors.wyldPurple,
     paddingVertical: 14,
     borderRadius: theme.radius.md,
     alignItems: 'center',
@@ -153,5 +153,5 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   footer: { marginTop: theme.spacing.lg, color: theme.colors.textSecondary, fontSize: 14 },
-  link: { color: theme.colors.teal, fontWeight: '600' },
+  link: { color: theme.colors.wyldPurple, fontWeight: '600' },
 });

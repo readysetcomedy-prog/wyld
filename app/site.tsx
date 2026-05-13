@@ -102,7 +102,7 @@ export default function Site() {
           <Step
             n="3"
             title="Run it from your dashboard"
-            body="Toggle modules on and off, update content, see analytics, run payroll. No website builder fiddling."
+            body="Toggle modules on and off, update content, see analytics. No website builder fiddling."
           />
         </View>
       </View>
@@ -157,7 +157,7 @@ export default function Site() {
         </Link>
       </View>
 
-      <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Site</Text>
+      <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Inc</Text>
     </ScrollView>
   );
 }

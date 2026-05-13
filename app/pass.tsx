@@ -252,7 +252,7 @@ export default function Pass() {
         </View>
       </View>
 
-      <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Pass</Text>
+      <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Inc</Text>
     </ScrollView>
   );
 }
