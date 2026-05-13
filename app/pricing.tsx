@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
-import { Image } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, LOGO_URL, SITE_LOGO_URL } from '@/lib/theme';
 import { Nav } from '@/components/Nav';
@@ -52,14 +51,9 @@ export default function Pricing() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      <Nav />
+      <Nav logoUrl={LOGO_URL} secondaryLogoUrl={SITE_LOGO_URL} />
 
       <View style={[styles.section, isWide && styles.sectionWide]}>
-        <View style={styles.logoRow}>
-          <Image source={{ uri: LOGO_URL }} style={styles.heroLogo} resizeMode="contain" />
-          <Text style={styles.logoPlus}>+</Text>
-          <Image source={{ uri: SITE_LOGO_URL }} style={styles.heroLogo} resizeMode="contain" />
-        </View>
         <Text style={styles.eyebrow}>Pricing</Text>
         <Text style={styles.title}>One door. One website. Or both, at a discount.</Text>
         <Text style={styles.sub}>
@@ -310,18 +304,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-  },
-  heroLogo: { width: 72, height: 72 },
-  logoPlus: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: theme.colors.textSecondary,
-  },
   eyebrow: {
     color: theme.colors.teal,
     fontWeight: '700',
