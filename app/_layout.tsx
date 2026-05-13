@@ -12,6 +12,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="sign-up" />
+        <Stack.Screen name="portfolio" />
         <Stack.Screen name="dashboard" />
       </Stack>
     </AuthProvider>

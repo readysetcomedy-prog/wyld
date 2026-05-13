@@ -16,28 +16,63 @@ import { theme, LOGO_URL } from '@/lib/theme';
 const BASE_SAVINGS = 490;
 const PER_EMPLOYEE_SAVINGS = 4500;
 
-function formatMoney(n: number) {
-  return '$' + n.toLocaleString('en-US');
+const DOOR_SETUP = 199;
+const DOOR_MONTHLY = 49;
+const SITE_SETUP = 299;
+const SITE_MONTHLY = 29;
+const BUNDLE_SETUP_DISCOUNT = 100;
+const BUNDLE_MONTHLY_DISCOUNT = 10;
+const YEARLY_OFF = 0.2;
+const LOCK_HARDWARE_COST = 70;
+
+const BUNDLE_SETUP = DOOR_SETUP + SITE_SETUP - BUNDLE_SETUP_DISCOUNT;
+const BUNDLE_MONTHLY = DOOR_MONTHLY + SITE_MONTHLY - BUNDLE_MONTHLY_DISCOUNT;
+
+type Billing = 'monthly' | 'yearly';
+
+function fmt(n: number) {
+  return '$' + (Number.isInteger(n) ? n.toString() : n.toFixed(2));
 }
 
 function scrollToHowItWorks() {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
   const el = document.getElementById('how-it-works');
   if (!el) return;
+
+  // Walk up to find the first ancestor that is actually scrolling.
+  let scroller: HTMLElement | null = null;
   let parent: HTMLElement | null = el.parentElement;
-  while (parent && parent !== document.body) {
+  while (parent) {
     const style = window.getComputedStyle(parent);
-    if (/(auto|scroll)/.test(style.overflowY)) {
-      const top =
-        parent.scrollTop +
-        el.getBoundingClientRect().top -
-        parent.getBoundingClientRect().top;
-      parent.scrollTo({ top, behavior: 'smooth' });
-      return;
+    const canScroll =
+      /(auto|scroll|overlay)/.test(style.overflowY) &&
+      parent.scrollHeight > parent.clientHeight;
+    if (canScroll) {
+      scroller = parent;
+      break;
     }
     parent = parent.parentElement;
   }
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  if (scroller) {
+    const top =
+      scroller.scrollTop +
+      el.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top;
+    scroller.scrollTo({ top, behavior: 'smooth' });
+    return;
+  }
+
+  // Fallbacks: window scroll, then scrollIntoView.
+  const targetY = el.getBoundingClientRect().top + window.scrollY;
+  if (typeof window.scrollTo === 'function') {
+    window.scrollTo({ top: targetY, behavior: 'smooth' });
+  }
+  try {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch {
+    // no-op
+  }
 }
 
 export default function Landing() {
@@ -45,6 +80,7 @@ export default function Landing() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const [employees, setEmployees] = useState(0);
+  const [billing, setBilling] = useState<Billing>('monthly');
   const monthlySavings = BASE_SAVINGS + employees * PER_EMPLOYEE_SAVINGS;
 
   if (loading) return null;
@@ -57,6 +93,11 @@ export default function Landing() {
           <Image source={{ uri: LOGO_URL }} style={styles.logoSmall} resizeMode="contain" />
         </View>
         <View style={styles.navLinks}>
+          <Link href="/portfolio" asChild>
+            <Pressable style={styles.navBtn}>
+              <Text style={styles.navBtnText}>Portfolio</Text>
+            </Pressable>
+          </Link>
           <Link href="/sign-in" asChild>
             <Pressable style={styles.navBtn}>
               <Text style={styles.navBtnText}>Sign in</Text>
@@ -76,8 +117,9 @@ export default function Landing() {
             Turnkey gym access.{'\n'}No front desk needed.
           </Text>
           <Text style={styles.heroSub}>
-            Members sign up, sign the waiver, and pay from their phone. The lock won't
-            open until they do.
+            Members sign up, sign the waiver, and pay you from their phone — we handle the
+            payment processing and drop the money in your account. The lock won't open
+            until they're paid.
           </Text>
           <View style={styles.heroCtas}>
             <Link href="/sign-up" asChild>
@@ -94,11 +136,34 @@ export default function Landing() {
             <Text style={styles.trustDot}>·</Text>
             <Text style={styles.trustText}>Cancel anytime</Text>
             <Text style={styles.trustDot}>·</Text>
-            <Text style={styles.trustText}>$49/mo flat</Text>
+            <Text style={styles.trustText}>Pay monthly or save 20% yearly</Text>
           </View>
         </View>
         <View style={[styles.heroVisual, isWide && styles.heroVisualWide]}>
           <Image source={{ uri: LOGO_URL }} style={styles.logoBig} resizeMode="contain" />
+        </View>
+      </View>
+
+      <View style={styles.gymTypes}>
+        <Text style={styles.gymTypesLabel}>Built for any kind of gym</Text>
+        <View style={styles.gymTypesPills}>
+          {[
+            'Martial arts',
+            'Rock climbing',
+            'CrossFit',
+            'Weight lifting',
+            'Yoga',
+            'Pilates',
+            'Dance',
+            'Boxing',
+            'Jiu-jitsu',
+            'Functional fitness',
+            'and more',
+          ].map((g) => (
+            <View key={g} style={styles.gymPill}>
+              <Text style={styles.gymPillText}>{g}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
@@ -112,7 +177,7 @@ export default function Landing() {
           <Step
             n="1"
             title="Install the lock"
-            body="Pop a smart lock on your door and enter your lock ID in your dashboard."
+            body={`Pop a smart lock on your door (about $${LOCK_HARDWARE_COST} one-time hardware) and enter your lock ID in your dashboard.`}
           />
           <Step
             n="2"
@@ -122,7 +187,7 @@ export default function Landing() {
           <Step
             n="3"
             title="Members let themselves in"
-            body="Sign the waiver, pay, walk in. No payment, no entry — the door enforces it for you."
+            body="Sign the waiver, pay you through the app, walk in. No payment, no entry — the door enforces it for you."
           />
         </View>
       </View>
@@ -130,9 +195,9 @@ export default function Landing() {
       <View style={[styles.mathBand, isWide && styles.mathBandWide]}>
         <Text style={styles.mathEyebrow}>Run your gym on autopilot.</Text>
         <Text style={styles.mathHeadline}>
-          $49/mo.{'\n'}
+          {fmt(DOOR_MONTHLY)}/mo.{'\n'}
           <Text style={styles.mathHeadlineAccent}>
-            Saves the average gym {formatMoney(BASE_SAVINGS)}/mo.
+            Saves the average gym {fmt(BASE_SAVINGS)}/mo.
           </Text>
         </Text>
         <Text style={styles.mathSub}>Based on real averages from real gyms.</Text>
@@ -158,14 +223,14 @@ export default function Landing() {
               </Pressable>
             </View>
             <Text style={styles.calcHint}>
-              We assume ~{formatMoney(PER_EMPLOYEE_SAVINGS)}/mo per employee in fully-loaded
-              cost. Drop them all, or just the front-desk shift.
+              We assume ~{fmt(PER_EMPLOYEE_SAVINGS)}/mo per employee in fully-loaded cost.
+              Drop them all, or just the front-desk shift.
             </Text>
           </View>
           <View style={styles.calcRight}>
             <Text style={styles.calcResultLabel}>Estimated monthly savings</Text>
-            <Text style={styles.calcResultValue}>{formatMoney(monthlySavings)}</Text>
-            <Text style={styles.calcResultSub}>after $49/mo for WyLD Pass</Text>
+            <Text style={styles.calcResultValue}>{fmt(monthlySavings)}</Text>
+            <Text style={styles.calcResultSub}>after {fmt(DOOR_MONTHLY)}/mo for WyLD Pass</Text>
           </View>
         </View>
 
@@ -207,6 +272,10 @@ export default function Landing() {
             body="Searchable directory plus a QR code unique to you. One scan and they're a member. Use it as 'Powered by WyLD Pass,' or link members straight from your existing website."
           />
           <Feature
+            title="We handle the payments"
+            body="Members pay you in-app. We collect membership dues, deposit them to your account, and chase no one — if they don't pay, the door doesn't open."
+          />
+          <Feature
             title="Liability handled"
             body="Built-in waiver makes the member responsible for anyone they let in. If a non-member gets hurt, it's on the member who let them through."
           />
@@ -217,17 +286,100 @@ export default function Landing() {
         </View>
       </View>
 
-      <View style={[styles.pricingBand, isWide && styles.pricingBandWide]}>
-        <View style={styles.pricingCard}>
-          <Text style={styles.pricingPrice}>$49</Text>
-          <Text style={styles.pricingPeriod}>per month</Text>
-          <Text style={styles.pricingTagline}>Everything. No contract. Cancel anytime.</Text>
-          <Link href="/sign-up" asChild>
-            <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary, styles.pricingCta])}>
-              <Text style={styles.ctaPrimaryText}>Get your gym set up</Text>
-            </Pressable>
-          </Link>
+      <View style={[styles.pricingSection, isWide && styles.pricingSectionWide]}>
+        <Text style={styles.eyebrow}>Pricing</Text>
+        <Text style={styles.sectionTitle}>Pick what you need. Skip what you don't.</Text>
+
+        <View style={styles.billingToggle}>
+          <Pressable
+            style={[
+              styles.billingOption,
+              billing === 'monthly' && styles.billingOptionActive,
+            ]}
+            onPress={() => setBilling('monthly')}
+          >
+            <Text
+              style={[
+                styles.billingOptionText,
+                billing === 'monthly' && styles.billingOptionTextActive,
+              ]}
+            >
+              Monthly
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.billingOption,
+              billing === 'yearly' && styles.billingOptionActive,
+            ]}
+            onPress={() => setBilling('yearly')}
+          >
+            <Text
+              style={[
+                styles.billingOptionText,
+                billing === 'yearly' && styles.billingOptionTextActive,
+              ]}
+            >
+              Yearly · Save 20%
+            </Text>
+          </Pressable>
         </View>
+
+        <View style={[styles.plans, isWide && styles.plansWide]}>
+          <PlanCard
+            name="WyLD Pass Door"
+            tagline="Self-serve access for your existing gym."
+            setup={DOOR_SETUP}
+            monthly={DOOR_MONTHLY}
+            billing={billing}
+            features={[
+              'Smart-lock self-serve entry',
+              'Built-in waiver',
+              'Membership payments collected for you',
+              'Unique QR code + searchable in-app listing',
+              'Tax-ready reports',
+              `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
+            ]}
+          />
+          <PlanCard
+            highlight
+            name="Both · Best Value"
+            tagline="The door plus a full gym website."
+            setup={BUNDLE_SETUP}
+            monthly={BUNDLE_MONTHLY}
+            billing={billing}
+            savingsNote={`$${BUNDLE_SETUP_DISCOUNT} off setup · $${BUNDLE_MONTHLY_DISCOUNT}/mo off`}
+            features={[
+              'Everything in WyLD Pass Door',
+              'Everything in WyLD Pass Site',
+              'One dashboard for all of it',
+              'One bill instead of two',
+              `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
+            ]}
+          />
+          <PlanCard
+            name="WyLD Pass Site"
+            tagline="A website for your gym, designed by us, hosted by us."
+            setup={SITE_SETUP}
+            monthly={SITE_MONTHLY}
+            billing={billing}
+            features={[
+              'Custom design or redesign of your site',
+              'Hosting included',
+              'Payment collection',
+              'Class schedule & booking',
+              'Online retail store',
+              'Staff management with time cards',
+              'Detailed analytics & reporting',
+              'Turn any module on or off in your dashboard',
+            ]}
+          />
+        </View>
+
+        <Text style={styles.pricingFinePrint}>
+          All prices in USD. Yearly billing is 20% off everything, setup included. No
+          contract, cancel anytime.
+        </Text>
       </View>
 
       <View style={[styles.finalCta, isWide && styles.finalCtaWide]}>
@@ -265,6 +417,92 @@ function Feature({ title, body }: { title: string; body: string }) {
     <View style={styles.feature}>
       <Text style={styles.featureTitle}>{title}</Text>
       <Text style={styles.featureBody}>{body}</Text>
+    </View>
+  );
+}
+
+function PlanCard({
+  name,
+  tagline,
+  setup,
+  monthly,
+  billing,
+  features,
+  savingsNote,
+  highlight,
+}: {
+  name: string;
+  tagline: string;
+  setup: number;
+  monthly: number;
+  billing: Billing;
+  features: string[];
+  savingsNote?: string;
+  highlight?: boolean;
+}) {
+  const isYearly = billing === 'yearly';
+  const displayedMonthly = isYearly ? monthly * (1 - YEARLY_OFF) : monthly;
+  const displayedSetup = isYearly ? setup * (1 - YEARLY_OFF) : setup;
+  const yearlyTotal = monthly * 12 * (1 - YEARLY_OFF);
+
+  return (
+    <View style={[styles.plan, highlight && styles.planHighlight]}>
+      {highlight ? (
+        <View style={styles.planBadge}>
+          <Text style={styles.planBadgeText}>Best value</Text>
+        </View>
+      ) : null}
+      <Text style={[styles.planName, highlight && styles.planNameLight]}>{name}</Text>
+      <Text style={[styles.planTagline, highlight && styles.planTaglineLight]}>{tagline}</Text>
+
+      <View style={styles.planPriceRow}>
+        <Text style={[styles.planPrice, highlight && styles.planPriceLight]}>
+          {fmt(displayedMonthly)}
+        </Text>
+        <Text style={[styles.planPriceUnit, highlight && styles.planPriceUnitLight]}>
+          {isYearly ? '/mo, billed yearly' : '/month'}
+        </Text>
+      </View>
+      <Text style={[styles.planSetup, highlight && styles.planSetupLight]}>
+        + {fmt(displayedSetup)} one-time setup
+      </Text>
+      {isYearly ? (
+        <Text style={[styles.planYearTotal, highlight && styles.planYearTotalLight]}>
+          {fmt(yearlyTotal)} billed once a year
+        </Text>
+      ) : null}
+      {savingsNote ? (
+        <Text style={[styles.planSavings, highlight && styles.planSavingsLight]}>
+          {savingsNote}
+        </Text>
+      ) : null}
+
+      <View style={styles.planDivider} />
+
+      {features.map((f) => (
+        <View key={f} style={styles.planFeatureRow}>
+          <Text style={[styles.planFeatureCheck, highlight && styles.planFeatureCheckLight]}>
+            ✓
+          </Text>
+          <Text style={[styles.planFeature, highlight && styles.planFeatureLight]}>{f}</Text>
+        </View>
+      ))}
+
+      <Link href="/sign-up" asChild>
+        <Pressable
+          style={StyleSheet.flatten([
+            styles.cta,
+            highlight ? styles.planCtaHighlight : styles.ctaPrimary,
+            styles.planCta,
+          ])}
+        >
+          <Text
+            style={[styles.ctaPrimaryText, highlight && styles.planCtaHighlightText]}
+          >
+            Get started
+          </Text>
+        </Pressable>
+      </Link>
     </View>
   );
 }
@@ -495,9 +733,10 @@ const styles = StyleSheet.create({
   statBody: { color: '#cbd5e1', fontSize: 14, lineHeight: 21 },
 
   features: { gap: theme.spacing.md, marginTop: theme.spacing.lg },
-  featuresWide: { flexDirection: 'row', gap: theme.spacing.lg },
+  featuresWide: { flexDirection: 'row', gap: theme.spacing.lg, flexWrap: 'wrap' },
   feature: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 260,
     backgroundColor: theme.colors.surface,
     padding: theme.spacing.lg,
     borderRadius: theme.radius.lg,
@@ -508,38 +747,95 @@ const styles = StyleSheet.create({
   featureTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.charcoal },
   featureBody: { fontSize: 15, color: theme.colors.textSecondary, lineHeight: 22 },
 
-  pricingBand: {
+  pricingSection: {
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xl,
-    alignItems: 'center',
+    gap: theme.spacing.md,
   },
-  pricingBandWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 72 },
-  pricingCard: {
-    width: '100%',
-    maxWidth: 440,
-    padding: theme.spacing.xl,
+  pricingSectionWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: 72 },
+
+  billingToggle: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.md,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginTop: theme.spacing.md,
+  },
+  billingOption: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+  },
+  billingOptionActive: { backgroundColor: theme.colors.charcoal },
+  billingOptionText: { fontSize: 14, fontWeight: '700', color: theme.colors.textSecondary },
+  billingOptionTextActive: { color: '#fff' },
+
+  plans: { gap: theme.spacing.md, marginTop: theme.spacing.lg },
+  plansWide: { flexDirection: 'row', alignItems: 'stretch', gap: theme.spacing.lg },
+  plan: {
+    flex: 1,
+    minWidth: 0,
+    padding: theme.spacing.lg,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
-    alignItems: 'center',
     gap: theme.spacing.xs,
   },
-  pricingPrice: {
-    fontSize: 64,
-    fontWeight: '800',
-    color: theme.colors.charcoal,
-    lineHeight: 68,
+  planHighlight: {
+    backgroundColor: theme.colors.charcoal,
+    borderColor: theme.colors.teal,
   },
-  pricingPeriod: { color: theme.colors.textSecondary, fontSize: 15 },
-  pricingTagline: {
-    color: theme.colors.charcoal,
-    fontSize: 15,
-    textAlign: 'center',
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+  planBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.teal,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    marginBottom: theme.spacing.xs,
   },
-  pricingCta: { width: '100%', alignItems: 'center' },
+  planBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  planName: { fontSize: 20, fontWeight: '800', color: theme.colors.charcoal },
+  planNameLight: { color: '#fff' },
+  planTagline: { fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  planTaglineLight: { color: '#cbd5e1' },
+  planPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: theme.spacing.md,
+    gap: 6,
+  },
+  planPrice: { fontSize: 44, fontWeight: '800', color: theme.colors.charcoal, lineHeight: 48 },
+  planPriceLight: { color: '#fff' },
+  planPriceUnit: { color: theme.colors.textSecondary, fontSize: 14, paddingBottom: 6 },
+  planPriceUnitLight: { color: '#cbd5e1' },
+  planSetup: { color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 },
+  planSetupLight: { color: '#cbd5e1' },
+  planYearTotal: { color: theme.colors.textSecondary, fontSize: 12 },
+  planYearTotalLight: { color: '#94a3b8' },
+  planSavings: { color: theme.colors.teal, fontSize: 13, fontWeight: '700', marginTop: 4 },
+  planSavingsLight: { color: theme.colors.teal },
+  planDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: theme.spacing.md,
+  },
+  planFeatureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
+  planFeatureCheck: { color: theme.colors.teal, fontWeight: '800', fontSize: 14, lineHeight: 20 },
+  planFeatureCheckLight: { color: theme.colors.teal },
+  planFeature: { color: theme.colors.charcoal, fontSize: 14, lineHeight: 20, flex: 1 },
+  planFeatureLight: { color: '#cbd5e1' },
+  planCta: { marginTop: theme.spacing.md, alignItems: 'center' },
+  planCtaHighlight: { backgroundColor: theme.colors.teal, borderColor: theme.colors.teal },
+  planCtaHighlightText: { color: '#fff' },
+  pricingFinePrint: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    marginTop: theme.spacing.md,
+  },
 
   finalCta: {
     paddingHorizontal: theme.spacing.lg,
@@ -555,6 +851,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 640,
   },
+
+  gymTypes: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.lg,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  gymTypesLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  gymTypesPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+    maxWidth: 880,
+  },
+  gymPill: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  gymPillText: { color: theme.colors.charcoal, fontSize: 13, fontWeight: '600' },
 
   footer: {
     textAlign: 'center',
