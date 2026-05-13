@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   navWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: theme.spacing.lg },
   brand: { flexDirection: 'row', alignItems: 'center' },
-  logoSmall: { width: 48, height: 48 },
+  logoSmall: { width: 96, height: 96 },
   navLinks: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'center' },
   navBtn: {
     paddingHorizontal: theme.spacing.md,
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   heroText: { flex: 1, gap: theme.spacing.md },
   heroVisual: { flex: 1, alignItems: 'center' },
-  logoBig: { width: 560, height: 560, maxWidth: '100%' },
+  logoBig: { width: 280, height: 280 },
   heroTitle: {
     fontSize: 40,
     fontWeight: '800',
