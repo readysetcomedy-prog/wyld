@@ -12,23 +12,12 @@ import {
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, LOGO_URL } from '@/lib/theme';
+import { Nav } from '@/components/Nav';
 
 const BASE_SAVINGS = 490;
 const PER_EMPLOYEE_SAVINGS = 4500;
-
-const DOOR_SETUP = 199;
 const DOOR_MONTHLY = 49;
-const SITE_SETUP = 299;
-const SITE_MONTHLY = 29;
-const BUNDLE_SETUP_DISCOUNT = 100;
-const BUNDLE_MONTHLY_DISCOUNT = 10;
-const YEARLY_OFF = 0.2;
 const LOCK_HARDWARE_COST = 70;
-
-const BUNDLE_SETUP = DOOR_SETUP + SITE_SETUP - BUNDLE_SETUP_DISCOUNT;
-const BUNDLE_MONTHLY = DOOR_MONTHLY + SITE_MONTHLY - BUNDLE_MONTHLY_DISCOUNT;
-
-type Billing = 'monthly' | 'yearly';
 
 function fmt(n: number) {
   return '$' + (Number.isInteger(n) ? n.toString() : n.toFixed(2));
@@ -39,7 +28,6 @@ export default function Landing() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const [employees, setEmployees] = useState(0);
-  const [billing, setBilling] = useState<Billing>('monthly');
   const monthlySavings = BASE_SAVINGS + employees * PER_EMPLOYEE_SAVINGS;
 
   const scrollRef = useRef<ScrollView>(null);
@@ -65,40 +53,11 @@ export default function Landing() {
 
   return (
     <ScrollView ref={scrollRef} style={styles.root} contentContainerStyle={styles.container}>
-      <View style={[styles.nav, isWide && styles.navWide]}>
-        <View style={styles.brand}>
-          <Image
-            source={{ uri: LOGO_URL }}
-            style={isWide ? styles.logoSmall : styles.logoSmallMobile}
-            resizeMode="contain"
-          />
-        </View>
-        <View style={styles.navLinks}>
-          <Link href="/portfolio" asChild>
-            <Pressable style={isWide ? styles.navBtn : styles.navBtnMobile}>
-              <Text style={styles.navBtnText}>Portfolio</Text>
-            </Pressable>
-          </Link>
-          <Link href="/sign-in" asChild>
-            <Pressable style={isWide ? styles.navBtn : styles.navBtnMobile}>
-              <Text style={styles.navBtnText}>Sign in</Text>
-            </Pressable>
-          </Link>
-          <Link href="/sign-up" asChild>
-            <Pressable
-              style={StyleSheet.flatten([
-                isWide ? styles.navBtn : styles.navBtnMobile,
-                styles.navBtnPrimary,
-              ])}
-            >
-              <Text style={[styles.navBtnText, styles.navBtnTextPrimary]}>Get started</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
+      <Nav />
 
       <View style={[styles.hero, isWide && styles.heroWide]}>
         <View style={[styles.heroText, isWide && styles.heroTextWide]}>
+          <Text style={styles.brandEyebrow}>WyLD Pass</Text>
           <Text style={styles.heroTitle}>
             Turnkey gym access.{'\n'}No front desk needed.
           </Text>
@@ -277,108 +236,20 @@ export default function Landing() {
         </View>
       </View>
 
-      <View style={[styles.pricingSection, isWide && styles.pricingSectionWide]}>
-        <Text style={styles.eyebrow}>Pricing</Text>
-        <Text style={styles.sectionTitle}>Pick what you need. Skip what you don't.</Text>
-
-        <View style={styles.billingToggle}>
-          <Pressable
-            style={[
-              styles.billingOption,
-              billing === 'monthly' && styles.billingOptionActive,
-            ]}
-            onPress={() => setBilling('monthly')}
-          >
-            <Text
-              style={[
-                styles.billingOptionText,
-                billing === 'monthly' && styles.billingOptionTextActive,
-              ]}
-            >
-              Monthly
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.billingOption,
-              billing === 'yearly' && styles.billingOptionActive,
-            ]}
-            onPress={() => setBilling('yearly')}
-          >
-            <Text
-              style={[
-                styles.billingOptionText,
-                billing === 'yearly' && styles.billingOptionTextActive,
-              ]}
-            >
-              Yearly · Save 20%
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={[styles.plans, isWide && styles.plansWide]}>
-          <PlanCard
-            isWide={isWide}
-            name="WyLD Pass Door"
-            tagline="Self-serve access for your existing gym."
-            setup={DOOR_SETUP}
-            monthly={DOOR_MONTHLY}
-            billing={billing}
-            features={[
-              'Smart-lock self-serve entry',
-              'Built-in waiver',
-              'Membership payments collected for you',
-              'Unique QR code + searchable in-app listing',
-              'Tax-ready reports',
-              `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
-            ]}
-          />
-          <PlanCard
-            isWide={isWide}
-            highlight
-            name="Both · Best Value"
-            tagline="The door plus a full gym website."
-            setup={BUNDLE_SETUP}
-            monthly={BUNDLE_MONTHLY}
-            billing={billing}
-            savingsNote={`$${BUNDLE_SETUP_DISCOUNT} off setup · $${BUNDLE_MONTHLY_DISCOUNT}/mo off`}
-            features={[
-              'Everything in WyLD Pass Door',
-              'Everything in WyLD Pass Site',
-              'Members can pay from the app OR your website — either counts as paid and unlocks the door',
-              'One dashboard, one bill',
-              `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
-            ]}
-          />
-          <PlanCard
-            isWide={isWide}
-            name="WyLD Pass Site"
-            tagline="A website for your gym, designed by us, hosted by us."
-            setup={SITE_SETUP}
-            monthly={SITE_MONTHLY}
-            billing={billing}
-            features={[
-              'Custom design or redesign of your site',
-              'Hosting included',
-              'Free .com domain — or we transfer your existing one for free',
-              'Payment collection with built-in waiver at checkout',
-              'Class schedule & booking',
-              'Online retail store',
-              'Staff management with time cards',
-              'Detailed analytics & reporting',
-              'Turn any module on or off in your dashboard',
-            ]}
-          />
-        </View>
-
-        <Text style={styles.pricingFinePrint}>
-          All prices in USD. Yearly billing is 20% off everything, setup included. No
-          contract, cancel anytime.
-        </Text>
-      </View>
-
       <View style={[styles.finalCta, isWide && styles.finalCtaWide]}>
         <Text style={styles.finalCtaTitle}>Set up your gym in under an hour.</Text>
+        <View style={styles.finalCtas}>
+          <Link href="/sign-up" asChild>
+            <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary])}>
+              <Text style={styles.ctaPrimaryText}>Get your gym set up</Text>
+            </Pressable>
+          </Link>
+          <Link href="/pricing" asChild>
+            <Pressable style={styles.cta}>
+              <Text style={styles.ctaText}>See pricing</Text>
+            </Pressable>
+          </Link>
+        </View>
       </View>
 
       <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Pass</Text>
@@ -416,142 +287,9 @@ function Feature({ title, body }: { title: string; body: string }) {
   );
 }
 
-function PlanCard({
-  name,
-  tagline,
-  setup,
-  monthly,
-  billing,
-  features,
-  savingsNote,
-  highlight,
-  isWide,
-}: {
-  name: string;
-  tagline: string;
-  setup: number;
-  monthly: number;
-  billing: Billing;
-  features: string[];
-  savingsNote?: string;
-  highlight?: boolean;
-  isWide: boolean;
-}) {
-  const isYearly = billing === 'yearly';
-  const displayedMonthly = isYearly ? monthly * (1 - YEARLY_OFF) : monthly;
-  const displayedSetup = isYearly ? setup * (1 - YEARLY_OFF) : setup;
-  const yearlyTotal = monthly * 12 * (1 - YEARLY_OFF);
-
-  return (
-    <View
-      style={[
-        styles.plan,
-        isWide ? styles.planWide : styles.planMobile,
-        highlight && styles.planHighlight,
-      ]}
-    >
-      {highlight ? (
-        <View style={styles.planBadge}>
-          <Text style={styles.planBadgeText}>Best value</Text>
-        </View>
-      ) : null}
-      <Text style={[styles.planName, highlight && styles.planNameLight]}>{name}</Text>
-      <Text style={[styles.planTagline, highlight && styles.planTaglineLight]}>{tagline}</Text>
-
-      <View style={styles.planPriceRow}>
-        <Text style={[styles.planPrice, highlight && styles.planPriceLight]}>
-          {fmt(displayedMonthly)}
-        </Text>
-        <Text style={[styles.planPriceUnit, highlight && styles.planPriceUnitLight]}>
-          {isYearly ? '/mo, billed yearly' : '/month'}
-        </Text>
-      </View>
-      <Text style={[styles.planSetup, highlight && styles.planSetupLight]}>
-        + {fmt(displayedSetup)} one-time setup
-      </Text>
-      {isYearly ? (
-        <Text style={[styles.planYearTotal, highlight && styles.planYearTotalLight]}>
-          {fmt(yearlyTotal)} billed once a year
-        </Text>
-      ) : null}
-      {savingsNote ? (
-        <Text style={[styles.planSavings, highlight && styles.planSavingsLight]}>
-          {savingsNote}
-        </Text>
-      ) : null}
-
-      <View style={styles.planDivider} />
-
-      {features.map((f) => (
-        <View key={f} style={styles.planFeatureRow}>
-          <Text style={[styles.planFeatureCheck, highlight && styles.planFeatureCheckLight]}>
-            ✓
-          </Text>
-          <Text style={[styles.planFeature, highlight && styles.planFeatureLight]}>{f}</Text>
-        </View>
-      ))}
-
-      <Link href="/sign-up" asChild>
-        <Pressable
-          style={StyleSheet.flatten([
-            styles.cta,
-            highlight ? styles.planCtaHighlight : styles.ctaPrimary,
-            styles.planCta,
-          ])}
-        >
-          <Text
-            style={[styles.ctaPrimaryText, highlight && styles.planCtaHighlightText]}
-          >
-            Get started
-          </Text>
-        </Pressable>
-      </Link>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   container: { paddingBottom: theme.spacing.xxl },
-
-  nav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  navWide: {
-    paddingHorizontal: theme.spacing.xxl,
-    paddingVertical: theme.spacing.lg,
-    maxWidth: 1240,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  brand: { flexDirection: 'row', alignItems: 'center' },
-  logoSmall: { width: 96, height: 96 },
-  logoSmallMobile: { width: 56, height: 56 },
-  navLinks: {
-    flexDirection: 'row',
-    gap: theme.spacing.xs,
-    alignItems: 'center',
-    flexShrink: 1,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-  },
-  navBtn: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-  },
-  navBtnMobile: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 6,
-    borderRadius: theme.radius.md,
-  },
-  navBtnText: { color: theme.colors.charcoal, fontWeight: '600' },
-  navBtnPrimary: { backgroundColor: theme.colors.charcoal },
-  navBtnTextPrimary: { color: '#fff' },
 
   hero: {
     paddingHorizontal: theme.spacing.lg,
@@ -568,6 +306,13 @@ const styles = StyleSheet.create({
     maxWidth: 1240,
     width: '100%',
     alignSelf: 'center',
+  },
+  brandEyebrow: {
+    color: theme.colors.teal,
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   heroText: { gap: theme.spacing.md, width: '100%' },
   heroTextWide: { flex: 1, width: 'auto' },
@@ -779,100 +524,11 @@ const styles = StyleSheet.create({
   featureTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.charcoal },
   featureBody: { fontSize: 15, color: theme.colors.textSecondary, lineHeight: 22 },
 
-  pricingSection: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.xl,
-    gap: theme.spacing.md,
-  },
-  pricingSectionWide: {
-    paddingHorizontal: theme.spacing.xxl,
-    paddingVertical: 72,
-    maxWidth: 1240,
-    width: '100%',
-    alignSelf: 'center',
-  },
-
-  billingToggle: {
+  finalCtas: {
     flexDirection: 'row',
-    alignSelf: 'flex-start',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginTop: theme.spacing.md,
-  },
-  billingOption: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.sm,
-  },
-  billingOptionActive: { backgroundColor: theme.colors.charcoal },
-  billingOptionText: { fontSize: 14, fontWeight: '700', color: theme.colors.textSecondary },
-  billingOptionTextActive: { color: '#fff' },
-
-  plans: { gap: theme.spacing.md, marginTop: theme.spacing.lg },
-  plansWide: { flexDirection: 'row', alignItems: 'stretch', gap: theme.spacing.lg },
-  plan: {
-    padding: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-    gap: theme.spacing.xs,
-  },
-  planMobile: { width: '100%' },
-  planWide: { flex: 1, flexBasis: 0, minWidth: 0 },
-  planHighlight: {
-    backgroundColor: theme.colors.charcoal,
-    borderColor: theme.colors.teal,
-  },
-  planBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: theme.colors.teal,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    marginBottom: theme.spacing.xs,
-  },
-  planBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1 },
-  planName: { fontSize: 20, fontWeight: '800', color: theme.colors.charcoal },
-  planNameLight: { color: '#fff' },
-  planTagline: { fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
-  planTaglineLight: { color: '#cbd5e1' },
-  planPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginTop: theme.spacing.md,
-    gap: 6,
-  },
-  planPrice: { fontSize: 44, fontWeight: '800', color: theme.colors.charcoal, lineHeight: 48 },
-  planPriceLight: { color: '#fff' },
-  planPriceUnit: { color: theme.colors.textSecondary, fontSize: 14, paddingBottom: 6 },
-  planPriceUnitLight: { color: '#cbd5e1' },
-  planSetup: { color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 },
-  planSetupLight: { color: '#cbd5e1' },
-  planYearTotal: { color: theme.colors.textSecondary, fontSize: 12 },
-  planYearTotalLight: { color: '#94a3b8' },
-  planSavings: { color: theme.colors.teal, fontSize: 13, fontWeight: '700', marginTop: 4 },
-  planSavingsLight: { color: theme.colors.teal },
-  planDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginVertical: theme.spacing.md,
-  },
-  planFeatureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  planFeatureCheck: { color: theme.colors.teal, fontWeight: '800', fontSize: 14, lineHeight: 20 },
-  planFeatureCheckLight: { color: theme.colors.teal },
-  planFeature: { color: theme.colors.charcoal, fontSize: 14, lineHeight: 20, flex: 1 },
-  planFeatureLight: { color: '#cbd5e1' },
-  planCta: { marginTop: theme.spacing.md, alignItems: 'center' },
-  planCtaHighlight: { backgroundColor: theme.colors.teal, borderColor: theme.colors.teal },
-  planCtaHighlightText: { color: '#fff' },
-  pricingFinePrint: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
-    marginTop: theme.spacing.md,
+    gap: theme.spacing.sm,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
 
   finalCta: {

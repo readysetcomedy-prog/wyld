@@ -2,6 +2,8 @@ export const theme = {
   colors: {
     teal: '#14B8A6',
     tealDark: '#0F766E',
+    siteRed: '#DC2626',
+    siteRedDark: '#B91C1C',
     charcoal: '#0F172A',
     background: '#FFFFFF',
     surface: '#F8FAFC',
@@ -16,3 +18,6 @@ export const theme = {
 
 export const LOGO_URL =
   'https://qkprkwydxbtybaxylhln.supabase.co/storage/v1/object/public/message-images/7e9a48d3-adc1-42f8-83eb-fc4296ec7eb9.png';
+
+export const SITE_LOGO_URL =
+  'https://qkprkwydxbtybaxylhln.supabase.co/storage/v1/object/public/message-images/1f467554-110e-4f32-af73-6893786429ae.png';

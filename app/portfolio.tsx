@@ -2,39 +2,17 @@ import { Link } from 'expo-router';
 import {
   View,
   Text,
-  Image,
   Pressable,
   StyleSheet,
   ScrollView,
-  useWindowDimensions,
 } from 'react-native';
-import { theme, LOGO_URL } from '@/lib/theme';
+import { theme } from '@/lib/theme';
+import { Nav } from '@/components/Nav';
 
 export default function Portfolio() {
-  const { width } = useWindowDimensions();
-  const isWide = width >= 768;
-
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      <View style={[styles.nav, isWide && styles.navWide]}>
-        <Link href="/" asChild>
-          <Pressable style={styles.brand}>
-            <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
-          </Pressable>
-        </Link>
-        <View style={styles.navLinks}>
-          <Link href="/" asChild>
-            <Pressable style={styles.navBtn}>
-              <Text style={styles.navBtnText}>Home</Text>
-            </Pressable>
-          </Link>
-          <Link href="/sign-up" asChild>
-            <Pressable style={StyleSheet.flatten([styles.navBtn, styles.navBtnPrimary])}>
-              <Text style={[styles.navBtnText, styles.navBtnTextPrimary]}>Get started</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </View>
+      <Nav />
 
       <View style={styles.body}>
         <Text style={styles.eyebrow}>Portfolio</Text>
@@ -56,25 +34,6 @@ export default function Portfolio() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   container: { paddingBottom: theme.spacing.xxl, minHeight: '100%' },
-  nav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  navWide: { paddingHorizontal: theme.spacing.xxl, paddingVertical: theme.spacing.lg },
-  brand: { flexDirection: 'row', alignItems: 'center' },
-  logo: { width: 96, height: 96 },
-  navLinks: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'center' },
-  navBtn: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-  },
-  navBtnText: { color: theme.colors.charcoal, fontWeight: '600' },
-  navBtnPrimary: { backgroundColor: theme.colors.charcoal },
-  navBtnTextPrimary: { color: '#fff' },
   body: {
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xxl,
