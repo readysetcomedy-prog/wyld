@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, Redirect } from 'expo-router';
 import {
   View,
@@ -7,14 +8,30 @@ import {
   ScrollView,
   Pressable,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, LOGO_URL } from '@/lib/theme';
+
+const BASE_SAVINGS = 490;
+const PER_EMPLOYEE_SAVINGS = 4500;
+
+function formatMoney(n: number) {
+  return '$' + n.toLocaleString('en-US');
+}
+
+function scrollToHowItWorks() {
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+  }
+}
 
 export default function Landing() {
   const { session, loading } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+  const [employees, setEmployees] = useState(0);
+  const monthlySavings = BASE_SAVINGS + employees * PER_EMPLOYEE_SAVINGS;
 
   if (loading) return null;
   if (session) return <Redirect href="/dashboard" />;
@@ -54,11 +71,9 @@ export default function Landing() {
                 <Text style={styles.ctaPrimaryText}>Get your gym set up</Text>
               </Pressable>
             </Link>
-            <Link href="#how-it-works" asChild>
-              <Pressable style={styles.cta}>
-                <Text style={styles.ctaText}>See how it works</Text>
-              </Pressable>
-            </Link>
+            <Pressable style={styles.cta} onPress={scrollToHowItWorks}>
+              <Text style={styles.ctaText}>See how it works</Text>
+            </Pressable>
           </View>
           <View style={styles.trustStrip}>
             <Text style={styles.trustText}>No contract</Text>
@@ -73,7 +88,10 @@ export default function Landing() {
         </View>
       </View>
 
-      <View style={[styles.section, isWide && styles.sectionWide]}>
+      <View
+        nativeID="how-it-works"
+        style={[styles.section, isWide && styles.sectionWide]}
+      >
         <Text style={styles.eyebrow}>How it works</Text>
         <Text style={styles.sectionTitle}>Three steps to a fully self-serve gym.</Text>
         <View style={[styles.steps, isWide && styles.stepsWide]}>
@@ -99,21 +117,69 @@ export default function Landing() {
         <Text style={styles.mathEyebrow}>Run your gym on autopilot.</Text>
         <Text style={styles.mathHeadline}>
           $49/mo.{'\n'}
-          <Text style={styles.mathHeadlineAccent}>Saves the average gym $490/mo.</Text>
+          <Text style={styles.mathHeadlineAccent}>
+            Saves the average gym {formatMoney(BASE_SAVINGS)}/mo.
+          </Text>
         </Text>
-        <Text style={styles.mathSub}>Based on real numbers from a real gym.</Text>
+        <Text style={styles.mathSub}>Based on real averages from real gyms.</Text>
+
+        <View style={[styles.calculator, isWide && styles.calculatorWide]}>
+          <View style={styles.calcLeft}>
+            <Text style={styles.calcLabel}>How many employees do you have?</Text>
+            <View style={styles.stepper}>
+              <Pressable
+                style={styles.stepperBtn}
+                onPress={() => setEmployees((n) => Math.max(0, n - 1))}
+                accessibilityLabel="Decrease employees"
+              >
+                <Text style={styles.stepperBtnText}>−</Text>
+              </Pressable>
+              <Text style={styles.stepperValue}>{employees}</Text>
+              <Pressable
+                style={styles.stepperBtn}
+                onPress={() => setEmployees((n) => n + 1)}
+                accessibilityLabel="Increase employees"
+              >
+                <Text style={styles.stepperBtnText}>+</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.calcHint}>
+              We assume ~{formatMoney(PER_EMPLOYEE_SAVINGS)}/mo per employee in fully-loaded
+              cost. Drop them all, or just the front-desk shift.
+            </Text>
+          </View>
+          <View style={styles.calcRight}>
+            <Text style={styles.calcResultLabel}>Estimated monthly savings</Text>
+            <Text style={styles.calcResultValue}>{formatMoney(monthlySavings)}</Text>
+            <Text style={styles.calcResultSub}>after $49/mo for WyLD Pass</Text>
+          </View>
+        </View>
+
+        <Text style={styles.whyTitle}>Where the savings come from</Text>
         <View style={[styles.statGrid, isWide && styles.statGridWide]}>
           <Stat
             title="Stop chasing payments."
-            body="No payment, no access. The door enforces it for you."
+            body="No payment, no access. The door enforces it for you — no awkward texts, no excuses."
           />
           <Stat
-            title="No more lost keys."
-            body="Every member's access is digital, tied to their account, revocable in one tap."
+            title="Lapsed members re-up faster."
+            body="When the door actually locks them out, 'I'll catch up next week' turns into a payment today."
           />
           <Stat
-            title="No more shared codes."
-            body="Friends can't piggyback in on a member's code — the waiver makes the member financially responsible if they do."
+            title="Piggybackers become members."
+            body="The waiver makes a member financially liable for anyone they let in. Most of them just buy their own membership instead."
+          />
+          <Stat
+            title="Sign-ups happen 24/7."
+            body="No more 'come back when we're open.' Someone walks up at 11pm, scans the QR, signs the waiver, pays, walks in."
+          />
+          <Stat
+            title="No lost keys, no rekeying."
+            body="Access is digital and tied to the account. Cancel a member, the door stops opening for them."
+          />
+          <Stat
+            title="Fewer (or zero) employees."
+            body="Self-serve signup, payment, and access means you don't need someone behind a desk. Use the calculator above."
           />
         </View>
       </View>
@@ -233,7 +299,7 @@ const styles = StyleSheet.create({
   },
   heroText: { flex: 1, gap: theme.spacing.md },
   heroVisual: { flex: 1, alignItems: 'center' },
-  logoBig: { width: 280, height: 280 },
+  logoBig: { width: 560, height: 560, maxWidth: '100%' },
   heroTitle: {
     fontSize: 40,
     fontWeight: '800',
@@ -334,10 +400,79 @@ const styles = StyleSheet.create({
   },
   mathHeadlineAccent: { color: theme.colors.teal },
   mathSub: { color: '#94a3b8', fontSize: 14, marginBottom: theme.spacing.md },
-  statGrid: { gap: theme.spacing.md, marginTop: theme.spacing.md },
-  statGridWide: { flexDirection: 'row', gap: theme.spacing.lg },
-  stat: {
+
+  calculator: {
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    gap: theme.spacing.lg,
+  },
+  calculatorWide: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xl },
+  calcLeft: { flex: 1, gap: theme.spacing.sm },
+  calcRight: {
     flex: 1,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.md,
+    backgroundColor: 'rgba(20,184,166,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(20,184,166,0.30)',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  calcLabel: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.xs,
+  },
+  stepperBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperBtnText: { color: '#fff', fontSize: 22, fontWeight: '800', lineHeight: 24 },
+  stepperValue: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    minWidth: 48,
+    textAlign: 'center',
+  },
+  calcHint: { color: '#cbd5e1', fontSize: 13, lineHeight: 19, marginTop: theme.spacing.xs },
+  calcResultLabel: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  calcResultValue: {
+    color: '#fff',
+    fontSize: 44,
+    fontWeight: '800',
+    lineHeight: 50,
+  },
+  calcResultSub: { color: '#cbd5e1', fontSize: 13 },
+
+  whyTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+    marginTop: theme.spacing.xl,
+  },
+  statGrid: { gap: theme.spacing.md, marginTop: theme.spacing.md },
+  statGridWide: { flexDirection: 'row', gap: theme.spacing.lg, flexWrap: 'wrap' },
+  stat: {
+    flexGrow: 1,
+    flexBasis: 260,
     padding: theme.spacing.lg,
     borderRadius: theme.radius.lg,
     backgroundColor: 'rgba(255,255,255,0.04)',
