@@ -15,7 +15,8 @@ type Item = { label: string; href: string };
 
 const MENU_ITEMS: Item[] = [
   { label: 'Home', href: '/' },
-  { label: 'WyLD Pass', href: '/' },
+  { label: 'About WyLD Inc', href: '/about' },
+  { label: 'WyLD Pass', href: '/pass' },
   { label: 'WyLD Site', href: '/site' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Portfolio', href: '/portfolio' },
