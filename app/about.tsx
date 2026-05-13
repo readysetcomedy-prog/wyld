@@ -58,7 +58,7 @@ export default function About() {
           don't want one.
         </Text>
         <Text style={styles.body}>
-          Two products today. More when our customers ask for them.
+          More on the way as customers ask for them.
         </Text>
       </View>
 

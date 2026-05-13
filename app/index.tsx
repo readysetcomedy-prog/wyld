@@ -35,10 +35,10 @@ export default function Home() {
           style={styles.bigLogo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Software for gyms that runs itself.</Text>
+        <Text style={styles.title}>Software that just works.</Text>
         <Text style={styles.sub}>
-          WyLD Inc builds the tools small gyms actually use. Two products, one umbrella —
-          pick what your gym needs.
+          WyLD Inc builds tools that solve real problems for real businesses. Pick what
+          you need.
         </Text>
       </View>
 
@@ -91,10 +91,10 @@ export default function Home() {
       <View style={[styles.aboutBand, isWide && styles.aboutBandWide]}>
         <View style={styles.aboutInner}>
           <Text style={styles.aboutEyebrow}>WyLD Inc</Text>
-          <Text style={styles.aboutTitle}>One company. Building software that just works.</Text>
+          <Text style={styles.aboutTitle}>We build until it works. Then we ship.</Text>
           <Text style={styles.aboutBody}>
             We pick a problem, build until it actually works, ship it, and only then look
-            at the next one. Two products today. More when our customers ask for them.
+            at the next one. More on the way as customers ask for them.
           </Text>
           <Link href="/about" asChild>
             <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPurple])}>

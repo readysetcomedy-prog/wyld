@@ -114,9 +114,9 @@ export default function Site() {
           <Feature title="Custom design" body="Real design or redesign of your site, not a template you fill in." />
           <Feature title="Hosting" body="Fast, reliable hosting included in the monthly. No separate bill, no upsell." />
           <Feature title="Free domain" body="Free .com — or we transfer the one you already own for free." />
-          <Feature title="Payment collection" body="Take payments online, with a built-in waiver at checkout. Same waiver protection as WyLD Pass." />
+          <Feature title="Payment collection" body="Take payments online, with a built-in waiver at checkout. Same waiver protection as WyLD Pass. Merchant processor fees not included." />
           <Feature title="Schedule & booking" body="Classes, drop-ins, private sessions. Members book themselves." />
-          <Feature title="Online retail" body="Sell shirts, gear, supplements, gift cards. Inventory and orders in your dashboard." />
+          <Feature title="Online retail" body="Sell shirts, gear, supplements, gift cards. Inventory and orders in your dashboard. 5% retail fee plus merchant processor fees apply." />
           <Feature title="Staff & time cards" body="Add employees, set roles, track clock-ins and hours. Export for payroll." />
           <Feature title="Analytics & reporting" body="Revenue, members, top sellers, schedule fill rates. Export for taxes." />
         </View>
@@ -139,9 +139,9 @@ export default function Site() {
                 <Text style={styles.ctaPrimaryText}>See bundle pricing</Text>
               </Pressable>
             </Link>
-            <Link href="/" asChild>
-              <Pressable style={styles.cta}>
-                <Text style={styles.ctaText}>Learn about WyLD Pass</Text>
+            <Link href="/pass" asChild>
+              <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaTeal])}>
+                <Text style={styles.ctaTealText}>Learn about WyLD Pass</Text>
               </Pressable>
             </Link>
           </View>
@@ -238,6 +238,8 @@ const styles = StyleSheet.create({
   ctaText: { color: theme.colors.charcoal, fontWeight: '700', fontSize: 16 },
   ctaPrimary: { backgroundColor: theme.colors.siteRed, borderColor: theme.colors.siteRed },
   ctaPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  ctaTeal: { backgroundColor: theme.colors.teal, borderColor: theme.colors.teal },
+  ctaTealText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   trustStrip: {
     flexDirection: 'row',
     alignItems: 'center',
