@@ -91,10 +91,10 @@ export default function Home() {
       <View style={[styles.aboutBand, isWide && styles.aboutBandWide]}>
         <View style={styles.aboutInner}>
           <Text style={styles.aboutEyebrow}>WyLD Inc</Text>
-          <Text style={styles.aboutTitle}>We build until it works. Then we ship.</Text>
+          <Text style={styles.aboutTitle}>You have problems. We build solutions.</Text>
           <Text style={styles.aboutBody}>
-            We pick a problem, build until it actually works, ship it, and only then look
-            at the next one. More on the way as customers ask for them.
+            You focus on your business. Let us focus on making that as easy and convenient
+            as possible.
           </Text>
           <Link href="/about" asChild>
             <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPurple])}>
