@@ -12,7 +12,7 @@ import {
 import { Link, Redirect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { theme, WYLD_INC_WYLD_INC_LOGO_URL } from '@/lib/theme';
+import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 
 export default function SignUp() {
   const { session, loading: authLoading } = useAuth();
