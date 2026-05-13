@@ -45,11 +45,11 @@ export default function Home() {
       <View style={[styles.products, isWide && styles.productsWide]}>
         <Link href="/pass" asChild>
           <Pressable
-            style={[
+            style={StyleSheet.flatten([
               styles.productCard,
               { borderColor: theme.colors.teal },
               isWide && styles.productCardWide,
-            ]}
+            ])}
           >
             <Image source={{ uri: LOGO_URL }} style={styles.productLogo} resizeMode="contain" />
             <Text style={[styles.productName, { color: theme.colors.teal }]}>WyLD Pass</Text>
@@ -66,11 +66,11 @@ export default function Home() {
 
         <Link href="/site" asChild>
           <Pressable
-            style={[
+            style={StyleSheet.flatten([
               styles.productCard,
               { borderColor: theme.colors.siteRed },
               isWide && styles.productCardWide,
-            ]}
+            ])}
           >
             <Image
               source={{ uri: SITE_LOGO_URL }}
