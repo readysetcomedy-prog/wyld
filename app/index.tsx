@@ -57,7 +57,6 @@ export default function Home() {
               Self-serve gym access. Smart lock, in-app payments, built-in waiver. Members
               let themselves in — the door enforces payment.
             </Text>
-            <Text style={[styles.productPrice, { color: theme.colors.teal }]}>$49/mo</Text>
             <Text style={[styles.productLink, { color: theme.colors.teal }]}>
               Learn about WyLD Pass →
             </Text>
@@ -82,7 +81,6 @@ export default function Home() {
               A real website for your gym. Custom design, free domain, payments, schedule,
               booking, retail, staff management — every module toggleable.
             </Text>
-            <Text style={[styles.productPrice, { color: theme.colors.siteRed }]}>$29/mo</Text>
             <Text style={[styles.productLink, { color: theme.colors.siteRed }]}>
               Learn about WyLD Site →
             </Text>
@@ -93,10 +91,10 @@ export default function Home() {
       <View style={[styles.aboutBand, isWide && styles.aboutBandWide]}>
         <View style={styles.aboutInner}>
           <Text style={styles.aboutEyebrow}>WyLD Inc</Text>
-          <Text style={styles.aboutTitle}>One company. Two products. Built for gyms.</Text>
+          <Text style={styles.aboutTitle}>One company. Building software that just works.</Text>
           <Text style={styles.aboutBody}>
-            We're not trying to be everything. We're trying to make running a gym feel like
-            running a business — not a front desk.
+            We pick a problem, build until it actually works, ship it, and only then look
+            at the next one. Two products today. More when our customers ask for them.
           </Text>
           <Link href="/about" asChild>
             <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPurple])}>
@@ -178,7 +176,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxWidth: 360,
   },
-  productPrice: { fontSize: 20, fontWeight: '800', marginTop: theme.spacing.sm },
   productLink: { fontSize: 15, fontWeight: '700', marginTop: theme.spacing.xs },
 
   aboutBand: {

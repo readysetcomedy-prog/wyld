@@ -1,7 +1,7 @@
 import { Redirect, router } from 'expo-router';
 import { View, Text, StyleSheet, Pressable, Image, ScrollView } from 'react-native';
 import { useAuth, Role } from '@/lib/auth';
-import { theme, LOGO_URL } from '@/lib/theme';
+import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 
 const ROLE_LABEL: Record<Role, string> = {
   admin: 'Admin',
@@ -19,7 +19,7 @@ export default function Dashboard() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
+        <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.logo} resizeMode="contain" />
         <Pressable
           onPress={async () => {
             await signOut();
@@ -43,8 +43,7 @@ export default function Dashboard() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>You're in.</Text>
         <Text style={styles.cardBody}>
-          This is a placeholder dashboard. Next up: admin gym creation, gym search, waivers,
-          and Stripe.
+          This is a placeholder dashboard. We'll fill it in as features land.
         </Text>
       </View>
     </ScrollView>
@@ -71,7 +70,7 @@ const styles = StyleSheet.create({
   },
   roleBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: theme.colors.teal,
+    backgroundColor: theme.colors.wyldPurple,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
     borderRadius: 999,

@@ -12,7 +12,7 @@ import {
 import { Link, Redirect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { theme, LOGO_URL } from '@/lib/theme';
+import { theme, WYLD_INC_WYLD_INC_LOGO_URL } from '@/lib/theme';
 
 export default function SignUp() {
   const { session, loading: authLoading } = useAuth();
@@ -49,7 +49,7 @@ export default function SignUp() {
   if (done) {
     return (
       <ScrollView contentContainerStyle={styles.container}>
-        <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
+        <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>Check your email</Text>
         <Text style={styles.sub}>
           We sent a confirmation link to {email}. Click it to finish creating your account.
@@ -65,12 +65,12 @@ export default function SignUp() {
     <ScrollView contentContainerStyle={styles.container}>
       <Link href="/" asChild>
         <Pressable>
-          <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
+          <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.logo} resizeMode="contain" />
         </Pressable>
       </Link>
       <Text style={styles.title}>Create your account</Text>
       <Text style={styles.sub}>
-        You'll start as a member. Join or claim a gym after signing up.
+        One account for everything WyLD. Pick what you want to use after signing up.
       </Text>
 
       <View style={styles.field}>
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   button: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: theme.colors.teal,
+    backgroundColor: theme.colors.wyldPurple,
     paddingVertical: 14,
     borderRadius: theme.radius.md,
     alignItems: 'center',
@@ -190,6 +190,6 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   footer: { marginTop: theme.spacing.lg, color: theme.colors.textSecondary, fontSize: 14 },
-  link: { color: theme.colors.teal, fontWeight: '600' },
-  doneLink: { color: theme.colors.teal, fontWeight: '600', marginTop: theme.spacing.lg },
+  link: { color: theme.colors.wyldPurple, fontWeight: '600' },
+  doneLink: { color: theme.colors.wyldPurple, fontWeight: '600', marginTop: theme.spacing.lg },
 });

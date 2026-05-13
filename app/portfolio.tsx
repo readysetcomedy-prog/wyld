@@ -6,27 +6,29 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { theme } from '@/lib/theme';
+import { theme, SITE_LOGO_URL } from '@/lib/theme';
 import { Nav } from '@/components/Nav';
 
 export default function Portfolio() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      <Nav />
+      <Nav logoUrl={SITE_LOGO_URL} accent={theme.colors.siteRed} />
 
       <View style={styles.body}>
-        <Text style={styles.eyebrow}>Portfolio</Text>
-        <Text style={styles.title}>Coming soon.</Text>
+        <Text style={styles.eyebrow}>WyLD Site</Text>
+        <Text style={styles.title}>Website Portfolio</Text>
         <Text style={styles.bodyText}>
-          We're putting together gym sites and rollouts we've built. Check back shortly —
-          or get in touch and we'll send you the latest set.
+          A look at the sites we've designed and shipped. Coming soon — we're putting the
+          first set together now. Get in touch and we'll send you what we have so far.
         </Text>
-        <Link href="/" asChild>
+        <Link href="/site" asChild>
           <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary])}>
-            <Text style={styles.ctaPrimaryText}>Back to home</Text>
+            <Text style={styles.ctaPrimaryText}>About WyLD Site</Text>
           </Pressable>
         </Link>
       </View>
+
+      <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Inc</Text>
     </ScrollView>
   );
 }
@@ -41,10 +43,10 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   eyebrow: {
-    color: theme.colors.teal,
-    fontWeight: '700',
+    color: theme.colors.siteRed,
+    fontWeight: '800',
     fontSize: 13,
-    letterSpacing: 1,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   title: {
@@ -68,6 +70,15 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     marginTop: theme.spacing.md,
   },
-  ctaPrimary: { backgroundColor: theme.colors.teal, borderColor: theme.colors.teal },
+  ctaPrimary: {
+    backgroundColor: theme.colors.siteRed,
+    borderColor: theme.colors.siteRed,
+  },
   ctaPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  footer: {
+    textAlign: 'center',
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xl,
+    fontSize: 13,
+  },
 });

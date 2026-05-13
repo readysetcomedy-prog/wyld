@@ -39,23 +39,23 @@ export default function About() {
         <Text style={styles.title}>WyLD Inc</Text>
         <Text style={styles.sub}>
           The umbrella company behind WyLD Pass and WyLD Site. We build software for the
-          gyms the big platforms ignore.
+          businesses the big platforms ignore.
         </Text>
       </View>
 
       <View style={[styles.section, isWide && styles.sectionWide]}>
         <Text style={styles.h2}>What we're about</Text>
         <Text style={styles.body}>
-          Small and mid-sized gyms spend hundreds of dollars a month, and hours of their
-          week, on stuff that should just happen on its own. Members forgetting to pay.
-          Lost keys. Front-desk shifts that exist only to let people in. Spreadsheets at
-          tax time. Websites that look like they were built in 2009.
+          Small business owners spend hundreds of dollars a month, and hours of their
+          week, on stuff that should just happen on its own. Chasing payments. Keys that
+          walk off. Spreadsheets at tax time. Websites that look like they were built in
+          2009.
         </Text>
         <Text style={styles.body}>
-          WyLD Inc builds the boring software that fixes those problems. We're not trying
-          to be Mindbody. We don't have a 20-person sales team and we don't want one. We
-          want a gym owner to sign up on a Sunday night, install a lock on Monday, and
-          stop chasing membership payments by Tuesday.
+          WyLD Inc builds the boring software that fixes those problems. We pick one
+          problem, build until it actually works, ship it, then look at the next one.
+          We're not trying to be a platform. We don't have a 20-person sales team and we
+          don't want one.
         </Text>
         <Text style={styles.body}>
           Two products today. More when our customers ask for them.
@@ -74,7 +74,7 @@ export default function About() {
             <Image source={{ uri: LOGO_URL }} style={styles.productLogo} resizeMode="contain" />
             <Text style={[styles.productName, { color: theme.colors.teal }]}>WyLD Pass</Text>
             <Text style={styles.productTagline}>
-              Self-serve gym access. Smart lock, in-app payments, built-in waiver.
+              Self-serve access control. Smart lock, in-app payments, built-in waiver.
             </Text>
             <Text style={[styles.productLink, { color: theme.colors.teal }]}>
               Learn about WyLD Pass →
@@ -97,7 +97,8 @@ export default function About() {
             />
             <Text style={[styles.productName, { color: theme.colors.siteRed }]}>WyLD Site</Text>
             <Text style={styles.productTagline}>
-              A real gym website. Schedule, booking, payments, retail, staff time cards.
+              A real website for your business. Schedule, booking, payments, retail, staff
+              time cards.
             </Text>
             <Text style={[styles.productLink, { color: theme.colors.siteRed }]}>
               Learn about WyLD Site →
