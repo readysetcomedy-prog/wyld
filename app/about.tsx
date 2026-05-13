@@ -38,22 +38,17 @@ export default function About() {
         <Text style={styles.eyebrow}>About</Text>
         <Text style={styles.title}>WyLD Inc</Text>
         <Text style={styles.sub}>
-          The umbrella company behind WyLD Pass and WyLD Site. We build software for the
-          businesses the big platforms ignore.
+          Coming soon....
         </Text>
       </View>
 
       <View style={[styles.section, isWide && styles.sectionWide]}>
         <Text style={styles.h2}>What we're about</Text>
         <Text style={styles.body}>
-          Small business owners spend hundreds of dollars a month, and hours of their
-          week, on stuff that should just happen on its own. Chasing payments. Keys that
-          walk off. Spreadsheets at tax time. Websites that look like they were built in
-          2009.
+          Coming soon....
         </Text>
         <Text style={styles.body}>
-          WyLD Inc builds the boring software that fixes those problems. We pick one
-          problem, build until it actually works, ship it, then look at the next one.
+          WyLD Inc.
         </Text>
       </View>
 
