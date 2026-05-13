@@ -54,11 +54,6 @@ export default function About() {
         <Text style={styles.body}>
           WyLD Inc builds the boring software that fixes those problems. We pick one
           problem, build until it actually works, ship it, then look at the next one.
-          We're not trying to be a platform. We don't have a 20-person sales team and we
-          don't want one.
-        </Text>
-        <Text style={styles.body}>
-          More on the way as customers ask for them.
         </Text>
       </View>
 
