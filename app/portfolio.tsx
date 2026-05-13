@@ -18,8 +18,8 @@ export default function Portfolio() {
         <Text style={styles.eyebrow}>WyLD Site</Text>
         <Text style={styles.title}>Website Portfolio</Text>
         <Text style={styles.bodyText}>
-          A look at the sites we've designed and shipped. Coming soon — we're putting the
-          first set together now. Get in touch and we'll send you what we have so far.
+          Coming soon — we're putting the
+          first set together now. 
         </Text>
         <Link href="/site" asChild>
           <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary])}>
