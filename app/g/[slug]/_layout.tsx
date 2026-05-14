@@ -61,6 +61,7 @@ export default function SiteLayout() {
           city: null,
           state: null,
           zip: null,
+          hours: null,
           social_instagram: null,
           social_facebook: null,
           social_x: null,

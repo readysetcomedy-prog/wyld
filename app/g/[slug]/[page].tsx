@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, Redirect } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { Slideshow } from '@/components/Slideshow';
+import { GymHours, hasAnyHours } from '@/components/GymHours';
 
 const VALID_PAGES = ['about', 'services', 'contact', 'news', 'faq', 'schedule', 'store'] as const;
 type PageKey = (typeof VALID_PAGES)[number];
@@ -88,22 +89,27 @@ export default function Page() {
       ) : null}
 
       {key === 'contact' ? (
-        <View style={styles.contactBlock}>
-          {site.settings.contact_email ? (
-            <Text style={styles.contactLine}>Email: {site.settings.contact_email}</Text>
+        <>
+          <View style={styles.contactBlock}>
+            {site.settings.contact_email ? (
+              <Text style={styles.contactLine}>Email: {site.settings.contact_email}</Text>
+            ) : null}
+            {site.settings.contact_phone ? (
+              <Text style={styles.contactLine}>Phone: {site.settings.contact_phone}</Text>
+            ) : null}
+            {site.settings.address_line1 ? (
+              <Text style={styles.contactLine}>
+                {site.settings.address_line1}
+                {site.settings.city ? `, ${site.settings.city}` : ''}
+                {site.settings.state ? `, ${site.settings.state}` : ''}
+                {site.settings.zip ? ` ${site.settings.zip}` : ''}
+              </Text>
+            ) : null}
+          </View>
+          {hasAnyHours(site.settings.hours) ? (
+            <GymHours hours={site.settings.hours ?? {}} primaryColor={site.theme.primary_color} />
           ) : null}
-          {site.settings.contact_phone ? (
-            <Text style={styles.contactLine}>Phone: {site.settings.contact_phone}</Text>
-          ) : null}
-          {site.settings.address_line1 ? (
-            <Text style={styles.contactLine}>
-              {site.settings.address_line1}
-              {site.settings.city ? `, ${site.settings.city}` : ''}
-              {site.settings.state ? `, ${site.settings.state}` : ''}
-              {site.settings.zip ? ` ${site.settings.zip}` : ''}
-            </Text>
-          ) : null}
-        </View>
+        </>
       ) : null}
     </View>
   );
