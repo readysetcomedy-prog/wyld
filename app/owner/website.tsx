@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -30,6 +31,9 @@ type Modules = {
   faq_enabled: boolean;
   calendar_enabled: boolean;
   store_enabled: boolean;
+  about_enabled: boolean;
+  services_enabled: boolean;
+  contact_enabled: boolean;
 };
 
 type Settings = {
@@ -128,7 +132,9 @@ export default function Website() {
         supabase.from('gym_themes').select('*').eq('gym_id', gymId).maybeSingle(),
         supabase
           .from('gym_modules')
-          .select('gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled')
+          .select(
+            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled'
+          )
           .eq('gym_id', gymId)
           .maybeSingle(),
         supabase.from('gym_site_settings').select('*').eq('gym_id', gymId).maybeSingle(),
@@ -163,6 +169,17 @@ export default function Website() {
       .eq('gym_id', themeRow.gym_id);
     if (error) setError(error.message);
     else notifySaved('Theme saved');
+  }
+
+  async function saveModules(patch: Partial<Modules>) {
+    if (!modules) return;
+    setModules({ ...modules, ...patch });
+    const { error } = await supabase
+      .from('gym_modules')
+      .update(patch)
+      .eq('gym_id', modules.gym_id);
+    if (error) setError(error.message);
+    else notifySaved('Visibility saved');
   }
 
   async function saveSettings(patch: Partial<Settings>) {
@@ -294,6 +311,34 @@ export default function Website() {
             onChange={(v) => setThemeRow({ ...themeRow, accent_color: v })}
             onCommit={(v) => saveTheme({ accent_color: v })}
           />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Page visibility</Text>
+        <Text style={styles.cardSub}>
+          Toggle which tabs appear on your public site. Home is always shown.
+        </Text>
+        <View style={styles.toggleGrid}>
+          {(
+            [
+              { key: 'services_enabled', label: 'Services' },
+              { key: 'calendar_enabled', label: 'Schedule' },
+              { key: 'about_enabled', label: 'About' },
+              { key: 'contact_enabled', label: 'Contact' },
+              { key: 'news_enabled', label: 'News / Blog' },
+              { key: 'faq_enabled', label: 'FAQ' },
+              { key: 'store_enabled', label: 'Store' },
+            ] as const
+          ).map((row) => (
+            <View key={row.key} style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>{row.label}</Text>
+              <Switch
+                value={!!modules[row.key]}
+                onValueChange={(v) => saveModules({ [row.key]: v } as Partial<Modules>)}
+              />
+            </View>
+          ))}
         </View>
       </View>
 
@@ -1001,6 +1046,26 @@ const styles = StyleSheet.create({
   galleryRemoveText: { color: '#fff', fontWeight: '800', fontSize: 14, lineHeight: 16 },
 
   subheading: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
+  toggleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    flexGrow: 1,
+    flexBasis: 220,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#fff',
+  },
+  toggleLabel: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
 
   btnSecondary: {
     paddingHorizontal: theme.spacing.md,

@@ -43,6 +43,15 @@ export default function Page() {
   if (key === 'faq' && !site.modules.faq_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
+  if (key === 'about' && !site.modules.about_enabled) {
+    return <Redirect href={`/g/${slug}` as never} />;
+  }
+  if (key === 'services' && !site.modules.services_enabled) {
+    return <Redirect href={`/g/${slug}` as never} />;
+  }
+  if (key === 'contact' && !site.modules.contact_enabled) {
+    return <Redirect href={`/g/${slug}` as never} />;
+  }
 
   const content = site.pages[key] ?? {};
   const heading = content.headline || PAGE_TITLES[key];

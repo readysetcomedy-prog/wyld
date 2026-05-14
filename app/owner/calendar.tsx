@@ -75,7 +75,6 @@ export default function OwnerCalendar() {
   const [events, setEvents] = useState<GymEvent[] | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsEnabled, setBookingsEnabled] = useState(false);
-  const [calendarEnabled, setCalendarEnabled] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -85,7 +84,7 @@ export default function OwnerCalendar() {
     const [{ data: m }, { data: evs }] = await Promise.all([
       supabase
         .from('gym_modules')
-        .select('bookings_enabled, calendar_enabled')
+        .select('bookings_enabled')
         .eq('gym_id', gymId)
         .maybeSingle(),
       supabase
@@ -95,7 +94,6 @@ export default function OwnerCalendar() {
         .order('starts_at'),
     ]);
     setBookingsEnabled(!!(m as any)?.bookings_enabled);
-    setCalendarEnabled(!!(m as any)?.calendar_enabled);
     const eventRows = (evs as GymEvent[]) ?? [];
     setEvents(eventRows);
 
@@ -140,19 +138,6 @@ export default function OwnerCalendar() {
     });
     return m;
   }, [bookings]);
-
-  async function toggleBookings(v: boolean) {
-    if (!gymId) return;
-    setBookingsEnabled(v);
-    const { error } = await supabase
-      .from('gym_modules')
-      .update({ bookings_enabled: v })
-      .eq('gym_id', gymId);
-    if (error) {
-      setErr(error.message);
-      setBookingsEnabled(!v);
-    }
-  }
 
   async function saveEvent() {
     if (!form || !gymId) return;
@@ -253,30 +238,11 @@ export default function OwnerCalendar() {
       <View>
         <Text style={styles.title}>Calendar</Text>
         <Text style={styles.sub}>
-          Add classes, events, and open slots. Capacity makes a slot bookable when
-          bookings are turned on.
+          Add classes, events, and open slots.{' '}
+          {bookingsEnabled
+            ? 'Slots with a capacity are bookable by your members — booked names show below.'
+            : 'Bookings are off for your gym, so capacity is informational only. Contact us to add bookings.'}
         </Text>
-      </View>
-
-      {!calendarEnabled ? (
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>
-            Heads up: the Schedule page on your public site is hidden until an admin turns
-            on the Calendar module for your gym.
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.toggleRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.toggleLabel}>Member bookings</Text>
-          <Text style={styles.toggleSub}>
-            When on, members of your gym can book class/event slots that have a capacity.
-            Member names show up in your calendar below — they&apos;re hidden on the public
-            schedule for privacy.
-          </Text>
-        </View>
-        <Switch value={bookingsEnabled} onValueChange={toggleBookings} />
       </View>
 
       {err ? <Text style={styles.err}>{err}</Text> : null}

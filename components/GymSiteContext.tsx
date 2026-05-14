@@ -19,6 +19,9 @@ export type GymSite = {
     news_enabled: boolean;
     faq_enabled: boolean;
     bookings_enabled: boolean;
+    about_enabled: boolean;
+    services_enabled: boolean;
+    contact_enabled: boolean;
   };
   settings: {
     contact_email: string | null;

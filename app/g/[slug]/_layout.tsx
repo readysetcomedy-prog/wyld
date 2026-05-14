@@ -81,6 +81,9 @@ export default function SiteLayout() {
           news_enabled: false,
           faq_enabled: false,
           bookings_enabled: false,
+          about_enabled: true,
+          services_enabled: true,
+          contact_enabled: true,
         },
         settings: settings ?? {
           contact_email: null,
@@ -186,13 +189,13 @@ export default function SiteLayout() {
 
   const NAV: { label: string; path: string }[] = [
     { label: 'Home', path: `/g/${slug}` },
-    { label: 'Services', path: `/g/${slug}/services` },
+    ...(site.modules.services_enabled ? [{ label: 'Services', path: `/g/${slug}/services` }] : []),
     ...(site.modules.calendar_enabled ? [{ label: 'Schedule', path: `/g/${slug}/schedule` }] : []),
     ...(site.modules.store_enabled ? [{ label: 'Store', path: `/g/${slug}/store` }] : []),
-    { label: 'About', path: `/g/${slug}/about` },
+    ...(site.modules.about_enabled ? [{ label: 'About', path: `/g/${slug}/about` }] : []),
     ...(site.modules.news_enabled ? [{ label: 'News', path: `/g/${slug}/news` }] : []),
     ...(site.modules.faq_enabled ? [{ label: 'FAQ', path: `/g/${slug}/faq` }] : []),
-    { label: 'Contact', path: `/g/${slug}/contact` },
+    ...(site.modules.contact_enabled ? [{ label: 'Contact', path: `/g/${slug}/contact` }] : []),
   ];
 
   return (

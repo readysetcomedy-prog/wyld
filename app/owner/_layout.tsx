@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import {
   View,
@@ -11,17 +12,20 @@ import {
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { supabase } from '@/lib/supabase';
 
-const TABS: { label: string; href: string }[] = [
+type Tab = { label: string; href: string; gated?: 'bookings_enabled' | 'store_enabled' };
+
+const TABS: Tab[] = [
   { label: 'Billing', href: '/owner/billing' },
   { label: 'Website', href: '/owner/website' },
   { label: 'Messages', href: '/owner/messages' },
   { label: 'Calendar', href: '/owner/calendar' },
-  { label: 'Bookings', href: '/owner/bookings' },
+  { label: 'Bookings', href: '/owner/bookings', gated: 'bookings_enabled' },
   { label: 'Members', href: '/owner/members' },
   { label: 'Employees', href: '/owner/employees' },
   { label: 'Time Cards', href: '/owner/time-cards' },
-  { label: 'Store', href: '/owner/store' },
+  { label: 'Store', href: '/owner/store', gated: 'store_enabled' },
   { label: 'Analytics & Reporting', href: '/owner/analytics' },
   { label: 'Door Management', href: '/owner/door' },
   { label: 'Offerings', href: '/owner/offerings' },
@@ -34,6 +38,26 @@ export default function OwnerLayout() {
   const isWide = width >= 1024;
   const pathname = usePathname();
   const router = useRouter();
+  const [modules, setModules] = useState<Record<string, boolean> | null>(null);
+
+  useEffect(() => {
+    if (!profile?.gym_id) {
+      setModules(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('gym_modules')
+        .select('bookings_enabled, store_enabled')
+        .eq('gym_id', profile.gym_id)
+        .maybeSingle();
+      if (!cancelled) setModules((data as any) ?? {});
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.gym_id]);
 
   if (loading) return null;
   if (!session) return <Redirect href="/sign-in" />;
@@ -57,7 +81,7 @@ export default function OwnerLayout() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={isWide ? styles.tabsWide : styles.tabsMobile}
         >
-          {TABS.map((tab) => {
+          {TABS.filter((t) => !t.gated || modules?.[t.gated] === true).map((tab) => {
             const isActive = pathname === tab.href;
             const badge = tab.href === '/owner/messages' && unread > 0 ? unread : 0;
             return (
