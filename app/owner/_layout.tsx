@@ -14,21 +14,34 @@ import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { supabase } from '@/lib/supabase';
 
-type Tab = { label: string; href: string; gated?: 'bookings_enabled' | 'store_enabled' };
+type ModuleKey =
+  | 'bookings_enabled'
+  | 'store_enabled'
+  | 'employees_enabled'
+  | 'time_cards_enabled'
+  | 'analytics_enabled'
+  | 'door_enabled'
+  | 'offerings_enabled'
+  | 'billing_enabled';
 
+type Tab = { label: string; href: string; gated?: ModuleKey };
+
+// Tabs with `gated` only render when the admin has flipped the corresponding
+// module flag on for this gym. Always-on tabs (Website, Messages, Calendar,
+// Members) are core and don't need a paid module.
 const TABS: Tab[] = [
-  { label: 'Billing', href: '/owner/billing' },
+  { label: 'Billing', href: '/owner/billing', gated: 'billing_enabled' },
   { label: 'Website', href: '/owner/website' },
   { label: 'Messages', href: '/owner/messages' },
   { label: 'Calendar', href: '/owner/calendar' },
   { label: 'Bookings', href: '/owner/bookings', gated: 'bookings_enabled' },
   { label: 'Members', href: '/owner/members' },
-  { label: 'Employees', href: '/owner/employees' },
-  { label: 'Time Cards', href: '/owner/time-cards' },
+  { label: 'Employees', href: '/owner/employees', gated: 'employees_enabled' },
+  { label: 'Time Cards', href: '/owner/time-cards', gated: 'time_cards_enabled' },
   { label: 'Store', href: '/owner/store', gated: 'store_enabled' },
-  { label: 'Analytics & Reporting', href: '/owner/analytics' },
-  { label: 'Door Management', href: '/owner/door' },
-  { label: 'Offerings', href: '/owner/offerings' },
+  { label: 'Analytics & Reporting', href: '/owner/analytics', gated: 'analytics_enabled' },
+  { label: 'Door Management', href: '/owner/door', gated: 'door_enabled' },
+  { label: 'Offerings', href: '/owner/offerings', gated: 'offerings_enabled' },
 ];
 
 export default function OwnerLayout() {
@@ -49,7 +62,9 @@ export default function OwnerLayout() {
     (async () => {
       const { data } = await supabase
         .from('gym_modules')
-        .select('bookings_enabled, store_enabled')
+        .select(
+          'bookings_enabled, store_enabled, employees_enabled, time_cards_enabled, analytics_enabled, door_enabled, offerings_enabled, billing_enabled'
+        )
         .eq('gym_id', profile.gym_id)
         .maybeSingle();
       if (!cancelled) setModules((data as any) ?? {});

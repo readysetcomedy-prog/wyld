@@ -30,26 +30,28 @@ export default function Page() {
   }
   const key = page as PageKey;
 
-  // Module-gated pages
-  if (key === 'schedule' && !site.modules.calendar_enabled) {
+  // Module-gated pages. News/FAQ/Store also require the owner to have
+  // published the page on top of admin granting the module.
+  const m = site.modules;
+  if (key === 'schedule' && !m.calendar_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'store' && !site.modules.store_enabled) {
+  if (key === 'store' && !(m.store_enabled && m.store_visible)) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'news' && !site.modules.news_enabled) {
+  if (key === 'news' && !(m.news_enabled && m.news_visible)) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'faq' && !site.modules.faq_enabled) {
+  if (key === 'faq' && !(m.faq_enabled && m.faq_visible)) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'about' && !site.modules.about_enabled) {
+  if (key === 'about' && !m.about_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'services' && !site.modules.services_enabled) {
+  if (key === 'services' && !m.services_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'contact' && !site.modules.contact_enabled) {
+  if (key === 'contact' && !m.contact_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
 

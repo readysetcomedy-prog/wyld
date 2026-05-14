@@ -34,6 +34,9 @@ type Modules = {
   about_enabled: boolean;
   services_enabled: boolean;
   contact_enabled: boolean;
+  news_visible: boolean;
+  faq_visible: boolean;
+  store_visible: boolean;
 };
 
 type Settings = {
@@ -133,7 +136,7 @@ export default function Website() {
         supabase
           .from('gym_modules')
           .select(
-            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled'
+            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible'
           )
           .eq('gym_id', gymId)
           .maybeSingle(),
@@ -317,28 +320,29 @@ export default function Website() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Page visibility</Text>
         <Text style={styles.cardSub}>
-          Toggle which tabs appear on your public site. Home is always shown.
+          Toggle which tabs appear on your public site. Home is always shown. Tabs that
+          aren&apos;t in the list aren&apos;t enabled for your gym yet — ask WyLD to add them.
         </Text>
         <View style={styles.toggleGrid}>
-          {(
-            [
-              { key: 'services_enabled', label: 'Services' },
-              { key: 'calendar_enabled', label: 'Schedule' },
-              { key: 'about_enabled', label: 'About' },
-              { key: 'contact_enabled', label: 'Contact' },
-              { key: 'news_enabled', label: 'News / Blog' },
-              { key: 'faq_enabled', label: 'FAQ' },
-              { key: 'store_enabled', label: 'Store' },
-            ] as const
-          ).map((row) => (
-            <View key={row.key} style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>{row.label}</Text>
-              <Switch
-                value={!!modules[row.key]}
-                onValueChange={(v) => saveModules({ [row.key]: v } as Partial<Modules>)}
-              />
-            </View>
-          ))}
+          {[
+            { key: 'services_enabled' as const, label: 'Services', show: true },
+            { key: 'calendar_enabled' as const, label: 'Schedule', show: true },
+            { key: 'about_enabled' as const, label: 'About', show: true },
+            { key: 'contact_enabled' as const, label: 'Contact', show: true },
+            { key: 'news_visible' as const, label: 'News / Blog', show: modules.news_enabled },
+            { key: 'faq_visible' as const, label: 'FAQ', show: modules.faq_enabled },
+            { key: 'store_visible' as const, label: 'Store', show: modules.store_enabled },
+          ]
+            .filter((r) => r.show)
+            .map((row) => (
+              <View key={row.key} style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>{row.label}</Text>
+                <Switch
+                  value={!!modules[row.key]}
+                  onValueChange={(v) => saveModules({ [row.key]: v } as Partial<Modules>)}
+                />
+              </View>
+            ))}
         </View>
       </View>
 

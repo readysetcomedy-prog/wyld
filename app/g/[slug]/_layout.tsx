@@ -84,6 +84,9 @@ export default function SiteLayout() {
           about_enabled: true,
           services_enabled: true,
           contact_enabled: true,
+          news_visible: true,
+          faq_visible: true,
+          store_visible: true,
         },
         settings: settings ?? {
           contact_email: null,
@@ -187,15 +190,19 @@ export default function SiteLayout() {
   const primary = site.theme.primary_color;
   const accent = site.theme.accent_color;
 
+  const m = site.modules;
+  const showStore = m.store_enabled && m.store_visible;
+  const showNews = m.news_enabled && m.news_visible;
+  const showFaq = m.faq_enabled && m.faq_visible;
   const NAV: { label: string; path: string }[] = [
     { label: 'Home', path: `/g/${slug}` },
-    ...(site.modules.services_enabled ? [{ label: 'Services', path: `/g/${slug}/services` }] : []),
-    ...(site.modules.calendar_enabled ? [{ label: 'Schedule', path: `/g/${slug}/schedule` }] : []),
-    ...(site.modules.store_enabled ? [{ label: 'Store', path: `/g/${slug}/store` }] : []),
-    ...(site.modules.about_enabled ? [{ label: 'About', path: `/g/${slug}/about` }] : []),
-    ...(site.modules.news_enabled ? [{ label: 'News', path: `/g/${slug}/news` }] : []),
-    ...(site.modules.faq_enabled ? [{ label: 'FAQ', path: `/g/${slug}/faq` }] : []),
-    ...(site.modules.contact_enabled ? [{ label: 'Contact', path: `/g/${slug}/contact` }] : []),
+    ...(m.services_enabled ? [{ label: 'Services', path: `/g/${slug}/services` }] : []),
+    ...(m.calendar_enabled ? [{ label: 'Schedule', path: `/g/${slug}/schedule` }] : []),
+    ...(showStore ? [{ label: 'Store', path: `/g/${slug}/store` }] : []),
+    ...(m.about_enabled ? [{ label: 'About', path: `/g/${slug}/about` }] : []),
+    ...(showNews ? [{ label: 'News', path: `/g/${slug}/news` }] : []),
+    ...(showFaq ? [{ label: 'FAQ', path: `/g/${slug}/faq` }] : []),
+    ...(m.contact_enabled ? [{ label: 'Contact', path: `/g/${slug}/contact` }] : []),
   ];
 
   return (
