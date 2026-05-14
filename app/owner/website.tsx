@@ -67,11 +67,15 @@ type Gym = {
   custom_domain: string | null;
 };
 
+type FaqItem = { id: string; q: string; a: string };
+
 type PageContent = {
   headline?: string;
   subheadline?: string;
   body?: string;
+  intro?: string;
   gallery?: string[];
+  items?: FaqItem[];
 };
 
 const PAGE_KEYS = ['home', 'about', 'services', 'contact', 'news', 'faq'] as const;
@@ -482,6 +486,13 @@ export default function Website() {
       {activePage === 'news' ? (
         <NewsPostsManager gymId={gymId} />
       ) : null}
+
+      {activePage === 'faq' ? (
+        <FaqItemsManager
+          items={(pages.faq?.items as FaqItem[] | undefined) ?? []}
+          onChange={(items) => savePage('faq', { items } as Partial<PageContent>)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -736,6 +747,113 @@ function Field({
   );
 }
 
+
+function FaqItemsManager({
+  items: initial,
+  onChange,
+}: {
+  items: FaqItem[];
+  onChange: (next: FaqItem[]) => void;
+}) {
+  const [items, setItems] = useState<FaqItem[]>(initial);
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
+
+  function commit(next: FaqItem[]) {
+    setItems(next);
+    onChange(next);
+  }
+  function newId() {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return (crypto as { randomUUID: () => string }).randomUUID();
+    }
+    return `i_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  }
+  function add() {
+    commit([...items, { id: newId(), q: '', a: '' }]);
+  }
+  function localUpdate(i: number, patch: Partial<FaqItem>) {
+    setItems(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  }
+  function commitBlur() {
+    onChange(items);
+  }
+  function remove(i: number) {
+    if (typeof window !== 'undefined' && !window.confirm('Remove this question?')) return;
+    commit(items.filter((_, idx) => idx !== i));
+  }
+  function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    commit(next);
+  }
+  return (
+    <View style={styles.card}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text style={styles.cardTitle}>FAQ items</Text>
+        <Pressable style={styles.btn} onPress={add}>
+          <Text style={styles.btnText}>Add question</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.cardSub}>
+        Each item shows up as a clickable question on your FAQ page. Click expands the answer.
+      </Text>
+      {items.length === 0 ? (
+        <Text style={styles.dim}>No questions yet — click "Add question" to start.</Text>
+      ) : (
+        <View style={{ gap: theme.spacing.sm }}>
+          {items.map((it, i) => (
+            <View key={it.id} style={styles.editor}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={styles.subheading}>Question {i + 1}</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Pressable style={styles.btnSecondary} onPress={() => move(i, -1)}>
+                    <Text style={styles.btnSecondaryText}>↑</Text>
+                  </Pressable>
+                  <Pressable style={styles.btnSecondary} onPress={() => move(i, 1)}>
+                    <Text style={styles.btnSecondaryText}>↓</Text>
+                  </Pressable>
+                  <Pressable style={styles.btnGhost} onPress={() => remove(i)}>
+                    <Text style={styles.btnGhostText}>Remove</Text>
+                  </Pressable>
+                </View>
+              </View>
+              <Field
+                label="Question"
+                value={it.q}
+                onChange={(v) => localUpdate(i, { q: v })}
+                onCommit={commitBlur}
+              />
+              <Field
+                label="Answer"
+                value={it.a}
+                onChange={(v) => localUpdate(i, { a: v })}
+                onCommit={commitBlur}
+                multiline
+                rows={4}
+              />
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   container: { gap: theme.spacing.lg, maxWidth: 960 },
