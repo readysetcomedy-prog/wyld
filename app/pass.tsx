@@ -17,7 +17,6 @@ import { Nav } from '@/components/Nav';
 const BASE_SAVINGS = 490;
 const PER_EMPLOYEE_SAVINGS = 4500;
 const DOOR_MONTHLY = 49;
-const LOCK_HARDWARE_COST = 70;
 
 function fmt(n: number) {
   return '$' + (Number.isInteger(n) ? n.toString() : n.toFixed(2));
@@ -125,7 +124,7 @@ export default function Pass() {
           <Step
             n="1"
             title="Install the lock"
-            body={`Pop a smart lock on your door (about $${LOCK_HARDWARE_COST} one-time hardware) and enter your lock ID in your dashboard.`}
+            body="Pop a smart lock on your door and enter your lock ID in your dashboard. Lock cost depends on your door — see below."
           />
           <Step
             n="2"
@@ -138,6 +137,41 @@ export default function Pass() {
             body="Sign the waiver, pay you through the app, walk in. No payment, no entry — the door enforces it for you."
           />
         </View>
+      </View>
+
+      <View style={[styles.section, isWide && styles.sectionWide]}>
+        <Text style={styles.eyebrow}>About the lock</Text>
+        <Text style={styles.sectionTitle}>
+          Lock cost depends on your door. We don't sell the lock.
+        </Text>
+        <View style={[styles.lockTiers, isWide && styles.lockTiersWide]}>
+          <View style={styles.lockTier}>
+            <Text style={styles.lockTierPrice}>~$70</Text>
+            <Text style={styles.lockTierTitle}>Standard interior door</Text>
+            <Text style={styles.lockTierBody}>
+              A smart deadbolt — the same kind you'd put on a house. Self-install in about
+              15 minutes with a screwdriver. Works for most side-entry, back-office, and
+              standard front doors.
+            </Text>
+          </View>
+          <View style={styles.lockTier}>
+            <Text style={styles.lockTierPrice}>~$350+</Text>
+            <Text style={styles.lockTierTitle}>
+              Storefront, glass, double, or fire-rated doors
+            </Text>
+            <Text style={styles.lockTierBody}>
+              These need commercial hardware — usually an electric strike or a magnetic
+              lock — plus a licensed installer to wire it into a low-voltage power supply.
+              Hardware runs about $350 and up, plus installation, which varies by site.
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.lockNote}>
+          Heads up: lock hardware and installation are paid to your hardware vendor or
+          installer. They're <Text style={styles.lockNoteBold}>not</Text> part of your
+          WyLD Pass subscription, and the prices above are typical third-party costs, not
+          ours.
+        </Text>
       </View>
 
       <View style={[styles.mathBand, isWide && styles.mathBandWide]}>
@@ -401,6 +435,42 @@ const styles = StyleSheet.create({
   stepNumberText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   stepTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.charcoal },
   stepBody: { fontSize: 15, color: theme.colors.textSecondary, lineHeight: 22 },
+
+  lockTiers: { gap: theme.spacing.md, marginTop: theme.spacing.lg },
+  lockTiersWide: { flexDirection: 'row', gap: theme.spacing.lg },
+  lockTier: {
+    flex: 1,
+    padding: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    gap: theme.spacing.xs,
+  },
+  lockTierPrice: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: theme.colors.teal,
+    lineHeight: 36,
+  },
+  lockTierTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: theme.colors.charcoal,
+  },
+  lockTierBody: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    lineHeight: 21,
+  },
+  lockNote: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+    marginTop: theme.spacing.md,
+    maxWidth: 760,
+  },
+  lockNoteBold: { fontWeight: '800', color: theme.colors.charcoal },
 
   mathBand: {
     paddingHorizontal: theme.spacing.lg,
