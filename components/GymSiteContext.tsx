@@ -26,6 +26,7 @@ export type GymSite = {
     city: string | null;
     state: string | null;
     zip: string | null;
+    hours: Record<string, string> | null;
     social_instagram: string | null;
     social_facebook: string | null;
     social_x: string | null;

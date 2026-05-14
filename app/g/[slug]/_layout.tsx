@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Slot, useLocalSearchParams, useRouter, usePathname } from 'expo-router';
+import {
+  Slot,
+  useLocalSearchParams,
+  useRouter,
+  usePathname,
+} from 'expo-router';
 import {
   View,
   Text,
@@ -9,12 +14,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   useWindowDimensions,
+  Linking,
+  Platform,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { GymSiteProvider, GymSite } from '@/components/GymSiteContext';
+import { SocialIcons } from '@/components/SocialIcons';
 
 export default function SiteLayout() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug: rawSlug } = useLocalSearchParams<{ slug: string }>();
+  const slug = typeof rawSlug === 'string' ? rawSlug.trim().toLowerCase() : '';
   const router = useRouter();
   const pathname = usePathname();
   const { width } = useWindowDimensions();
@@ -22,25 +31,43 @@ export default function SiteLayout() {
 
   const [site, setSite] = useState<GymSite | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
+    let cancelled = false;
     (async () => {
-      const { data: gym } = await supabase
+      const { data: gym, error: gymErr } = await supabase
         .from('gyms')
         .select('id, name, slug, city, state')
         .eq('slug', slug)
         .maybeSingle();
+      if (cancelled) return;
+      if (gymErr) {
+        setLoadError(gymErr.message);
+        return;
+      }
       if (!gym) {
         setNotFound(true);
         return;
       }
-      const [{ data: theme }, { data: modules }, { data: settings }, { data: pages }] = await Promise.all([
+      const [
+        { data: theme, error: themeErr },
+        { data: modules, error: modErr },
+        { data: settings, error: setErr },
+        { data: pages, error: pagesErr },
+      ] = await Promise.all([
         supabase.from('gym_themes').select('*').eq('gym_id', gym.id).maybeSingle(),
         supabase.from('gym_modules').select('*').eq('gym_id', gym.id).maybeSingle(),
         supabase.from('gym_site_settings').select('*').eq('gym_id', gym.id).maybeSingle(),
         supabase.from('gym_pages').select('page_key, content').eq('gym_id', gym.id),
       ]);
+      if (cancelled) return;
+      const firstErr = themeErr || modErr || setErr || pagesErr;
+      if (firstErr) {
+        setLoadError(firstErr.message);
+        return;
+      }
       const pagesMap: Record<string, any> = {};
       (pages ?? []).forEach((row: any) => {
         pagesMap[row.page_key] = row.content ?? {};
@@ -61,6 +88,7 @@ export default function SiteLayout() {
           city: null,
           state: null,
           zip: null,
+          hours: null,
           social_instagram: null,
           social_facebook: null,
           social_x: null,
@@ -69,13 +97,56 @@ export default function SiteLayout() {
         pages: pagesMap,
       });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
+
+  // Update browser tab title + favicon to match the gym (web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (site) {
+      document.title = site.gym.name;
+      if (site.theme.logo_url) {
+        let link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = site.theme.logo_url;
+      }
+    }
+  }, [site]);
+
+  if (loadError) {
+    return (
+      <View style={styles.notFound}>
+        <Text style={styles.notFoundTitle}>Couldn't load gym</Text>
+        <Text style={styles.notFoundBody}>{loadError}</Text>
+        <Pressable
+          style={styles.retry}
+          onPress={() => {
+            setLoadError(null);
+            setSite(null);
+          }}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (notFound) {
     return (
       <View style={styles.notFound}>
         <Text style={styles.notFoundTitle}>Gym not found</Text>
-        <Text style={styles.notFoundBody}>No gym matches that URL.</Text>
+        <Text style={styles.notFoundBody}>
+          No gym matches the URL <Text style={styles.mono}>/g/{slug}</Text>.
+        </Text>
+        <Pressable style={styles.retry} onPress={() => router.replace('/' as never)}>
+          <Text style={styles.retryText}>Go home</Text>
+        </Pressable>
       </View>
     );
   }
@@ -169,22 +240,11 @@ export default function SiteLayout() {
                 <Text style={styles.footerLine}>{site.settings.contact_email}</Text>
               ) : null}
             </View>
-            <View style={styles.footerSocial}>
-              {site.settings.social_instagram ? (
-                <Text style={styles.footerLine}>Instagram: {site.settings.social_instagram}</Text>
-              ) : null}
-              {site.settings.social_facebook ? (
-                <Text style={styles.footerLine}>Facebook: {site.settings.social_facebook}</Text>
-              ) : null}
-              {site.settings.social_x ? (
-                <Text style={styles.footerLine}>X: {site.settings.social_x}</Text>
-              ) : null}
-              {site.settings.social_tiktok ? (
-                <Text style={styles.footerLine}>TikTok: {site.settings.social_tiktok}</Text>
-              ) : null}
-            </View>
+            <SocialIcons settings={site.settings} accent={accent} />
           </View>
-          <Text style={styles.poweredBy}>Powered by WyLD Site</Text>
+          <Text style={styles.copyright}>
+            © {new Date().getFullYear()} {site.gym.name}
+          </Text>
         </View>
       </ScrollView>
     </GymSiteProvider>
@@ -237,16 +297,24 @@ const styles = StyleSheet.create({
   footerInnerWide: { flexDirection: 'row', justifyContent: 'space-between' },
   footerName: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 4 },
   footerLine: { color: 'rgba(255,255,255,0.8)', fontSize: 13, lineHeight: 20 },
-  footerSocial: { gap: 4 },
-  poweredBy: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
+  copyright: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
     textAlign: 'center',
     marginTop: 24,
   },
 
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 8 },
+  notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
   notFoundTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A' },
-  notFoundBody: { fontSize: 15, color: '#475569' },
+  notFoundBody: { fontSize: 15, color: '#475569', textAlign: 'center', maxWidth: 480 },
+  mono: { fontFamily: 'monospace', color: '#0F172A' },
+  retry: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+  },
+  retryText: { color: '#fff', fontWeight: '700' },
 });

@@ -13,6 +13,8 @@ import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { pickAndUploadImages } from '@/components/ImageUpload';
 import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
+import { ColorPickerField } from '@/components/ColorPicker';
+import { DAY_KEYS, DAY_LABELS, type HoursMap } from '@/components/GymHours';
 
 type Theme = {
   gym_id: string;
@@ -38,11 +40,24 @@ type Settings = {
   city: string | null;
   state: string | null;
   zip: string | null;
+  hours: HoursMap | null;
   social_instagram: string | null;
   social_facebook: string | null;
   social_x: string | null;
   social_tiktok: string | null;
   meta_description: string | null;
+};
+
+type NewsPost = {
+  id: string;
+  gym_id: string;
+  slug: string;
+  title: string;
+  body: string;
+  cover_image_url: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type Gym = {
@@ -52,11 +67,15 @@ type Gym = {
   custom_domain: string | null;
 };
 
+type FaqItem = { id: string; q: string; a: string };
+
 type PageContent = {
   headline?: string;
   subheadline?: string;
   body?: string;
+  intro?: string;
   gallery?: string[];
+  items?: FaqItem[];
 };
 
 const PAGE_KEYS = ['home', 'about', 'services', 'contact', 'news', 'faq'] as const;
@@ -262,13 +281,13 @@ export default function Website() {
         </View>
 
         <View style={styles.gridTwo}>
-          <ColorField
+          <ColorPickerField
             label="Primary color"
             value={themeRow.primary_color}
             onChange={(v) => setThemeRow({ ...themeRow, primary_color: v })}
             onCommit={(v) => saveTheme({ primary_color: v })}
           />
-          <ColorField
+          <ColorPickerField
             label="Accent color"
             value={themeRow.accent_color}
             onChange={(v) => setThemeRow({ ...themeRow, accent_color: v })}
@@ -434,7 +453,262 @@ export default function Website() {
             onCommit={(v) => saveSettings({ social_tiktok: v || null })}
           />
         </View>
+
+        <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.sm }}>
+          <Text style={styles.subheading}>Gym Hours</Text>
+          <Text style={styles.hintSmall}>
+            Set once — shows up on your Home and Contact pages. Leave a day blank to mark it Closed.
+          </Text>
+          <View style={styles.gridTwo}>
+            {DAY_KEYS.map((k) => (
+              <Field
+                key={k}
+                label={DAY_LABELS[k]}
+                value={settings.hours?.[k] ?? ''}
+                onChange={(v) =>
+                  setSettings({
+                    ...settings,
+                    hours: { ...(settings.hours ?? {}), [k]: v },
+                  })
+                }
+                onCommit={(v) =>
+                  saveSettings({
+                    hours: { ...(settings.hours ?? {}), [k]: v },
+                  })
+                }
+                placeholder="5:00 AM – 11:00 PM"
+              />
+            ))}
+          </View>
+        </View>
       </View>
+
+      {activePage === 'news' ? (
+        <NewsPostsManager gymId={gymId} />
+      ) : null}
+
+      {activePage === 'faq' ? (
+        <FaqItemsManager
+          items={(pages.faq?.items as FaqItem[] | undefined) ?? []}
+          onChange={(items) => savePage('faq', { items } as Partial<PageContent>)}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function NewsPostsManager({ gymId }: { gymId: string }) {
+  const [posts, setPosts] = useState<NewsPost[] | null>(null);
+  const [editing, setEditing] = useState<NewsPost | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reload() {
+    const { data, error } = await supabase
+      .from('gym_news_posts')
+      .select('*')
+      .eq('gym_id', gymId)
+      .order('created_at', { ascending: false });
+    if (error) setError(error.message);
+    else setPosts((data as NewsPost[]) ?? []);
+  }
+
+  useEffect(() => {
+    reload();
+  }, [gymId]);
+
+  async function createPost() {
+    setError(null);
+    const baseSlug = `post-${Date.now().toString(36)}`;
+    const { data, error } = await supabase
+      .from('gym_news_posts')
+      .insert({
+        gym_id: gymId,
+        slug: baseSlug,
+        title: 'Untitled post',
+        body: '',
+      })
+      .select('*')
+      .single();
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setEditing(data as NewsPost);
+    setCreating(true);
+    reload();
+  }
+
+  async function savePost(patch: Partial<NewsPost>) {
+    if (!editing) return;
+    const next = { ...editing, ...patch };
+    setEditing(next);
+    const { error } = await supabase
+      .from('gym_news_posts')
+      .update(patch)
+      .eq('id', editing.id);
+    if (error) setError(error.message);
+    else reload();
+  }
+
+  async function deletePost(id: string) {
+    if (typeof window !== 'undefined' && !window.confirm('Delete this post? This cannot be undone.')) return;
+    const { error } = await supabase.from('gym_news_posts').delete().eq('id', id);
+    if (error) setError(error.message);
+    else {
+      if (editing?.id === id) setEditing(null);
+      reload();
+    }
+  }
+
+  async function uploadCover() {
+    if (!editing) return;
+    const urls = await pickAndUploadImages(gymId, { multiple: false });
+    if (urls[0]) savePost({ cover_image_url: urls[0] });
+  }
+
+  function slugify(s: string) {
+    return s
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60) || `post-${Date.now().toString(36)}`;
+  }
+
+  return (
+    <View style={styles.card}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text style={styles.cardTitle}>Blog posts</Text>
+        <Pressable style={styles.btn} onPress={createPost}>
+          <Text style={styles.btnText}>New post</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.cardSub}>
+        Posts only appear on your public site once they're marked Published.
+      </Text>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      {posts == null ? (
+        <ActivityIndicator color={theme.colors.wyldPurple} />
+      ) : posts.length === 0 ? (
+        <Text style={styles.dim}>No posts yet.</Text>
+      ) : (
+        <View style={{ gap: 8 }}>
+          {posts.map((p) => {
+            const isPublished = p.published_at && new Date(p.published_at) <= new Date();
+            return (
+              <View key={p.id} style={styles.postRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.postTitle}>{p.title || '(Untitled)'}</Text>
+                  <Text style={styles.postMeta}>
+                    {isPublished
+                      ? `Published ${new Date(p.published_at!).toLocaleDateString()}`
+                      : 'Draft'}{' '}
+                    · /{p.slug}
+                  </Text>
+                </View>
+                <Pressable style={styles.btnSecondary} onPress={() => setEditing(p)}>
+                  <Text style={styles.btnSecondaryText}>Edit</Text>
+                </Pressable>
+                <Pressable style={styles.btnGhost} onPress={() => deletePost(p.id)}>
+                  <Text style={styles.btnGhostText}>Delete</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {editing ? (
+        <View style={styles.editor}>
+          <Text style={styles.subheading}>
+            {creating ? 'New post' : 'Edit post'}
+          </Text>
+          <Field
+            label="Title"
+            value={editing.title}
+            onChange={(v) => setEditing({ ...editing, title: v })}
+            onCommit={(v) =>
+              savePost({
+                title: v,
+                slug: editing.slug.startsWith('post-') ? slugify(v) : editing.slug,
+              })
+            }
+          />
+          <Field
+            label="URL slug"
+            value={editing.slug}
+            onChange={(v) => setEditing({ ...editing, slug: v })}
+            onCommit={(v) => savePost({ slug: slugify(v) })}
+          />
+          <View>
+            <Text style={styles.label}>Cover image</Text>
+            {editing.cover_image_url ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Image
+                  source={{ uri: editing.cover_image_url }}
+                  style={{ width: 120, height: 80, borderRadius: theme.radius.md }}
+                  resizeMode="cover"
+                />
+                <Pressable style={styles.btnGhost} onPress={() => savePost({ cover_image_url: null })}>
+                  <Text style={styles.btnGhostText}>Remove</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <Pressable style={styles.btn} onPress={uploadCover}>
+              <Text style={styles.btnText}>
+                {editing.cover_image_url ? 'Replace image' : 'Upload image'}
+              </Text>
+            </Pressable>
+          </View>
+          <Field
+            label="Body"
+            value={editing.body}
+            onChange={(v) => setEditing({ ...editing, body: v })}
+            onCommit={(v) => savePost({ body: v })}
+            multiline
+            rows={10}
+          />
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginTop: 8,
+            }}
+          >
+            <Pressable
+              style={styles.btn}
+              onPress={() =>
+                savePost({
+                  published_at: editing.published_at ? null : new Date().toISOString(),
+                })
+              }
+            >
+              <Text style={styles.btnText}>
+                {editing.published_at ? 'Unpublish' : 'Publish now'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.btnSecondary}
+              onPress={() => {
+                setEditing(null);
+                setCreating(false);
+              }}
+            >
+              <Text style={styles.btnSecondaryText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -473,32 +747,110 @@ function Field({
   );
 }
 
-function ColorField({
-  label,
-  value,
+
+function FaqItemsManager({
+  items: initial,
   onChange,
-  onCommit,
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  onCommit: (v: string) => void;
+  items: FaqItem[];
+  onChange: (next: FaqItem[]) => void;
 }) {
+  const [items, setItems] = useState<FaqItem[]>(initial);
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
+
+  function commit(next: FaqItem[]) {
+    setItems(next);
+    onChange(next);
+  }
+  function newId() {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return (crypto as { randomUUID: () => string }).randomUUID();
+    }
+    return `i_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  }
+  function add() {
+    commit([...items, { id: newId(), q: '', a: '' }]);
+  }
+  function localUpdate(i: number, patch: Partial<FaqItem>) {
+    setItems(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  }
+  function commitBlur() {
+    onChange(items);
+  }
+  function remove(i: number) {
+    if (typeof window !== 'undefined' && !window.confirm('Remove this question?')) return;
+    commit(items.filter((_, idx) => idx !== i));
+  }
+  function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    commit(next);
+  }
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.colorRow}>
-        <View style={[styles.swatch, { backgroundColor: value }]} />
-        <TextInput
-          value={value}
-          onChangeText={onChange}
-          onBlur={() => onCommit(value)}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={[styles.input, { flex: 1 }]}
-          placeholder="#000000"
-        />
+    <View style={styles.card}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text style={styles.cardTitle}>FAQ items</Text>
+        <Pressable style={styles.btn} onPress={add}>
+          <Text style={styles.btnText}>Add question</Text>
+        </Pressable>
       </View>
+      <Text style={styles.cardSub}>
+        Each item shows up as a clickable question on your FAQ page. Click expands the answer.
+      </Text>
+      {items.length === 0 ? (
+        <Text style={styles.dim}>No questions yet — click "Add question" to start.</Text>
+      ) : (
+        <View style={{ gap: theme.spacing.sm }}>
+          {items.map((it, i) => (
+            <View key={it.id} style={styles.editor}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={styles.subheading}>Question {i + 1}</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Pressable style={styles.btnSecondary} onPress={() => move(i, -1)}>
+                    <Text style={styles.btnSecondaryText}>↑</Text>
+                  </Pressable>
+                  <Pressable style={styles.btnSecondary} onPress={() => move(i, 1)}>
+                    <Text style={styles.btnSecondaryText}>↓</Text>
+                  </Pressable>
+                  <Pressable style={styles.btnGhost} onPress={() => remove(i)}>
+                    <Text style={styles.btnGhostText}>Remove</Text>
+                  </Pressable>
+                </View>
+              </View>
+              <Field
+                label="Question"
+                value={it.q}
+                onChange={(v) => localUpdate(i, { q: v })}
+                onCommit={commitBlur}
+              />
+              <Field
+                label="Answer"
+                value={it.a}
+                onChange={(v) => localUpdate(i, { a: v })}
+                onCommit={commitBlur}
+                multiline
+                rows={4}
+              />
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -636,4 +988,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   galleryRemoveText: { color: '#fff', fontWeight: '800', fontSize: 14, lineHeight: 16 },
+
+  subheading: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
+
+  btnSecondary: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  btnSecondaryText: { color: theme.colors.charcoal, fontWeight: '700', fontSize: 13 },
+
+  postRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  postTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
+  postMeta: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
+
+  editor: {
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    backgroundColor: '#fff',
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    gap: theme.spacing.md,
+  },
 });

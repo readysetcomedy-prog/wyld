@@ -22,7 +22,7 @@ export function Slideshow({
 
   return (
     <View style={[styles.container, rounded && styles.rounded, { aspectRatio }]}>
-      <Image source={{ uri: urls[i] }} style={styles.image} resizeMode="cover" />
+      <Image source={{ uri: urls[i] }} style={styles.image} resizeMode="contain" />
       {urls.length > 1 ? (
         <>
           <Pressable

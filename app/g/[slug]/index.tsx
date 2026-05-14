@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { Slideshow } from '@/components/Slideshow';
+import { GymHours, hasAnyHours } from '@/components/GymHours';
 
 export default function Home() {
   const site = useGymSite();
@@ -54,6 +55,10 @@ export default function Home() {
             <Text key={i} style={styles.bodyPara}>{para}</Text>
           ))}
         </View>
+      ) : null}
+
+      {hasAnyHours(site.settings.hours) ? (
+        <GymHours hours={site.settings.hours ?? {}} primaryColor={site.theme.primary_color} />
       ) : null}
     </View>
   );
