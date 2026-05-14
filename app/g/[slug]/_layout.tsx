@@ -273,9 +273,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logo: { width: 48, height: 48 },
-  brandName: { fontSize: 22, fontWeight: '800' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  logo: { width: 64, height: 64 },
+  brandName: { fontSize: 24, fontWeight: '800', letterSpacing: 0.2 },
 
   nav: { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 4 },
   navWide: { paddingVertical: 0 },

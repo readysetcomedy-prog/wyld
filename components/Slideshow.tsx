@@ -5,10 +5,12 @@ export function Slideshow({
   urls,
   aspectRatio = 16 / 9,
   rounded = true,
+  backgroundColor = '#f1f5f9',
 }: {
   urls: string[];
   aspectRatio?: number;
   rounded?: boolean;
+  backgroundColor?: string;
 }) {
   const [i, setI] = useState(0);
 
@@ -21,7 +23,7 @@ export function Slideshow({
   if (urls.length === 0) return null;
 
   return (
-    <View style={[styles.container, rounded && styles.rounded, { aspectRatio }]}>
+    <View style={[styles.container, rounded && styles.rounded, { aspectRatio, backgroundColor }]}>
       <Image source={{ uri: urls[i] }} style={styles.image} resizeMode="contain" />
       {urls.length > 1 ? (
         <>
@@ -53,7 +55,7 @@ export function Slideshow({
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', overflow: 'hidden', position: 'relative', backgroundColor: '#0f172a' },
+  container: { width: '100%', overflow: 'hidden', position: 'relative' },
   rounded: { borderRadius: 16 },
   image: { width: '100%', height: '100%' },
   arrow: {

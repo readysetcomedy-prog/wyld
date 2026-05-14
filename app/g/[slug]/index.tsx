@@ -17,6 +17,9 @@ export default function Home() {
   const body: string = page.body || '';
   const gallery: string[] = page.gallery ?? [];
 
+  const introParas = body.split('\n').filter((p) => p.trim());
+  const showHours = hasAnyHours(site.settings.hours);
+
   return (
     <View style={[styles.page, isWide && styles.pageWide]}>
       <View style={[styles.hero, isWide && styles.heroWide]}>
@@ -42,36 +45,39 @@ export default function Home() {
         </View>
         <View style={[styles.heroVisual, isWide && styles.heroVisualWide]}>
           {gallery.length > 0 ? (
-            <Slideshow urls={gallery} />
+            <Slideshow urls={gallery} aspectRatio={isWide ? 16 / 10 : 4 / 3} backgroundColor="#f8fafc" />
           ) : (
             <View style={[styles.heroPlaceholder, { backgroundColor: site.theme.primary_color }]} />
           )}
         </View>
       </View>
 
-      {body ? (
-        <View style={styles.intro}>
-          {body.split('\n').filter((p) => p.trim()).map((para, i) => (
+      {introParas.length > 0 ? (
+        <View style={[styles.introCard, { borderLeftColor: site.theme.primary_color }]}>
+          {introParas.map((para, i) => (
             <Text key={i} style={styles.bodyPara}>{para}</Text>
           ))}
         </View>
       ) : null}
 
-      {hasAnyHours(site.settings.hours) ? (
-        <GymHours hours={site.settings.hours ?? {}} primaryColor={site.theme.primary_color} />
+      {showHours ? (
+        <View style={styles.hoursCard}>
+          <GymHours hours={site.settings.hours ?? {}} primaryColor={site.theme.primary_color} />
+        </View>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 20, paddingVertical: 24, gap: 32 },
+  page: { paddingHorizontal: 20, paddingVertical: 24, gap: 36 },
   pageWide: {
     paddingHorizontal: 40,
     paddingVertical: 56,
     maxWidth: 1240,
     width: '100%',
     alignSelf: 'center',
+    gap: 48,
   },
   hero: { gap: 24 },
   heroWide: { flexDirection: 'row', alignItems: 'center', gap: 48 },
@@ -85,8 +91,30 @@ const styles = StyleSheet.create({
   ctaOutline: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 10, borderWidth: 2 },
   ctaOutlineText: { fontWeight: '700', fontSize: 15 },
   heroVisual: { width: '100%' },
-  heroVisualWide: { flex: 1 },
-  heroPlaceholder: { width: '100%', aspectRatio: 16 / 9, borderRadius: 16, opacity: 0.1 },
-  intro: { gap: 12, maxWidth: 760 },
+  heroVisualWide: { flex: 1.15 },
+  heroPlaceholder: { width: '100%', aspectRatio: 16 / 10, borderRadius: 16, opacity: 0.1 },
+  introCard: {
+    backgroundColor: '#f8fafc',
+    borderLeftWidth: 4,
+    borderRadius: 12,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
   bodyPara: { fontSize: 16, color: '#0F172A', lineHeight: 26 },
+  hoursCard: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    alignSelf: 'flex-start',
+    maxWidth: 520,
+    width: '100%',
+  },
 });
