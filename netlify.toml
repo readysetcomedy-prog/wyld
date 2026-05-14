@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Expo Router's web export doesn't pre-generate files for dynamic routes
+# like /g/[slug] or /admin/gyms/[id]. Without a fallback, hitting those
+# URLs directly returns Netlify's 404 before our JS can load. This
+# redirect serves index.html for anything the static build doesn't
+# already provide so the SPA can handle the route on the client.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
