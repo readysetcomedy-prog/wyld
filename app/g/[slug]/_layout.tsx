@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Slot,
   useLocalSearchParams,
@@ -102,7 +102,28 @@ export default function SiteLayout() {
     };
   }, [slug]);
 
-  // Update browser tab title + favicon to match the gym (web only)
+  // Update browser tab title + favicon to match the gym (web only).
+  // Capture the originals on mount so we can restore them on unmount —
+  // otherwise visiting a gym leaves its title/favicon on the WyLD pages.
+  const originalTitleRef = useRef<string | null>(null);
+  const originalFaviconRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    originalTitleRef.current = document.title;
+    const link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    originalFaviconRef.current = link?.href ?? null;
+    return () => {
+      if (originalTitleRef.current !== null) {
+        document.title = originalTitleRef.current;
+      }
+      const l = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+      if (l && originalFaviconRef.current) {
+        l.href = originalFaviconRef.current;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     if (site) {
