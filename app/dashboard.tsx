@@ -15,6 +15,7 @@ export default function Dashboard() {
 
   if (loading) return null;
   if (!session) return <Redirect href="/sign-in" />;
+  if (profile?.role === 'gym_owner') return <Redirect href="/owner" />;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

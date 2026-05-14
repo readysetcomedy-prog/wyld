@@ -18,6 +18,7 @@ export default function RootLayout() {
         <Stack.Screen name="pricing" />
         <Stack.Screen name="about" />
         <Stack.Screen name="dashboard" />
+        <Stack.Screen name="owner" />
       </Stack>
     </AuthProvider>
   );
