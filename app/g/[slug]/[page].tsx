@@ -5,6 +5,7 @@ import { Slideshow } from '@/components/Slideshow';
 import { FaqAccordion } from '@/components/FaqAccordion';
 import { PublicContactSection } from '@/components/PublicContactSection';
 import { PublicScheduleSection } from '@/components/PublicScheduleSection';
+import { PublicStoreSection } from '@/components/PublicStoreSection';
 
 const VALID_PAGES = ['about', 'services', 'contact', 'news', 'faq', 'schedule', 'store'] as const;
 type PageKey = (typeof VALID_PAGES)[number];
@@ -113,13 +114,7 @@ export default function Page() {
 
       {key === 'schedule' ? <PublicScheduleSection /> : null}
 
-      {key === 'store' ? (
-        <View style={styles.dataNote}>
-          <Text style={styles.dataNoteText}>
-            Store items will appear here once {site.gym.name} adds them.
-          </Text>
-        </View>
-      ) : null}
+      {key === 'store' ? <PublicStoreSection /> : null}
 
       {key === 'contact' ? <PublicContactSection /> : null}
     </View>
