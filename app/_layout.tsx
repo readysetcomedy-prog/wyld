@@ -19,6 +19,9 @@ export default function RootLayout() {
         <Stack.Screen name="about" />
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="owner" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="member" />
+        <Stack.Screen name="g/[slug]" />
       </Stack>
     </AuthProvider>
   );
