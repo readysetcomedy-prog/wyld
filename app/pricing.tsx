@@ -20,7 +20,6 @@ const SITE_MONTHLY = 29;
 const BUNDLE_SETUP_DISCOUNT = 100;
 const BUNDLE_MONTHLY_DISCOUNT = 10;
 const YEARLY_OFF = 0.2;
-const LOCK_HARDWARE_COST = 70;
 
 const BUNDLE_SETUP = DOOR_SETUP + SITE_SETUP - BUNDLE_SETUP_DISCOUNT;
 const BUNDLE_MONTHLY = DOOR_MONTHLY + SITE_MONTHLY - BUNDLE_MONTHLY_DISCOUNT;
@@ -111,7 +110,7 @@ export default function Pricing() {
               'Membership payments collected for you (merchant processor fees not included)',
               'Unique QR code + searchable in-app listing',
               'Tax-ready reports',
-              `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
+              'Lock hardware sold separately: ~$70 deadbolt (self-install) or ~$350+ for commercial doors (electric strike or mag lock, installer required). Not part of our fees.',
             ]}
           />
           <PlanCard
@@ -128,7 +127,7 @@ export default function Pricing() {
               'Everything in WyLD Site',
               'Members pay from the app OR your website — either unlocks the door',
               'One dashboard, one bill',
-              `Plus a one-time ~${fmt(LOCK_HARDWARE_COST)} lock you buy once`,
+              'Lock hardware sold separately: ~$70 deadbolt (self-install) or ~$350+ for commercial doors. Not part of our fees.',
             ]}
           />
           <PlanCard
