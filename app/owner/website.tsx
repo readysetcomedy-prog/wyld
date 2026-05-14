@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { pickAndUploadImages } from '@/components/ImageUpload';
+import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
 
 type Theme = {
   gym_id: string;
@@ -88,6 +89,7 @@ export default function Website() {
   const [savingPage, setSavingPage] = useState(false);
   const [savedNote, setSavedNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [baseUrl, setBaseUrl] = useState<string>(DEFAULT_BASE_URL);
 
   const gymId = profile?.gym_id ?? null;
 
@@ -100,6 +102,7 @@ export default function Website() {
         { data: m },
         { data: s },
         { data: pp },
+        b,
       ] = await Promise.all([
         supabase.from('gyms').select('id, name, slug, custom_domain').eq('id', gymId).maybeSingle(),
         supabase.from('gym_themes').select('*').eq('gym_id', gymId).maybeSingle(),
@@ -110,7 +113,9 @@ export default function Website() {
           .maybeSingle(),
         supabase.from('gym_site_settings').select('*').eq('gym_id', gymId).maybeSingle(),
         supabase.from('gym_pages').select('page_key, content').eq('gym_id', gymId),
+        fetchBaseUrl(),
       ]);
+      setBaseUrl(b);
       setGym((g as Gym | null) ?? null);
       setThemeRow((t as Theme | null) ?? null);
       setModules((m as Modules | null) ?? null);
@@ -202,11 +207,7 @@ export default function Website() {
     );
   }
 
-  const liveUrl = gym.custom_domain
-    ? `https://${gym.custom_domain}`
-    : gym.slug
-      ? `https://wyldinc.app/g/${gym.slug}`
-      : null;
+  const liveUrl = liveUrlForGym(baseUrl, gym);
 
   const visiblePages: PageKey[] = PAGE_KEYS.filter((k) => {
     if (k === 'news') return modules.news_enabled || pages.news != null;

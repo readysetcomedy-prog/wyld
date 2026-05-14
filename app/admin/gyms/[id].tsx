@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
 
 type Gym = {
   id: string;
@@ -82,15 +83,18 @@ export default function GymDetail() {
   const [savingMeta, setSavingMeta] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
   const [metaSaved, setMetaSaved] = useState(false);
+  const [baseUrl, setBaseUrl] = useState<string>(DEFAULT_BASE_URL);
 
   useEffect(() => {
     (async () => {
       const gymId = String(id ?? '');
       if (!gymId) return;
-      const [{ data: g, error: gErr }, { data: m }] = await Promise.all([
+      const [{ data: g, error: gErr }, { data: m }, b] = await Promise.all([
         supabase.from('gyms').select('*').eq('id', gymId).maybeSingle(),
         supabase.from('gym_modules').select('*').eq('gym_id', gymId).maybeSingle(),
+        fetchBaseUrl(),
       ]);
+      setBaseUrl(b);
       if (gErr || !g) {
         setError(gErr?.message ?? 'Gym not found');
         setLoading(false);
@@ -173,11 +177,7 @@ export default function GymDetail() {
     );
   }
 
-  const liveUrl = gym.custom_domain
-    ? `https://${gym.custom_domain}`
-    : gym.slug
-      ? `https://wyldinc.app/g/${gym.slug}`
-      : null;
+  const liveUrl = liveUrlForGym(baseUrl, gym);
 
   return (
     <View style={styles.container}>
@@ -219,7 +219,7 @@ export default function GymDetail() {
             autoCapitalize="none"
           />
           <Text style={styles.hint}>
-            Used at wyldinc.app/g/<Text style={styles.hintMono}>{slug || 'your-slug'}</Text>
+            Used at <Text style={styles.hintMono}>{baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}/g/{slug || 'your-slug'}</Text>
           </Text>
         </View>
         <View style={styles.field}>
