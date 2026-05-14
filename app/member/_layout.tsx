@@ -10,14 +10,17 @@ import {
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const TABS = [
   { label: 'My gyms', href: '/member' },
   { label: 'Find a gym', href: '/member/find' },
+  { label: 'Messages', href: '/member/messages' },
 ];
 
 export default function MemberLayout() {
-  const { session, loading, signOut } = useAuth();
+  const { session, loading, signOut, profile } = useAuth();
+  const unread = useUnreadMessages('member', null, profile?.id ?? null);
   const pathname = usePathname();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -43,6 +46,7 @@ export default function MemberLayout() {
         >
           {TABS.map((t) => {
             const isActive = pathname === t.href;
+            const badge = t.href === '/member/messages' && unread > 0 ? unread : 0;
             return (
               <Pressable
                 key={t.href}
@@ -52,9 +56,16 @@ export default function MemberLayout() {
                 ]}
                 onPress={() => router.push(t.href as never)}
               >
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                  {t.label}
-                </Text>
+                <View style={styles.tabInner}>
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                    {t.label}
+                  </Text>
+                  {badge > 0 ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{badge}</Text>
+                    </View>
+                  ) : null}
+                </View>
               </Pressable>
             );
           })}
@@ -129,6 +140,16 @@ const styles = StyleSheet.create({
   tabMobileActive: { backgroundColor: theme.colors.wyldPurple, borderColor: theme.colors.wyldPurple },
   tabText: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
   tabTextActive: { color: '#fff' },
+  tabInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badge: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 999,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 
   signOut: {
     marginTop: 'auto',

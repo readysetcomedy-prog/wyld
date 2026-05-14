@@ -2,8 +2,9 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, Redirect } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { Slideshow } from '@/components/Slideshow';
-import { GymHours, hasAnyHours } from '@/components/GymHours';
 import { FaqAccordion } from '@/components/FaqAccordion';
+import { PublicContactSection } from '@/components/PublicContactSection';
+import { PublicScheduleSection } from '@/components/PublicScheduleSection';
 
 const VALID_PAGES = ['about', 'services', 'contact', 'news', 'faq', 'schedule', 'store'] as const;
 type PageKey = (typeof VALID_PAGES)[number];
@@ -99,13 +100,7 @@ export default function Page() {
         </View>
       ) : null}
 
-      {key === 'schedule' ? (
-        <View style={styles.dataNote}>
-          <Text style={styles.dataNoteText}>
-            Class schedule will appear here once {site.gym.name} adds it.
-          </Text>
-        </View>
-      ) : null}
+      {key === 'schedule' ? <PublicScheduleSection /> : null}
 
       {key === 'store' ? (
         <View style={styles.dataNote}>
@@ -115,29 +110,7 @@ export default function Page() {
         </View>
       ) : null}
 
-      {key === 'contact' ? (
-        <>
-          <View style={styles.contactBlock}>
-            {site.settings.contact_email ? (
-              <Text style={styles.contactLine}>Email: {site.settings.contact_email}</Text>
-            ) : null}
-            {site.settings.contact_phone ? (
-              <Text style={styles.contactLine}>Phone: {site.settings.contact_phone}</Text>
-            ) : null}
-            {site.settings.address_line1 ? (
-              <Text style={styles.contactLine}>
-                {site.settings.address_line1}
-                {site.settings.city ? `, ${site.settings.city}` : ''}
-                {site.settings.state ? `, ${site.settings.state}` : ''}
-                {site.settings.zip ? ` ${site.settings.zip}` : ''}
-              </Text>
-            ) : null}
-          </View>
-          {hasAnyHours(site.settings.hours) ? (
-            <GymHours hours={site.settings.hours ?? {}} primaryColor={site.theme.primary_color} />
-          ) : null}
-        </>
-      ) : null}
+      {key === 'contact' ? <PublicContactSection /> : null}
     </View>
   );
 }
@@ -164,6 +137,4 @@ const styles = StyleSheet.create({
     maxWidth: 760,
   },
   dataNoteText: { fontSize: 14, color: '#475569', lineHeight: 20 },
-  contactBlock: { gap: 4, marginTop: 8 },
-  contactLine: { fontSize: 16, color: '#0F172A' },
 });

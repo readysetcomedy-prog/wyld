@@ -80,6 +80,7 @@ export default function SiteLayout() {
           store_enabled: false,
           news_enabled: false,
           faq_enabled: false,
+          bookings_enabled: false,
         },
         settings: settings ?? {
           contact_email: null,

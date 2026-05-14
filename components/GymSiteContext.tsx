@@ -18,6 +18,7 @@ export type GymSite = {
     store_enabled: boolean;
     news_enabled: boolean;
     faq_enabled: boolean;
+    bookings_enabled: boolean;
   };
   settings: {
     contact_email: string | null;

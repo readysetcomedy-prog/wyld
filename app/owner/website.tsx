@@ -15,6 +15,7 @@ import { pickAndUploadImages } from '@/components/ImageUpload';
 import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
 import { ColorPickerField } from '@/components/ColorPicker';
 import { DAY_KEYS, DAY_LABELS, type HoursMap } from '@/components/GymHours';
+import { LocationsManager } from '@/components/LocationsManager';
 
 type Theme = {
   gym_id: string;
@@ -481,6 +482,16 @@ export default function Website() {
             ))}
           </View>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Locations</Text>
+        <Text style={styles.cardSub}>
+          Add one or more locations, each with its own address, emails, and phones. These
+          appear on your Contact page. If you don&apos;t add any, the single contact info above
+          is used as a fallback.
+        </Text>
+        <LocationsManager gymId={gymId} />
       </View>
 
       {activePage === 'news' ? (
