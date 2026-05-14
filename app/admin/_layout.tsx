@@ -14,6 +14,7 @@ import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Gyms', href: '/admin/gyms', match: (p) => p.startsWith('/admin/gyms') },
   { label: 'Users', href: '/admin/users', match: (p) => p === '/admin/users' },
+  { label: 'Settings', href: '/admin/settings', match: (p) => p === '/admin/settings' },
 ];
 
 export default function AdminLayout() {
