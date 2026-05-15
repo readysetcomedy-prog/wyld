@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { GymSiteProvider, GymSite, GymSiteLocation } from '@/components/GymSiteContext';
 import { SocialIcons } from '@/components/SocialIcons';
 import { PhoneLink, EmailLink } from '@/components/ContactLink';
+import { WYLD_INC_LOGO_URL } from '@/lib/theme';
 
 const DEFAULT_MODULES = {
   calendar_enabled: false,
@@ -429,6 +430,21 @@ export default function SiteLayout() {
                 ))}
               </View>
             </View>
+
+            <View style={styles.footerLogoCol}>
+              {site.theme.logo_url ? (
+                <Image
+                  source={{ uri: site.theme.logo_url }}
+                  style={styles.footerLogo}
+                  resizeMode="contain"
+                />
+              ) : null}
+              <Image
+                source={{ uri: WYLD_INC_LOGO_URL }}
+                style={styles.footerLogo}
+                resizeMode="contain"
+              />
+            </View>
           </View>
 
           <View style={styles.footerDivider} />
@@ -558,6 +574,18 @@ const styles = StyleSheet.create({
   },
   footerNavLink: { color: 'rgba(255,255,255,0.82)', fontSize: 14, paddingVertical: 3 },
   footerAppCol: { gap: 14, maxWidth: 460 },
+  footerLogoCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  footerLogo: {
+    width: 84,
+    height: 84,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+  },
   footerAppTitle: { color: '#fff', fontSize: 16, fontWeight: '800', lineHeight: 23 },
   storeBadges: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   storeBadge: {
