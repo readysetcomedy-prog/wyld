@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Slot,
   useLocalSearchParams,
+  useGlobalSearchParams,
   useRouter,
   usePathname,
 } from 'expo-router';
@@ -69,10 +70,10 @@ function normalizeTheme(row: any) {
 }
 
 export default function SiteLayout() {
-  const { slug: rawSlug, loc: rawLoc } = useLocalSearchParams<{
-    slug: string;
-    loc?: string;
-  }>();
+  // useLocalSearchParams in a layout only reliably returns path params (slug).
+  // Query-string params like ?loc= need useGlobalSearchParams to surface here.
+  const { slug: rawSlug } = useLocalSearchParams<{ slug: string }>();
+  const { loc: rawLoc } = useGlobalSearchParams<{ loc?: string }>();
   const slug = typeof rawSlug === 'string' ? rawSlug.trim().toLowerCase() : '';
   const locParam = typeof rawLoc === 'string' && rawLoc ? rawLoc.toLowerCase() : null;
   const router = useRouter();
@@ -125,16 +126,13 @@ export default function SiteLayout() {
       const locations: GymSiteLocation[] = (locationRows ?? []) as any;
       const multiLocationEnabled = !!(modules as any)?.multi_location_enabled;
 
-      // Resolve the current location.
-      // - locParam wins if it matches a location's slug
-      // - otherwise primary, otherwise first, otherwise null
+      // Resolve the current location strictly from the URL. No auto-fallback
+      // to a "primary" location — locations are equal. If multi-location is on
+      // and no loc is in the URL, the home page renders the picker landing.
       let currentLocation: GymSiteLocation | null = null;
       if (locParam) {
         currentLocation =
           locations.find((l) => l.slug?.toLowerCase() === locParam) ?? null;
-      }
-      if (!currentLocation) {
-        currentLocation = locations.find((l) => l.is_primary) ?? locations[0] ?? null;
       }
 
       // Fetch theme & pages for both the gym default (location_id IS NULL) and
@@ -332,12 +330,7 @@ export default function SiteLayout() {
             {site.theme.logo_url ? (
               <Image source={{ uri: site.theme.logo_url }} style={styles.logo} resizeMode="contain" />
             ) : null}
-            <View>
-              <Text style={[styles.brandName, { color: primary }]}>{site.gym.name}</Text>
-              {site.currentLocation && site.locations.length > 1 ? (
-                <Text style={styles.brandLocation}>{site.currentLocation.label}</Text>
-              ) : null}
-            </View>
+            <Text style={[styles.brandName, { color: primary }]}>{site.gym.name}</Text>
           </Pressable>
 
           {NAV.length > 0 ? (
@@ -387,12 +380,7 @@ export default function SiteLayout() {
         <View style={[styles.footer, { backgroundColor: primary }]}>
           <View style={[styles.footerInner, isWide && styles.footerInnerWide]}>
             <View>
-              <Text style={styles.footerName}>
-                {site.gym.name}
-                {site.currentLocation && site.locations.length > 1
-                  ? ` — ${site.currentLocation.label}`
-                  : ''}
-              </Text>
+              <Text style={styles.footerName}>{site.gym.name}</Text>
               {site.settings.address_line1 ? (
                 <Text style={styles.footerLine}>
                   {site.settings.address_line1}

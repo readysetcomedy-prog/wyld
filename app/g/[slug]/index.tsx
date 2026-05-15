@@ -45,13 +45,6 @@ export default function Home() {
                   {l.state ? `, ${l.state}` : ''}
                 </Text>
               ) : null}
-              {l.is_primary ? (
-                <View
-                  style={[pickerStyles.primaryBadge, { backgroundColor: site.theme.accent_color }]}
-                >
-                  <Text style={pickerStyles.primaryBadgeText}>Primary</Text>
-                </View>
-              ) : null}
             </Pressable>
           ))}
         </View>

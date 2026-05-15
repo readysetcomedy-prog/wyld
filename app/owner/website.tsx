@@ -455,7 +455,6 @@ export default function Website() {
                   ]}
                 >
                   {l.label || 'Untitled location'}
-                  {l.is_primary ? ' ★' : ''}
                 </Text>
               </Pressable>
             ))}
