@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,12 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { GymHours, hasAnyHours } from '@/components/GymHours';
+import { GymHours, hasAnyHours, HoursMap } from '@/components/GymHours';
 import { useGymSite } from '@/components/GymSiteContext';
-import { StyledBlock, BlockStyle } from '@/components/StyledBlock';
 import { PhoneLink, EmailLink } from '@/components/ContactLink';
 
 type LocContact = {
@@ -29,15 +29,17 @@ type Loc = {
   city: string | null;
   state: string | null;
   zip: string | null;
+  hours: HoursMap | null;
   contacts: LocContact[];
 };
 
 export function PublicContactSection() {
   const site = useGymSite();
   const { session, profile } = useAuth();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
   const [locations, setLocations] = useState<Loc[] | null>(null);
 
-  // Send-message form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [body, setBody] = useState('');
@@ -54,10 +56,7 @@ export function PublicContactSection() {
           .select('*')
           .eq('gym_id', site.gym.id)
           .order('display_order'),
-        supabase
-          .from('gym_location_contacts')
-          .select('*')
-          .order('display_order'),
+        supabase.from('gym_location_contacts').select('*').order('display_order'),
       ]);
       if (cancelled) return;
       const byLoc: Record<string, LocContact[]> = {};
@@ -73,6 +72,16 @@ export function PublicContactSection() {
     };
   }, [site.gym.id]);
 
+  // The location the visitor is on — fall back to the first location for a
+  // single-location gym, or null if the gym has none.
+  const loc: Loc | null = useMemo(() => {
+    if (!locations) return null;
+    if (site.currentLocation) {
+      return locations.find((l) => l.id === site.currentLocation!.id) ?? null;
+    }
+    return locations[0] ?? null;
+  }, [locations, site.currentLocation]);
+
   async function sendMessage() {
     setErr(null);
     if (!body.trim()) {
@@ -82,7 +91,7 @@ export function PublicContactSection() {
     setSending(true);
 
     if (session && profile) {
-      // Authenticated: open-or-find a member_gym thread, then insert a message.
+      // Member / signed-in: open-or-find a member_gym thread, then a message.
       const { data: existing } = await supabase
         .from('message_threads')
         .select('id')
@@ -98,6 +107,7 @@ export function PublicContactSection() {
             kind: 'member_gym',
             gym_id: site.gym.id,
             user_id: profile.id,
+            location_id: loc?.id ?? null,
             subject: 'From contact page',
           })
           .select('id')
@@ -122,37 +132,22 @@ export function PublicContactSection() {
       setSent(true);
       setBody('');
     } else {
-      // Anonymous: create contact_form thread + first message.
+      // Anonymous: a SECURITY DEFINER RPC creates the thread + message.
       if (!name.trim() || !email.trim()) {
         setErr('Please enter your name and email.');
         setSending(false);
         return;
       }
-      const { data: created, error: tErr } = await supabase
-        .from('message_threads')
-        .insert({
-          kind: 'contact_form',
-          gym_id: site.gym.id,
-          anon_name: name.trim(),
-          anon_email: email.trim(),
-          subject: 'Contact form message',
-        })
-        .select('id')
-        .single();
-      if (tErr) {
-        setErr(tErr.message);
-        setSending(false);
-        return;
-      }
-      const threadId = (created as any).id as string;
-      const { error: mErr } = await supabase.from('messages').insert({
-        thread_id: threadId,
-        sender_is_anon: true,
-        body: body.trim(),
+      const { error } = await supabase.rpc('submit_contact_message', {
+        p_gym_id: site.gym.id,
+        p_location_id: loc?.id ?? null,
+        p_name: name.trim(),
+        p_email: email.trim(),
+        p_body: body.trim(),
       });
       setSending(false);
-      if (mErr) {
-        setErr(mErr.message);
+      if (error) {
+        setErr(error.message);
         return;
       }
       setSent(true);
@@ -162,106 +157,95 @@ export function PublicContactSection() {
     }
   }
 
-  const showFallback = !locations || locations.length === 0;
-  const fallback = site.settings;
   const accent = site.theme.accent_color;
   const primary = site.theme.primary_color;
+  const fallback = site.settings;
 
-  return (
-    <View style={styles.root}>
-      {locations === null ? (
-        <ActivityIndicator color={primary} />
-      ) : showFallback ? (
-        <View style={styles.locCard}>
-          {fallback.address_line1 ? (
-            <Text style={styles.addr}>
-              {fallback.address_line1}
-              {fallback.city ? `, ${fallback.city}` : ''}
-              {fallback.state ? `, ${fallback.state}` : ''}
-              {fallback.zip ? ` ${fallback.zip}` : ''}
-            </Text>
-          ) : null}
-          {fallback.contact_email ? (
-            <EmailLink
-              email={fallback.contact_email}
-              prefix="Email: "
-              style={styles.contactLine}
-            />
-          ) : null}
-          {fallback.contact_phone ? (
-            <PhoneLink
-              phone={fallback.contact_phone}
-              prefix="Phone: "
-              style={styles.contactLine}
-            />
-          ) : null}
-        </View>
-      ) : (
-        <View style={styles.locGrid}>
-          {locations.map((loc) => {
-            const emails = loc.contacts.filter((c) => c.kind === 'email');
-            const phones = loc.contacts.filter((c) => c.kind === 'phone');
-            return (
-              <View key={loc.id} style={styles.locCard}>
-                {loc.label ? (
-                  <Text style={[styles.locTitle, { color: primary }]}>{loc.label}</Text>
-                ) : null}
-                {loc.address_line1 ? (
-                  <Text style={styles.addr}>
-                    {loc.address_line1}
-                    {loc.address_line2 ? `, ${loc.address_line2}` : ''}
-                  </Text>
-                ) : null}
-                {(loc.city || loc.state || loc.zip) ? (
-                  <Text style={styles.addr}>
-                    {[loc.city, loc.state, loc.zip].filter(Boolean).join(', ')}
-                  </Text>
-                ) : null}
-                {emails.length > 0 ? (
-                  <View style={styles.contactGroup}>
-                    {emails.map((c) => (
-                      <EmailLink
-                        key={c.id}
-                        email={c.value}
-                        prefix={c.label ? `${c.label}: ` : ''}
-                        style={styles.contactLine}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-                {phones.length > 0 ? (
-                  <View style={styles.contactGroup}>
-                    {phones.map((c) => (
-                      <PhoneLink
-                        key={c.id}
-                        phone={c.value}
-                        prefix={c.label ? `${c.label}: ` : ''}
-                        style={styles.contactLine}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      )}
+  // Hours: location's own if set, else gym-level.
+  const hours: HoursMap | null = loc?.hours ?? fallback.hours ?? null;
 
-      {hasAnyHours(site.settings.hours) ? (
-        <StyledBlock
-          style={(((site.pages.contact ?? {}).styles ?? {}) as Record<string, BlockStyle>).hours}
-          defaults={{ box: true, width: 'narrow' }}
-        >
-          <GymHours hours={site.settings.hours ?? {}} primaryColor={primary} />
-        </StyledBlock>
+  // HQ / main office: gym-level contact info, shown only if it has an
+  // address that differs from the location being viewed.
+  const hqDiffers =
+    !!fallback.address_line1 &&
+    fallback.address_line1.trim() !== (loc?.address_line1 ?? '').trim();
+
+  if (locations === null) return <ActivityIndicator color={primary} />;
+
+  const emails = (loc?.contacts ?? []).filter((c) => c.kind === 'email');
+  const phones = (loc?.contacts ?? []).filter((c) => c.kind === 'phone');
+
+  const locationCard = (
+    <View style={styles.col}>
+      <View style={styles.card}>
+        <Text style={[styles.cardTitle, { color: primary }]}>
+          {loc?.label || 'Visit us'}
+        </Text>
+        {loc?.address_line1 ? (
+          <Text style={styles.addr}>
+            {loc.address_line1}
+            {loc.address_line2 ? `, ${loc.address_line2}` : ''}
+          </Text>
+        ) : fallback.address_line1 ? (
+          <Text style={styles.addr}>{fallback.address_line1}</Text>
+        ) : null}
+        {loc && (loc.city || loc.state || loc.zip) ? (
+          <Text style={styles.addr}>
+            {[loc.city, loc.state, loc.zip].filter(Boolean).join(', ')}
+          </Text>
+        ) : !loc && (fallback.city || fallback.state || fallback.zip) ? (
+          <Text style={styles.addr}>
+            {[fallback.city, fallback.state, fallback.zip].filter(Boolean).join(', ')}
+          </Text>
+        ) : null}
+
+        {emails.length > 0 ? (
+          <View style={styles.contactGroup}>
+            {emails.map((c) => (
+              <EmailLink
+                key={c.id}
+                email={c.value}
+                prefix={c.label ? `${c.label}: ` : ''}
+                style={styles.contactLine}
+              />
+            ))}
+          </View>
+        ) : fallback.contact_email ? (
+          <EmailLink email={fallback.contact_email} prefix="Email: " style={styles.contactLine} />
+        ) : null}
+
+        {phones.length > 0 ? (
+          <View style={styles.contactGroup}>
+            {phones.map((c) => (
+              <PhoneLink
+                key={c.id}
+                phone={c.value}
+                prefix={c.label ? `${c.label}: ` : ''}
+                style={styles.contactLine}
+              />
+            ))}
+          </View>
+        ) : fallback.contact_phone ? (
+          <PhoneLink phone={fallback.contact_phone} prefix="Phone: " style={styles.contactLine} />
+        ) : null}
+      </View>
+
+      {hasAnyHours(hours) ? (
+        <View style={styles.card}>
+          <GymHours hours={hours ?? {}} primaryColor={primary} />
+        </View>
       ) : null}
+    </View>
+  );
 
+  const messageForm = (
+    <View style={styles.col}>
       <View style={styles.formCard}>
         <Text style={[styles.formTitle, { color: primary }]}>Send a message</Text>
         {sent ? (
           <View>
             <Text style={styles.sentText}>
-              Thanks — your message has been sent to {site.gym.name}.
+              Thanks — your message has been sent to {loc?.label || site.gym.name}.
             </Text>
             <Pressable onPress={() => setSent(false)} style={styles.linkBtn}>
               <Text style={[styles.linkBtnText, { color: accent }]}>Send another</Text>
@@ -270,32 +254,30 @@ export function PublicContactSection() {
         ) : (
           <>
             {!session ? (
-              <>
-                <View style={styles.row}>
-                  <View style={styles.flex}>
-                    <Text style={styles.label}>Your name</Text>
-                    <TextInput
-                      value={name}
-                      onChangeText={setName}
-                      placeholder="Jane Doe"
-                      placeholderTextColor="#94a3b8"
-                      style={styles.input}
-                    />
-                  </View>
-                  <View style={styles.flex}>
-                    <Text style={styles.label}>Email</Text>
-                    <TextInput
-                      value={email}
-                      onChangeText={setEmail}
-                      placeholder="you@example.com"
-                      placeholderTextColor="#94a3b8"
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      style={styles.input}
-                    />
-                  </View>
+              <View style={styles.row}>
+                <View style={styles.flex}>
+                  <Text style={styles.label}>Your name</Text>
+                  <TextInput
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Jane Doe"
+                    placeholderTextColor="#94a3b8"
+                    style={styles.input}
+                  />
                 </View>
-              </>
+                <View style={styles.flex}>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@example.com"
+                    placeholderTextColor="#94a3b8"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    style={styles.input}
+                  />
+                </View>
+              </View>
             ) : (
               <Text style={styles.signedInNote}>
                 Signed in as {profile?.full_name || profile?.email}. Your reply will appear in
@@ -306,7 +288,7 @@ export function PublicContactSection() {
             <TextInput
               value={body}
               onChangeText={setBody}
-              placeholder={`Hi ${site.gym.name}…`}
+              placeholder={`Hi ${loc?.label || site.gym.name}…`}
               placeholderTextColor="#94a3b8"
               multiline
               numberOfLines={5}
@@ -329,15 +311,42 @@ export function PublicContactSection() {
       </View>
     </View>
   );
+
+  return (
+    <View style={styles.root}>
+      <View style={[styles.twoCol, isWide && styles.twoColWide]}>
+        {locationCard}
+        {messageForm}
+      </View>
+
+      {hqDiffers ? (
+        <View style={styles.hqCard}>
+          <Text style={styles.hqTitle}>Main office</Text>
+          <Text style={styles.hqLine}>
+            {fallback.address_line1}
+            {fallback.city ? `, ${fallback.city}` : ''}
+            {fallback.state ? `, ${fallback.state}` : ''}
+            {fallback.zip ? ` ${fallback.zip}` : ''}
+          </Text>
+          {fallback.contact_phone ? (
+            <PhoneLink phone={fallback.contact_phone} prefix="Phone: " style={styles.hqLine} />
+          ) : null}
+          {fallback.contact_email ? (
+            <EmailLink email={fallback.contact_email} prefix="Email: " style={styles.hqLine} />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 24 },
-  locGrid: { gap: 16, flexDirection: 'row', flexWrap: 'wrap' },
-  locCard: {
-    flexGrow: 1,
-    flexBasis: 280,
-    maxWidth: 420,
+  root: { gap: 20 },
+  twoCol: { gap: 20, flexDirection: 'column' },
+  twoColWide: { flexDirection: 'row', alignItems: 'flex-start' },
+  col: { flex: 1, gap: 16, minWidth: 0 },
+
+  card: {
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -345,7 +354,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 4,
   },
-  locTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  cardTitle: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
   addr: { fontSize: 15, color: '#0F172A', lineHeight: 22 },
   contactGroup: { marginTop: 6, gap: 2 },
   contactLine: { fontSize: 14, color: '#475569' },
@@ -357,11 +366,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 12,
-    maxWidth: 640,
   },
   formTitle: { fontSize: 20, fontWeight: '800' },
   row: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  flex: { flexGrow: 1, flexBasis: 0, minWidth: 160, gap: 4 },
+  flex: { flexGrow: 1, flexBasis: 0, minWidth: 140, gap: 4 },
   label: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
   input: {
     borderWidth: 1,
@@ -380,4 +388,23 @@ const styles = StyleSheet.create({
   sentText: { fontSize: 15, color: '#0F172A', lineHeight: 22 },
   linkBtn: { marginTop: 8 },
   linkBtnText: { fontSize: 14, fontWeight: '700' },
+
+  hqCard: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 14,
+    gap: 3,
+    maxWidth: 420,
+  },
+  hqTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  hqLine: { fontSize: 14, color: '#475569', lineHeight: 20 },
 });
