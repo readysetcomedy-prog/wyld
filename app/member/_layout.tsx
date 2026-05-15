@@ -28,6 +28,8 @@ export default function MemberLayout() {
 
   if (loading) return null;
   if (!session) return <Redirect href="/sign-in" />;
+  // Wait for profile to match the current session before rendering.
+  if (!profile || profile.id !== session.user.id) return null;
 
   return (
     <View style={[styles.root, isWide && styles.rootWide]}>

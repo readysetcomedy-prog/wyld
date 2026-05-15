@@ -15,9 +15,13 @@ export default function Dashboard() {
 
   if (loading) return null;
   if (!session) return <Redirect href="/sign-in" />;
-  if (profile?.role === 'admin') return <Redirect href="/admin" />;
-  if (profile?.role === 'gym_owner') return <Redirect href="/owner" />;
-  if (profile?.role === 'member') return <Redirect href="/member" />;
+  // Wait for the profile to catch up with the current session, otherwise a
+  // stale profile from a prior user can route the new user to the wrong
+  // role-based home (e.g. admin landing on /owner).
+  if (!profile || profile.id !== session.user.id) return null;
+  if (profile.role === 'admin') return <Redirect href="/admin" />;
+  if (profile.role === 'gym_owner') return <Redirect href="/owner" />;
+  if (profile.role === 'member') return <Redirect href="/member" />;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

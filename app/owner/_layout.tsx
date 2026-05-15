@@ -78,7 +78,9 @@ export default function OwnerLayout() {
 
   if (loading) return null;
   if (!session) return <Redirect href="/sign-in" />;
-  if (profile && profile.role !== 'gym_owner' && profile.role !== 'admin') {
+  // Wait for profile to match the current session before role-gating.
+  if (!profile || profile.id !== session.user.id) return null;
+  if (profile.role !== 'gym_owner' && profile.role !== 'admin') {
     return <Redirect href="/dashboard" />;
   }
 
