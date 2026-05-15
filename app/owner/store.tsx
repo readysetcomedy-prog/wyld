@@ -27,6 +27,8 @@ type Product = {
   image_url: string | null;
   published: boolean;
   display_order: number;
+  category: string | null;
+  featured: boolean;
 };
 
 type Form = {
@@ -38,6 +40,8 @@ type Form = {
   inventory_location: string;
   image_url: string | null;
   published: boolean;
+  category: string;
+  featured: boolean;
 };
 
 const EMPTY: Form = {
@@ -48,6 +52,8 @@ const EMPTY: Form = {
   inventory_location: '',
   image_url: null,
   published: true,
+  category: '',
+  featured: false,
 };
 
 export default function OwnerStore() {
@@ -118,6 +124,8 @@ export default function OwnerStore() {
       inventory_location: form.inventory_location.trim() || null,
       image_url: form.image_url,
       published: form.published,
+      category: form.category.trim() || null,
+      featured: form.featured,
     };
     setSaving(true);
     if (form.id) {
@@ -185,6 +193,8 @@ export default function OwnerStore() {
       inventory_location: p.inventory_location ?? '',
       image_url: p.image_url,
       published: p.published,
+      category: p.category ?? '',
+      featured: p.featured,
     });
   }
 
@@ -310,6 +320,18 @@ export default function OwnerStore() {
                 </View>
               </View>
 
+              <Text style={styles.label}>Category (optional)</Text>
+              <TextInput
+                value={form.category}
+                onChangeText={(v) => setForm({ ...form, category: v })}
+                placeholder="Apparel, Supplements, Gear…"
+                placeholderTextColor="#94a3b8"
+                style={styles.input}
+              />
+              <Text style={styles.dim}>
+                Shoppers can filter the public store by category.
+              </Text>
+
               <Text style={styles.label}>Inventory location (private)</Text>
               <TextInput
                 value={form.inventory_location}
@@ -326,6 +348,13 @@ export default function OwnerStore() {
                   onValueChange={(v) => setForm({ ...form, published: v })}
                 />
                 <Text style={styles.label}>Show on public store</Text>
+              </View>
+              <View style={styles.toggleInline}>
+                <Switch
+                  value={form.featured}
+                  onValueChange={(v) => setForm({ ...form, featured: v })}
+                />
+                <Text style={styles.label}>Featured (pinned to the top)</Text>
               </View>
             </View>
           </View>
@@ -375,6 +404,18 @@ export default function OwnerStore() {
                   <Text style={styles.cardPrice}>
                     {p.price_cents != null ? `$${(p.price_cents / 100).toFixed(2)}` : '—'}
                   </Text>
+                  <View style={styles.tagRow}>
+                    {p.featured ? (
+                      <View style={styles.featTag}>
+                        <Text style={styles.featTagText}>★ Featured</Text>
+                      </View>
+                    ) : null}
+                    {p.category ? (
+                      <View style={styles.catTag}>
+                        <Text style={styles.catTagText}>{p.category}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   {p.sku ? <Text style={styles.cardMeta}>SKU {p.sku}</Text> : null}
                   {p.inventory_location ? (
                     <Text style={styles.cardMeta} numberOfLines={1}>
@@ -502,6 +543,21 @@ const styles = StyleSheet.create({
   cardBody: { padding: 12, gap: 4 },
   cardName: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
   cardPrice: { fontSize: 16, fontWeight: '800', color: theme.colors.wyldPurple },
+  tagRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginVertical: 2 },
+  featTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#fef3c7',
+  },
+  featTagText: { fontSize: 10, fontWeight: '800', color: '#92400e' },
+  catTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#eef2ff',
+  },
+  catTagText: { fontSize: 10, fontWeight: '700', color: '#4338ca' },
   cardMeta: { fontSize: 12, color: theme.colors.textSecondary },
   cardActions: { flexDirection: 'row', gap: 6, marginTop: 8 },
   actionBtn: {

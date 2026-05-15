@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Switch,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -19,6 +20,8 @@ const TYPE_OPTIONS: { value: 'class' | 'event' | 'open_slot'; label: string }[] 
   { value: 'event', label: 'Event' },
   { value: 'open_slot', label: 'Open slot' },
 ];
+
+const HORIZON_DAYS = 365;
 
 type Booking = {
   id: string;
@@ -33,16 +36,58 @@ type FormState = {
   title: string;
   description: string;
   event_type: 'class' | 'event' | 'open_slot';
-  starts_at: string; // local datetime input value: YYYY-MM-DDTHH:MM
+  starts_at: string;
   ends_at: string;
-  capacity: string; // '' means no booking; else integer >= 1
+  capacity: string;
   recurring: boolean;
-  recurrence_until: string; // YYYY-MM-DD or ''
+  recurrence_until: string;
 };
 
-const EMPTY_FORM = (): FormState => {
-  const now = new Date();
-  const start = new Date(now);
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
+function toLocalInput(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+function fromLocalInput(s: string) {
+  return new Date(s);
+}
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function startOfWeek(d: Date) {
+  const x = startOfDay(d);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
+}
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function addMonths(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+function dateKey(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+const EMPTY_FORM = (seed?: Date): FormState => {
+  const start = new Date(seed ?? new Date());
   start.setMinutes(0, 0, 0);
   start.setHours(start.getHours() + 1);
   const end = new Date(start);
@@ -59,19 +104,12 @@ const EMPTY_FORM = (): FormState => {
   };
 };
 
-function toLocalInput(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function fromLocalInput(s: string) {
-  // Treat as local time.
-  return new Date(s);
-}
-
 export default function OwnerCalendar() {
   const { profile } = useAuth();
   const gymId = profile?.gym_id ?? null;
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const [events, setEvents] = useState<GymEvent[] | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsEnabled, setBookingsEnabled] = useState(false);
@@ -79,19 +117,15 @@ export default function OwnerCalendar() {
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
+  const [selectedDay, setSelectedDay] = useState<Date>(today);
+
   const load = useCallback(async () => {
     if (!gymId) return;
     const [{ data: m }, { data: evs }] = await Promise.all([
-      supabase
-        .from('gym_modules')
-        .select('bookings_enabled')
-        .eq('gym_id', gymId)
-        .maybeSingle(),
-      supabase
-        .from('gym_events')
-        .select('*')
-        .eq('gym_id', gymId)
-        .order('starts_at'),
+      supabase.from('gym_modules').select('bookings_enabled').eq('gym_id', gymId).maybeSingle(),
+      supabase.from('gym_events').select('*').eq('gym_id', gymId).order('starts_at'),
     ]);
     setBookingsEnabled(!!(m as any)?.bookings_enabled);
     const eventRows = (evs as GymEvent[]) ?? [];
@@ -127,17 +161,35 @@ export default function OwnerCalendar() {
 
   const occurrences = useMemo(() => {
     if (!events) return [];
-    return expandEvents(events, 60);
+    return expandEvents(events, HORIZON_DAYS);
   }, [events]);
+
+  const occByDay = useMemo(() => {
+    const m: Record<string, EventOccurrence[]> = {};
+    occurrences.forEach((o) => {
+      (m[dateKey(o.start)] ??= []).push(o);
+    });
+    return m;
+  }, [occurrences]);
 
   const bookingsByKey = useMemo(() => {
     const m: Record<string, Booking[]> = {};
     bookings.forEach((b) => {
-      const key = `${b.event_id}|${b.occurrence_date}`;
-      (m[key] ??= []).push(b);
+      (m[`${b.event_id}|${b.occurrence_date}`] ??= []).push(b);
     });
     return m;
   }, [bookings]);
+
+  const monthCells = useMemo(() => {
+    const gridStart = startOfWeek(startOfMonth(monthAnchor));
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [monthAnchor]);
+
+  const selectedWeekStart = useMemo(() => startOfWeek(selectedDay), [selectedDay]);
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(selectedWeekStart, i)),
+    [selectedWeekStart]
+  );
 
   async function saveEvent() {
     if (!form || !gymId) return;
@@ -148,7 +200,7 @@ export default function OwnerCalendar() {
     }
     const startsAt = fromLocalInput(form.starts_at);
     const endsAt = fromLocalInput(form.ends_at);
-    if (!(startsAt instanceof Date) || isNaN(startsAt.getTime())) {
+    if (isNaN(startsAt.getTime())) {
       setErr('Invalid start time.');
       return;
     }
@@ -170,32 +222,27 @@ export default function OwnerCalendar() {
       ends_at: endsAt.toISOString(),
       capacity: cap,
       recurrence: form.recurring ? 'weekly' : null,
-      recurrence_until:
-        form.recurring && form.recurrence_until ? form.recurrence_until : null,
+      recurrence_until: form.recurring && form.recurrence_until ? form.recurrence_until : null,
     };
 
     setSaving(true);
-    if (form.id) {
-      const { error } = await supabase.from('gym_events').update(payload).eq('id', form.id);
-      setSaving(false);
-      if (error) {
-        setErr(error.message);
-        return;
-      }
-    } else {
-      const { error } = await supabase.from('gym_events').insert(payload);
-      setSaving(false);
-      if (error) {
-        setErr(error.message);
-        return;
-      }
+    const res = form.id
+      ? await supabase.from('gym_events').update(payload).eq('id', form.id)
+      : await supabase.from('gym_events').insert(payload);
+    setSaving(false);
+    if (res.error) {
+      setErr(res.error.message);
+      return;
     }
     setForm(null);
     load();
   }
 
   async function deleteEvent(id: string) {
-    if (typeof window !== 'undefined' && !window.confirm('Delete this event? Existing bookings will be removed.')) {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Delete this event? Existing bookings will be removed.')
+    ) {
       return;
     }
     const { error } = await supabase.from('gym_events').delete().eq('id', id);
@@ -203,6 +250,7 @@ export default function OwnerCalendar() {
       setErr(error.message);
       return;
     }
+    setForm(null);
     load();
   }
 
@@ -228,10 +276,22 @@ export default function OwnerCalendar() {
       </View>
     );
   }
-
   if (events === null) {
     return <ActivityIndicator color={theme.colors.charcoal} />;
   }
+
+  const monthLabel = monthAnchor.toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+  const weekRange = `${weekDays[0].toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })} – ${weekDays[6].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+
+  const feedDays = weekDays
+    .map((d) => ({ day: d, occs: occByDay[dateKey(d)] ?? [] }))
+    .filter((x) => x.occs.length > 0);
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
@@ -240,15 +300,15 @@ export default function OwnerCalendar() {
         <Text style={styles.sub}>
           Add classes, events, and open slots.{' '}
           {bookingsEnabled
-            ? 'Slots with a capacity are bookable by your members — booked names show below.'
-            : 'Bookings are off for your gym, so capacity is informational only. Contact us to add bookings.'}
+            ? 'Capacity slots are bookable by members — booked names show below.'
+            : 'Bookings are off, so capacity is informational only.'}
         </Text>
       </View>
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
       {!form ? (
-        <Pressable style={styles.btn} onPress={() => setForm(EMPTY_FORM())}>
+        <Pressable style={styles.btn} onPress={() => setForm(EMPTY_FORM(selectedDay))}>
           <Text style={styles.btnText}>+ Add to calendar</Text>
         </Pressable>
       ) : (
@@ -279,10 +339,7 @@ export default function OwnerCalendar() {
               <Pressable
                 key={opt.value}
                 onPress={() => setForm({ ...form, event_type: opt.value })}
-                style={[
-                  styles.typePill,
-                  form.event_type === opt.value && styles.typePillActive,
-                ]}
+                style={[styles.typePill, form.event_type === opt.value && styles.typePillActive]}
               >
                 <Text
                   style={[
@@ -364,11 +421,7 @@ export default function OwnerCalendar() {
           </View>
 
           <View style={styles.formButtons}>
-            <Pressable
-              style={styles.btn}
-              onPress={saveEvent}
-              disabled={saving}
-            >
+            <Pressable style={styles.btn} onPress={saveEvent} disabled={saving}>
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
             </Pressable>
             <Pressable style={styles.btnGhost} onPress={() => setForm(null)}>
@@ -383,82 +436,161 @@ export default function OwnerCalendar() {
         </View>
       )}
 
-      <View style={styles.eventsList}>
-        <Text style={styles.sectionTitle}>Upcoming (next 60 days)</Text>
-        {occurrences.length === 0 ? (
-          <Text style={styles.dim}>Nothing scheduled. Add an entry above.</Text>
-        ) : (
-          groupByDay(occurrences).map(([day, list]) => (
-            <View key={day} style={styles.daySection}>
-              <Text style={styles.dayHeading}>
-                {new Date(day + 'T00:00:00').toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </Text>
-              {list.map((o) => {
-                const key = `${o.event.id}|${o.dateKey}`;
-                const ev = o.event;
-                const list = bookingsByKey[key] ?? [];
-                const cap = ev.capacity;
-                return (
-                  <View key={key} style={styles.eventRow}>
-                    <View style={styles.eventTime}>
-                      <Text style={styles.eventTimeText}>
-                        {o.start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                      </Text>
-                      <Text style={styles.eventTimeSub}>
-                        {o.end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                      </Text>
+      {/* Month calendar */}
+      <View style={styles.calCard}>
+        <View style={styles.calHeader}>
+          <Pressable
+            onPress={() => setMonthAnchor((m) => addMonths(m, -1))}
+            style={styles.navBtn}
+          >
+            <Text style={styles.navBtnText}>‹</Text>
+          </Pressable>
+          <Text style={styles.calTitle}>{monthLabel}</Text>
+          <Pressable
+            onPress={() => setMonthAnchor((m) => addMonths(m, 1))}
+            style={styles.navBtn}
+          >
+            <Text style={styles.navBtnText}>›</Text>
+          </Pressable>
+        </View>
+        <View style={styles.dowRow}>
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+            <Text key={d} style={styles.dowText}>
+              {isWide ? d : d[0]}
+            </Text>
+          ))}
+        </View>
+        <View style={styles.grid}>
+          {monthCells.map((d) => {
+            const inMonth = d.getMonth() === monthAnchor.getMonth();
+            const isToday = isSameDay(d, today);
+            const isSelected = isSameDay(d, selectedDay);
+            const inWeek = d >= selectedWeekStart && d <= addDays(selectedWeekStart, 6);
+            const count = (occByDay[dateKey(d)] ?? []).length;
+            return (
+              <Pressable
+                key={d.toISOString()}
+                onPress={() => setSelectedDay(d)}
+                style={[
+                  styles.cell,
+                  inWeek && { backgroundColor: '#f1f5f9' },
+                  isSelected && { backgroundColor: '#ede9fe' },
+                ]}
+              >
+                <View style={styles.cellInner}>
+                  <Text
+                    style={[
+                      styles.cellNum,
+                      !inMonth && styles.cellNumOut,
+                      isToday && { color: theme.colors.wyldPurple, fontWeight: '900' },
+                    ]}
+                  >
+                    {d.getDate()}
+                  </Text>
+                  {count > 0 ? (
+                    <View style={styles.countPill}>
+                      <Text style={styles.countPillText}>{count}</Text>
                     </View>
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Text style={styles.eventTitle}>{ev.title}</Text>
-                      <View style={styles.eventMeta}>
-                        <View style={styles.kindPill}>
-                          <Text style={styles.kindPillText}>
-                            {ev.event_type === 'open_slot' ? 'Open slot' : ev.event_type}
-                          </Text>
-                        </View>
-                        {ev.recurrence === 'weekly' ? (
-                          <Text style={styles.metaText}>↻ Weekly</Text>
-                        ) : null}
-                        {cap != null ? (
-                          <Text style={styles.metaText}>
-                            {list.length}/{cap} booked
-                          </Text>
-                        ) : null}
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Week heading */}
+      <View style={styles.weekBar}>
+        <Text style={styles.weekTitle}>Week of {weekRange}</Text>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            onPress={() => setSelectedDay((d) => addDays(d, -7))}
+            style={styles.navBtnSm}
+          >
+            <Text style={styles.navBtnText}>‹</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setSelectedDay(today);
+              setMonthAnchor(startOfMonth(today));
+            }}
+            style={styles.todayBtn}
+          >
+            <Text style={styles.todayBtnText}>Today</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSelectedDay((d) => addDays(d, 7))}
+            style={styles.navBtnSm}
+          >
+            <Text style={styles.navBtnText}>›</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {feedDays.length === 0 ? (
+        <Text style={styles.dim}>Nothing scheduled this week.</Text>
+      ) : (
+        feedDays.map(({ day, occs }) => (
+          <View key={day.toISOString()} style={styles.daySection}>
+            <Text style={styles.dayHeading}>
+              {day.toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'short',
+                day: 'numeric',
+              })}
+            </Text>
+            {occs.map((o) => {
+              const key = `${o.event.id}|${o.dateKey}`;
+              const ev = o.event;
+              const bl = bookingsByKey[key] ?? [];
+              return (
+                <View key={key} style={styles.eventRow}>
+                  <View style={styles.eventTime}>
+                    <Text style={styles.eventTimeText}>
+                      {o.start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </Text>
+                    <Text style={styles.eventTimeSub}>
+                      {o.end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.eventTitle}>{ev.title}</Text>
+                    <View style={styles.eventMeta}>
+                      <View style={styles.kindPill}>
+                        <Text style={styles.kindPillText}>
+                          {ev.event_type === 'open_slot' ? 'Open slot' : ev.event_type}
+                        </Text>
                       </View>
-                      {list.length > 0 ? (
-                        <View style={styles.bookedRow}>
-                          {list.map((b) => (
-                            <View key={b.id} style={styles.bookedChip}>
-                              <Text style={styles.bookedChipText}>{b.member_name}</Text>
-                            </View>
-                          ))}
-                        </View>
+                      {ev.recurrence === 'weekly' ? (
+                        <Text style={styles.metaText}>↻ Weekly</Text>
+                      ) : null}
+                      {ev.capacity != null ? (
+                        <Text style={styles.metaText}>
+                          {bl.length}/{ev.capacity} booked
+                        </Text>
                       ) : null}
                     </View>
-                    <Pressable onPress={() => editEvent(ev)} style={styles.editBtn}>
-                      <Text style={styles.editBtnText}>Edit</Text>
-                    </Pressable>
+                    {bl.length > 0 ? (
+                      <View style={styles.bookedRow}>
+                        {bl.map((b) => (
+                          <View key={b.id} style={styles.bookedChip}>
+                            <Text style={styles.bookedChipText}>{b.member_name}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
-                );
-              })}
-            </View>
-          ))
-        )}
-      </View>
+                  <Pressable onPress={() => editEvent(ev)} style={styles.editBtn}>
+                    <Text style={styles.editBtnText}>Edit</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        ))
+      )}
     </ScrollView>
   );
-}
-
-function groupByDay(occ: EventOccurrence[]) {
-  const m: Record<string, EventOccurrence[]> = {};
-  occ.forEach((o) => {
-    (m[o.dateKey] ??= []).push(o);
-  });
-  return Object.entries(m).sort(([a], [b]) => a.localeCompare(b));
 }
 
 const dateInputStyle: any = {
@@ -478,28 +610,9 @@ const styles = StyleSheet.create({
   empty: { padding: theme.spacing.lg, gap: 8 },
   title: { fontSize: 28, fontWeight: '800', color: theme.colors.charcoal },
   sub: { fontSize: 14, color: theme.colors.textSecondary, marginTop: 4 },
-  notice: {
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#fde68a',
-    backgroundColor: '#fffbeb',
-  },
-  noticeText: { fontSize: 13, color: '#92400e' },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#fff',
-  },
-  toggleRowInline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  toggleLabel: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
-  toggleSub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2, lineHeight: 18 },
   err: { color: theme.colors.danger, fontSize: 13 },
+  dim: { fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' },
+
   btn: {
     alignSelf: 'flex-start',
     paddingHorizontal: 16,
@@ -535,7 +648,6 @@ const styles = StyleSheet.create({
   },
   formTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.charcoal },
   label: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
-  dim: { fontSize: 12, color: theme.colors.textSecondary, fontStyle: 'italic' },
   input: {
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -555,17 +667,103 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     backgroundColor: '#fff',
   },
-  typePillActive: { backgroundColor: theme.colors.wyldPurple, borderColor: theme.colors.wyldPurple },
+  typePillActive: {
+    backgroundColor: theme.colors.wyldPurple,
+    borderColor: theme.colors.wyldPurple,
+  },
   typePillText: { color: theme.colors.charcoal, fontWeight: '700', fontSize: 13 },
   typePillTextActive: { color: '#fff' },
   row: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  flex: { flex: 1, flexBasis: 220, gap: 6 },
+  flex: { flex: 1, flexBasis: 220, gap: 6, minWidth: 200 },
+  toggleRowInline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   formButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 },
 
-  eventsList: { gap: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.charcoal },
+  calCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 10,
+  },
+  calHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calTitle: { fontSize: 17, fontWeight: '800', color: theme.colors.charcoal },
+  navBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  navBtnSm: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  navBtnText: { fontSize: 18, color: theme.colors.charcoal, fontWeight: '700', lineHeight: 18 },
+  dowRow: { flexDirection: 'row' },
+  dowText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    paddingVertical: 4,
+  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: `${100 / 7}%`, aspectRatio: 1, padding: 3 },
+  cellInner: {
+    flex: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  cellNum: { fontSize: 13, fontWeight: '600', color: theme.colors.charcoal },
+  cellNumOut: { color: '#cbd5e1' },
+  countPill: {
+    minWidth: 16,
+    paddingHorizontal: 4,
+    borderRadius: 999,
+    backgroundColor: theme.colors.wyldPurple,
+  },
+  countPillText: { color: '#fff', fontSize: 9, fontWeight: '800', textAlign: 'center' },
+
+  weekBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  weekTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.charcoal, flex: 1 },
+  todayBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: theme.colors.charcoal,
+  },
+  todayBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+
   daySection: { gap: 6 },
-  dayHeading: { fontSize: 14, fontWeight: '800', color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 8 },
+  dayHeading: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 6,
+  },
   eventRow: {
     flexDirection: 'row',
     gap: 12,
@@ -576,7 +774,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'flex-start',
   },
-  eventTime: { width: 80 },
+  eventTime: { width: 72 },
   eventTimeText: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
   eventTimeSub: { fontSize: 12, color: theme.colors.textSecondary },
   eventTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
@@ -587,7 +785,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#eef2ff',
   },
-  kindPillText: { fontSize: 11, fontWeight: '800', color: '#4338ca', textTransform: 'capitalize' },
+  kindPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4338ca',
+    textTransform: 'capitalize',
+  },
   metaText: { fontSize: 12, color: theme.colors.textSecondary },
   bookedRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 6 },
   bookedChip: {

@@ -19,6 +19,7 @@ type Thread = {
   kind: 'member_gym' | 'admin_user' | 'contact_form';
   gym_id: string | null;
   user_id: string | null;
+  location_id: string | null;
   anon_name: string | null;
   anon_email: string | null;
   subject: string | null;
@@ -62,6 +63,19 @@ export function MessagesView({
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [creatingAdminThread, setCreatingAdminThread] = useState(false);
+  // Owner location filter
+  const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
+  const [locFilter, setLocFilter] = useState<string | null>(null); // null = all
+
+  useEffect(() => {
+    if (mode !== 'owner' || !gymId) return;
+    supabase
+      .from('gym_locations')
+      .select('id, label')
+      .eq('gym_id', gymId)
+      .order('display_order')
+      .then(({ data }) => setLocations((data as any) ?? []));
+  }, [mode, gymId]);
 
   const readField: keyof Thread =
     mode === 'owner' ? 'gym_last_read_at' : mode === 'admin' ? 'admin_last_read_at' : 'user_last_read_at';
@@ -220,10 +234,44 @@ export function MessagesView({
 
   if (threads === null) return <ActivityIndicator color={theme.colors.charcoal} />;
 
+  const visibleThreads =
+    mode === 'owner' && locFilter
+      ? threads.filter((t) => t.location_id === locFilter)
+      : threads;
+
   return (
     <View style={styles.root}>
       <View style={styles.sidebar}>
         <Text style={styles.sidebarTitle}>Conversations</Text>
+        {mode === 'owner' && locations.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.locFilterRow}
+          >
+            <Pressable
+              onPress={() => setLocFilter(null)}
+              style={[styles.locChip, locFilter === null && styles.locChipActive]}
+            >
+              <Text style={[styles.locChipText, locFilter === null && styles.locChipTextActive]}>
+                All
+              </Text>
+            </Pressable>
+            {locations.map((l) => (
+              <Pressable
+                key={l.id}
+                onPress={() => setLocFilter(l.id)}
+                style={[styles.locChip, locFilter === l.id && styles.locChipActive]}
+              >
+                <Text
+                  style={[styles.locChipText, locFilter === l.id && styles.locChipTextActive]}
+                >
+                  {l.label || 'Location'}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
         {mode === 'member' && !threads.some((t) => t.kind === 'admin_user') ? (
           <Pressable
             style={styles.startAdmin}
@@ -233,11 +281,11 @@ export function MessagesView({
             <Text style={styles.startAdminText}>+ Message WyLD support</Text>
           </Pressable>
         ) : null}
-        {threads.length === 0 ? (
+        {visibleThreads.length === 0 ? (
           <Text style={styles.dim}>No conversations yet.</Text>
         ) : (
           <ScrollView style={styles.list}>
-            {threads.map((t) => (
+            {visibleThreads.map((t) => (
               <Pressable
                 key={t.id}
                 onPress={() => setActiveId(t.id)}
@@ -364,6 +412,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sidebarTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
+  locFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
+  locChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  locChipActive: {
+    backgroundColor: theme.colors.wyldPurple,
+    borderColor: theme.colors.wyldPurple,
+  },
+  locChipText: { fontSize: 11, fontWeight: '700', color: theme.colors.charcoal },
+  locChipTextActive: { color: '#fff' },
   list: { flexGrow: 0 },
   dim: { color: theme.colors.textSecondary, fontStyle: 'italic', fontSize: 13 },
   threadRow: {

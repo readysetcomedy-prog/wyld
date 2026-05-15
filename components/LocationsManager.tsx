@@ -295,7 +295,7 @@ export function LocationsManager({
                     placeholderTextColor="#94a3b8"
                     keyboardType={c.kind === 'email' ? 'email-address' : 'phone-pad'}
                     autoCapitalize="none"
-                    style={[styles.input, { flexBasis: 0, flexGrow: 2 }]}
+                    style={[styles.input, { flexBasis: 180, flexGrow: 2, flexShrink: 1, minWidth: 150 }]}
                   />
                   <TextInput
                     value={c.label ?? ''}
@@ -312,7 +312,7 @@ export function LocationsManager({
                     onBlur={() => updateContact(c.id, { label: c.label })}
                     placeholder="Label (Reception, Sales…)"
                     placeholderTextColor="#94a3b8"
-                    style={[styles.input, { flexBasis: 0, flexGrow: 1 }]}
+                    style={[styles.input, { flexBasis: 120, flexGrow: 1, flexShrink: 1, minWidth: 110 }]}
                   />
                   <Pressable onPress={() => deleteContact(c.id)} style={styles.iconBtn}>
                     <Text style={styles.iconBtnText}>×</Text>
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   subTitle: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
-  contactRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  contactRow: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
   kindPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,

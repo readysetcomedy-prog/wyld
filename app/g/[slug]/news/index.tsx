@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
@@ -21,34 +22,98 @@ type Post = {
   published_at: string;
 };
 
+const PAGE_SIZE = 9;
+
 export default function NewsList() {
   const site = useGymSite();
   const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
-  const [posts, setPosts] = useState<Post[] | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [keyword, setKeyword] = useState('');
+  const [appliedKeyword, setAppliedKeyword] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const loadingRef = useRef(false);
+  const locId = site.currentLocation?.id ?? null;
+
+  const fetchPage = useCallback(
+    async (pageIndex: number, replace: boolean) => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      setLoading(true);
+
+      const locFilter = locId
+        ? `location_id.is.null,location_id.eq.${locId}`
+        : 'location_id.is.null';
+      let q = supabase
         .from('gym_news_posts')
         .select('id, slug, title, body, cover_image_url, published_at')
         .eq('gym_id', site.gym.id)
+        .or(locFilter)
         .not('published_at', 'is', null)
-        .lte('published_at', new Date().toISOString())
-        .order('published_at', { ascending: false });
-      setPosts((data as Post[]) ?? []);
-    })();
-  }, [site.gym.id]);
+        .lte('published_at', new Date().toISOString());
+
+      if (appliedKeyword.trim()) {
+        const kw = appliedKeyword.trim().replace(/[%,]/g, '');
+        q = q.or(`title.ilike.%${kw}%,body.ilike.%${kw}%`);
+      }
+      if (dateFrom) q = q.gte('published_at', new Date(dateFrom).toISOString());
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        q = q.lte('published_at', end.toISOString());
+      }
+
+      const from = pageIndex * PAGE_SIZE;
+      const { data } = await q
+        .order('published_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      const rows = (data as Post[]) ?? [];
+      setPosts((prev) => (replace ? rows : [...prev, ...rows]));
+      setHasMore(rows.length === PAGE_SIZE);
+      setPage(pageIndex);
+      setLoading(false);
+      loadingRef.current = false;
+    },
+    [site.gym.id, locId, appliedKeyword, dateFrom, dateTo]
+  );
+
+  // Reload from scratch whenever applied filters change.
+  useEffect(() => {
+    fetchPage(0, true);
+  }, [fetchPage]);
+
+  // Infinite scroll on web: load the next page near the bottom of the window.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onScroll = () => {
+      if (loadingRef.current || !hasMore) return;
+      const nearBottom =
+        window.innerHeight + window.scrollY >=
+        document.body.offsetHeight - 700;
+      if (nearBottom) fetchPage(page + 1, false);
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [fetchPage, page, hasMore]);
 
   if (!site.modules.news_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
 
-  const page = site.pages.news ?? {};
-  const heading = page.headline || 'News';
-  const intro: string = page.body || '';
+  const pageContent = site.pages.news ?? {};
+  const heading = pageContent.headline || 'News';
+  const intro: string = pageContent.body || '';
 
   return (
     <View style={[styles.page, isWide && styles.pageWide]}>
@@ -61,10 +126,71 @@ export default function NewsList() {
         </View>
       ) : null}
 
-      {posts == null ? (
-        <ActivityIndicator color={site.theme.accent_color} />
-      ) : posts.length === 0 ? (
-        <Text style={styles.dim}>No posts yet. Check back soon.</Text>
+      {/* Search / filter bar */}
+      <View style={[styles.filterBar, isWide && styles.filterBarWide]}>
+        <View style={styles.filterField}>
+          <Text style={styles.filterLabel}>Search</Text>
+          {Platform.OS === 'web' ? (
+            <input
+              value={keyword}
+              onChange={(e) => setKeyword((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => {
+                if ((e as any).key === 'Enter') setAppliedKeyword(keyword);
+              }}
+              placeholder="Keyword in title or post"
+              style={webInput as any}
+            />
+          ) : null}
+        </View>
+        <View style={styles.filterField}>
+          <Text style={styles.filterLabel}>From</Text>
+          {Platform.OS === 'web' ? (
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom((e.target as HTMLInputElement).value)}
+              style={webInput as any}
+            />
+          ) : null}
+        </View>
+        <View style={styles.filterField}>
+          <Text style={styles.filterLabel}>To</Text>
+          {Platform.OS === 'web' ? (
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo((e.target as HTMLInputElement).value)}
+              style={webInput as any}
+            />
+          ) : null}
+        </View>
+        <Pressable
+          style={[styles.searchBtn, { backgroundColor: site.theme.accent_color }]}
+          onPress={() => setAppliedKeyword(keyword)}
+        >
+          <Text style={styles.searchBtnText}>Search</Text>
+        </Pressable>
+        {(appliedKeyword || dateFrom || dateTo) ? (
+          <Pressable
+            style={styles.clearBtn}
+            onPress={() => {
+              setKeyword('');
+              setAppliedKeyword('');
+              setDateFrom('');
+              setDateTo('');
+            }}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {posts.length === 0 && !loading ? (
+        <Text style={styles.dim}>
+          {appliedKeyword || dateFrom || dateTo
+            ? 'No posts match your search.'
+            : 'No posts yet. Check back soon.'}
+        </Text>
       ) : (
         <View style={[styles.grid, isWide && styles.gridWide]}>
           {posts.map((p) => (
@@ -74,11 +200,7 @@ export default function NewsList() {
               onPress={() => router.push(`/g/${slug}/news/${p.slug}` as never)}
             >
               {p.cover_image_url ? (
-                <Image
-                  source={{ uri: p.cover_image_url }}
-                  style={styles.cover}
-                  resizeMode="cover"
-                />
+                <Image source={{ uri: p.cover_image_url }} style={styles.cover} resizeMode="cover" />
               ) : (
                 <View style={[styles.cover, { backgroundColor: site.theme.primary_color, opacity: 0.08 }]} />
               )}
@@ -100,9 +222,32 @@ export default function NewsList() {
           ))}
         </View>
       )}
+
+      {loading ? <ActivityIndicator color={site.theme.accent_color} /> : null}
+
+      {hasMore && !loading && posts.length > 0 ? (
+        <Pressable
+          style={styles.loadMore}
+          onPress={() => fetchPage(page + 1, false)}
+        >
+          <Text style={styles.loadMoreText}>Load more posts</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
+
+const webInput = {
+  border: '1px solid #e2e8f0',
+  borderRadius: 10,
+  padding: '9px 12px',
+  fontSize: 14,
+  background: '#fff',
+  color: '#0F172A',
+  width: '100%',
+  boxSizing: 'border-box',
+  fontFamily: 'inherit',
+};
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 20, paddingVertical: 24, gap: 24 },
@@ -117,6 +262,29 @@ const styles = StyleSheet.create({
   intro: { gap: 12, maxWidth: 760 },
   para: { fontSize: 16, color: '#0F172A', lineHeight: 26 },
   dim: { color: '#94a3b8', fontStyle: 'italic' },
+
+  filterBar: {
+    flexDirection: 'column',
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  filterBarWide: { flexDirection: 'row', alignItems: 'flex-end' },
+  filterField: { flex: 1, gap: 4, minWidth: 140 },
+  filterLabel: { fontSize: 12, fontWeight: '700', color: '#475569' },
+  searchBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10 },
+  searchBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  clearBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  clearBtnText: { color: '#475569', fontWeight: '700', fontSize: 14 },
 
   grid: { gap: 16 },
   gridWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 24 },
@@ -134,4 +302,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '800' },
   excerpt: { fontSize: 14, color: '#475569', lineHeight: 20 },
   readMore: { fontSize: 14, fontWeight: '700', marginTop: 4 },
+
+  loadMore: {
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  loadMoreText: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
 });
