@@ -19,6 +19,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { GymSiteProvider, GymSite, GymSiteLocation } from '@/components/GymSiteContext';
 import { SocialIcons } from '@/components/SocialIcons';
+import { PhoneLink, EmailLink } from '@/components/ContactLink';
 
 const DEFAULT_MODULES = {
   calendar_enabled: false,
@@ -401,10 +402,10 @@ export default function SiteLayout() {
                 </Text>
               ) : null}
               {site.settings.contact_phone ? (
-                <Text style={styles.footerLine}>{site.settings.contact_phone}</Text>
+                <PhoneLink phone={site.settings.contact_phone} style={styles.footerLine} />
               ) : null}
               {site.settings.contact_email ? (
-                <Text style={styles.footerLine}>{site.settings.contact_email}</Text>
+                <EmailLink email={site.settings.contact_email} style={styles.footerLine} />
               ) : null}
             </View>
             <SocialIcons settings={site.settings} accent={accent} />
