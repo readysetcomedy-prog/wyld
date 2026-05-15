@@ -82,15 +82,13 @@ export function LocationsManager({
 
   async function addLocation() {
     const display_order = locations.length;
-    const isFirst = locations.length === 0;
-    const baseSlug = isFirst ? 'main' : `location-${locations.length + 1}`;
+    const n = locations.length + 1;
     const { data, error } = await supabase
       .from('gym_locations')
       .insert({
         gym_id: gymId,
-        label: isFirst ? 'Main location' : `Location ${locations.length + 1}`,
-        slug: baseSlug,
-        is_primary: isFirst,
+        label: `Location ${n}`,
+        slug: `location-${n}`,
         display_order,
       })
       .select()
@@ -100,22 +98,6 @@ export function LocationsManager({
       return;
     }
     setLocations([...locations, { ...(data as any), contacts: [] }]);
-  }
-
-  async function setPrimary(id: string) {
-    // Unset all then set the chosen one. Two-step to satisfy the partial
-    // unique index on (gym_id) where is_primary=true.
-    const updated = locations.map((l) => ({ ...l, is_primary: l.id === id }));
-    setLocations(updated);
-    await supabase
-      .from('gym_locations')
-      .update({ is_primary: false })
-      .eq('gym_id', gymId);
-    const { error } = await supabase
-      .from('gym_locations')
-      .update({ is_primary: true })
-      .eq('id', id);
-    if (error) setError(error.message);
   }
 
   async function updateLocation(id: string, patch: Partial<GymLocation>) {
@@ -198,20 +180,9 @@ export function LocationsManager({
               placeholderTextColor="#94a3b8"
               style={styles.locLabel}
             />
-            {loc.is_primary ? (
-              <View style={styles.primaryBadge}>
-                <Text style={styles.primaryBadgeText}>Primary</Text>
-              </View>
-            ) : (
-              <Pressable onPress={() => setPrimary(loc.id)} style={styles.makePrimaryBtn}>
-                <Text style={styles.makePrimaryBtnText}>Make primary</Text>
-              </Pressable>
-            )}
-            {!loc.is_primary ? (
-              <Pressable onPress={() => deleteLocation(loc.id)} style={styles.deleteBtn}>
-                <Text style={styles.deleteBtnText}>Delete</Text>
-              </Pressable>
-            ) : null}
+            <Pressable onPress={() => deleteLocation(loc.id)} style={styles.deleteBtn}>
+              <Text style={styles.deleteBtnText}>Delete</Text>
+            </Pressable>
           </View>
 
           <View style={styles.row}>
