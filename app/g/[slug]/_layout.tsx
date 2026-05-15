@@ -74,7 +74,23 @@ export default function SiteLayout() {
       });
       setSite({
         gym,
-        theme: theme ?? { primary_color: '#0F172A', accent_color: '#14B8A6', logo_url: null },
+        theme: theme
+          ? {
+              primary_color: theme.primary_color ?? '#0F172A',
+              accent_color: theme.accent_color ?? '#14B8A6',
+              logo_url: theme.logo_url ?? null,
+              style_preset: theme.style_preset ?? 'clean',
+              hero_variant: theme.hero_variant ?? 'split',
+              section_dividers: !!theme.section_dividers,
+            }
+          : {
+              primary_color: '#0F172A',
+              accent_color: '#14B8A6',
+              logo_url: null,
+              style_preset: 'clean',
+              hero_variant: 'split',
+              section_dividers: false,
+            },
         modules: modules ?? {
           calendar_enabled: false,
           store_enabled: false,

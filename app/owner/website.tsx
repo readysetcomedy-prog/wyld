@@ -17,12 +17,16 @@ import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings
 import { ColorPickerField } from '@/components/ColorPicker';
 import { DAY_KEYS, DAY_LABELS, type HoursMap } from '@/components/GymHours';
 import { LocationsManager } from '@/components/LocationsManager';
+import { PRESET_OPTIONS, PresetName } from '@/lib/stylePresets';
 
 type Theme = {
   gym_id: string;
   primary_color: string;
   accent_color: string;
   logo_url: string | null;
+  style_preset: 'clean' | 'bold' | 'warm' | 'modern';
+  hero_variant: 'split' | 'fullbleed';
+  section_dividers: boolean;
 };
 
 type Modules = {
@@ -313,6 +317,73 @@ export default function Website() {
             value={themeRow.accent_color}
             onChange={(v) => setThemeRow({ ...themeRow, accent_color: v })}
             onCommit={(v) => saveTheme({ accent_color: v })}
+          />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Style</Text>
+        <Text style={styles.cardSub}>
+          Pick a preset — it sets card shape, section tint, and headline weight together
+          so the site stays consistent. Add a hero variant and section dividers for more
+          flair.
+        </Text>
+
+        <View style={styles.presetGrid}>
+          {PRESET_OPTIONS.map((opt) => {
+            const active = themeRow.style_preset === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.presetTile, active && { borderColor: theme.colors.wyldPurple, borderWidth: 2 }]}
+                onPress={() => saveTheme({ style_preset: opt.value })}
+              >
+                <View style={[styles.presetSwatch, presetSwatchStyle(opt.value)]} />
+                <Text style={styles.presetLabel}>{opt.label}</Text>
+                <Text style={styles.presetBlurb}>{opt.blurb}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.styleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Hero layout</Text>
+            <Text style={styles.cardSub}>
+              Split: text on one side, image on the other. Full-bleed: image fills the
+              hero with text overlaid.
+            </Text>
+          </View>
+          <View style={styles.segGroup}>
+            {(['split', 'fullbleed'] as const).map((v) => (
+              <Pressable
+                key={v}
+                style={[styles.segItem, themeRow.hero_variant === v && styles.segItemActive]}
+                onPress={() => saveTheme({ hero_variant: v })}
+              >
+                <Text
+                  style={[
+                    styles.segItemText,
+                    themeRow.hero_variant === v && styles.segItemTextActive,
+                  ]}
+                >
+                  {v === 'split' ? 'Split' : 'Full-bleed'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.styleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Section dividers</Text>
+            <Text style={styles.cardSub}>
+              Adds a subtle angled cut between the hero and the first section.
+            </Text>
+          </View>
+          <Switch
+            value={themeRow.section_dividers}
+            onValueChange={(v) => saveTheme({ section_dividers: v })}
           />
         </View>
       </View>
@@ -915,6 +986,20 @@ function FaqItemsManager({
   );
 }
 
+function presetSwatchStyle(name: PresetName) {
+  switch (name) {
+    case 'bold':
+      return { backgroundColor: '#1e293b', borderRadius: 8, borderColor: '#1e293b' };
+    case 'warm':
+      return { backgroundColor: '#fdf6e8', borderRadius: 18, borderColor: '#f1ead9' };
+    case 'modern':
+      return { backgroundColor: '#fff', borderRadius: 4, borderColor: '#0F172A', borderWidth: 1 };
+    case 'clean':
+    default:
+      return { backgroundColor: '#f8fafc', borderRadius: 12, borderColor: '#e2e8f0' };
+  }
+}
+
 const styles = StyleSheet.create({
   container: { gap: theme.spacing.lg, maxWidth: 960 },
   headerBlock: { gap: 4 },
@@ -1070,6 +1155,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   toggleLabel: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
+  presetTile: {
+    width: 160,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  presetSwatch: {
+    width: '100%',
+    height: 60,
+    borderWidth: 1,
+  },
+  presetLabel: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
+  presetBlurb: { fontSize: 12, color: theme.colors.textSecondary, lineHeight: 16 },
+  styleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  segGroup: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+  },
+  segItem: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: '#fff',
+  },
+  segItemActive: { backgroundColor: theme.colors.wyldPurple },
+  segItemText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  segItemTextActive: { color: '#fff' },
 
   btnSecondary: {
     paddingHorizontal: theme.spacing.md,

@@ -12,6 +12,9 @@ export type GymSite = {
     primary_color: string;
     accent_color: string;
     logo_url: string | null;
+    style_preset: 'clean' | 'bold' | 'warm' | 'modern';
+    hero_variant: 'split' | 'fullbleed';
+    section_dividers: boolean;
   };
   modules: {
     calendar_enabled: boolean;
