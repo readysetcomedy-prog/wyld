@@ -6,6 +6,7 @@ import { FaqAccordion } from '@/components/FaqAccordion';
 import { PublicContactSection } from '@/components/PublicContactSection';
 import { PublicScheduleSection } from '@/components/PublicScheduleSection';
 import { PublicStoreSection } from '@/components/PublicStoreSection';
+import { StyledBlock, BlockStyle } from '@/components/StyledBlock';
 
 const VALID_PAGES = ['about', 'services', 'contact', 'news', 'faq', 'schedule', 'store'] as const;
 type PageKey = (typeof VALID_PAGES)[number];
@@ -57,11 +58,28 @@ export default function Page() {
   }
 
   const content = site.pages[key] ?? {};
+  const blockStyles: Record<string, BlockStyle> = (content.styles ?? {}) as any;
   const heading = content.headline || PAGE_TITLES[key];
   const body: string = content.body || '';
   const intro: string = content.intro || '';
   const gallery: string[] = content.gallery ?? [];
   const faqItems = Array.isArray(content.items) ? content.items : [];
+
+  // Pages with auto-populated lower content (events / products / contact info /
+  // hours / locations / FAQ / message form). For these, the body block is just
+  // an optional intro — the placeholder ("This page is being built.") only
+  // shows on pages that have no auto-content of their own.
+  const HAS_AUTO_CONTENT: Record<PageKey, boolean> = {
+    about: false,
+    services: true,
+    contact: true,
+    news: true,
+    faq: true,
+    schedule: true,
+    store: true,
+  };
+
+  const showPlaceholder = !body && !intro && !HAS_AUTO_CONTENT[key] && key !== 'faq';
 
   return (
     <View style={[styles.page, isWide && styles.pageWide]}>
@@ -72,16 +90,9 @@ export default function Page() {
       {key === 'faq' ? (
         <>
           {intro || body ? (
-            <View style={styles.body}>
-              {(intro || body)
-                .split('\n')
-                .filter((p) => p.trim())
-                .map((para, i) => (
-                  <Text key={i} style={styles.para}>
-                    {para}
-                  </Text>
-                ))}
-            </View>
+            <StyledBlock style={blockStyles.body} defaults={{ width: 'wide' }}>
+              <BodyParagraphs text={intro || body} align={blockStyles.body?.align ?? 'left'} />
+            </StyledBlock>
           ) : null}
           {faqItems.length > 0 ? (
             <FaqAccordion
@@ -94,14 +105,12 @@ export default function Page() {
           )}
         </>
       ) : body ? (
-        <View style={styles.body}>
-          {body.split('\n').filter((p) => p.trim()).map((para, i) => (
-            <Text key={i} style={styles.para}>{para}</Text>
-          ))}
-        </View>
-      ) : (
+        <StyledBlock style={blockStyles.body} defaults={{ width: 'wide' }}>
+          <BodyParagraphs text={body} align={blockStyles.body?.align ?? 'left'} />
+        </StyledBlock>
+      ) : showPlaceholder ? (
         <Text style={styles.dim}>This page is being built. Check back soon.</Text>
-      )}
+      ) : null}
 
       {key === 'services' ? (
         <View style={styles.dataNote}>
@@ -113,11 +122,24 @@ export default function Page() {
       ) : null}
 
       {key === 'schedule' ? <PublicScheduleSection /> : null}
-
       {key === 'store' ? <PublicStoreSection /> : null}
-
       {key === 'contact' ? <PublicContactSection /> : null}
     </View>
+  );
+}
+
+function BodyParagraphs({ text, align }: { text: string; align: 'left' | 'center' }) {
+  return (
+    <>
+      {text
+        .split('\n')
+        .filter((p) => p.trim())
+        .map((para, i) => (
+          <Text key={i} style={[styles.para, { textAlign: align }]}>
+            {para}
+          </Text>
+        ))}
+    </>
   );
 }
 
@@ -131,7 +153,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   h1: { fontSize: 36, fontWeight: '800', lineHeight: 44 },
-  body: { gap: 12, maxWidth: 760 },
   para: { fontSize: 16, color: '#0F172A', lineHeight: 26 },
   dim: { color: '#94a3b8', fontStyle: 'italic' },
   dataNote: {

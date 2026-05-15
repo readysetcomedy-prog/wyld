@@ -5,17 +5,55 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useGymSite } from '@/components/GymSiteContext';
 import { expandEvents, EventOccurrence, GymEvent } from '@/lib/events';
 
-const HORIZON_DAYS = 30;
+const HORIZON_DAYS = 90;
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function startOfWeek(d: Date) {
+  const x = startOfDay(d);
+  // Monday-start
+  const dow = (x.getDay() + 6) % 7;
+  x.setDate(x.getDate() - dow);
+  return x;
+}
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function addMonths(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+function dateKey(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
 
 export function PublicScheduleSection() {
   const site = useGymSite();
   const { session, profile } = useAuth();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const [events, setEvents] = useState<GymEvent[] | null>(null);
   const [bookings, setBookings] = useState<
     { event_id: string; occurrence_date: string; count: number; mine: boolean }[]
@@ -23,6 +61,10 @@ export function PublicScheduleSection() {
   const [isMember, setIsMember] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
+  const [selectedDay, setSelectedDay] = useState<Date>(today);
 
   async function load() {
     const horizonEnd = new Date(Date.now() + HORIZON_DAYS * 86400_000).toISOString();
@@ -74,12 +116,22 @@ export function PublicScheduleSection() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [site.gym.id, profile?.id]);
 
   const occurrences = useMemo(() => {
     if (!events) return [];
     return expandEvents(events, HORIZON_DAYS);
   }, [events]);
+
+  const occByDay = useMemo(() => {
+    const m: Record<string, EventOccurrence[]> = {};
+    occurrences.forEach((o) => {
+      const k = dateKey(o.start);
+      (m[k] ??= []).push(o);
+    });
+    return m;
+  }, [occurrences]);
 
   const bookingsByKey = useMemo(() => {
     const m: Record<string, { count: number; mine: boolean }> = {};
@@ -89,14 +141,19 @@ export function PublicScheduleSection() {
     return m;
   }, [bookings]);
 
-  const grouped = useMemo(() => {
-    const byDay: Record<string, EventOccurrence[]> = {};
-    occurrences.forEach((o) => {
-      const day = o.start.toISOString().slice(0, 10);
-      (byDay[day] ??= []).push(o);
-    });
-    return Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
-  }, [occurrences]);
+  // Month grid cells (always 6 rows × 7 cols = 42 days starting from the
+  // Monday on or before the 1st of the displayed month)
+  const monthCells = useMemo(() => {
+    const first = startOfMonth(monthAnchor);
+    const gridStart = startOfWeek(first);
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [monthAnchor]);
+
+  const selectedWeekStart = useMemo(() => startOfWeek(selectedDay), [selectedDay]);
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(selectedWeekStart, i)),
+    [selectedWeekStart]
+  );
 
   async function book(o: EventOccurrence) {
     if (!profile?.id) return;
@@ -114,7 +171,6 @@ export function PublicScheduleSection() {
     }
     load();
   }
-
   async function cancel(o: EventOccurrence) {
     if (!profile?.id) return;
     setBusy(`${o.event.id}|${o.dateKey}`);
@@ -138,32 +194,136 @@ export function PublicScheduleSection() {
   const bookingsEnabled = site.modules.bookings_enabled;
 
   if (events === null) return <ActivityIndicator color={primary} />;
-  if (occurrences.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyText}>
-          No upcoming classes or events in the next {HORIZON_DAYS} days. Check back soon.
-        </Text>
-      </View>
-    );
-  }
+
+  const monthLabel = monthAnchor.toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+  const weekRange = `${weekDays[0].toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })} – ${weekDays[6].toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })}`;
+
+  // Feed: events in the selected week, grouped by day
+  const feedDays = weekDays
+    .map((d) => ({ day: d, occs: occByDay[dateKey(d)] ?? [] }))
+    .filter((x) => x.occs.length > 0);
 
   return (
     <View style={styles.root}>
       {err ? <Text style={styles.err}>{err}</Text> : null}
-      {grouped.map(([day, list]) => {
-        const d = new Date(day + 'T00:00:00');
-        return (
-          <View key={day} style={styles.daySection}>
+
+      {/* Calendar grid */}
+      <View style={styles.calCard}>
+        <View style={styles.calHeader}>
+          <Pressable
+            onPress={() => setMonthAnchor((m) => addMonths(m, -1))}
+            style={styles.navBtn}
+          >
+            <Text style={styles.navBtnText}>‹</Text>
+          </Pressable>
+          <Text style={[styles.calTitle, { color: primary }]}>{monthLabel}</Text>
+          <Pressable
+            onPress={() => setMonthAnchor((m) => addMonths(m, 1))}
+            style={styles.navBtn}
+          >
+            <Text style={styles.navBtnText}>›</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.dowRow}>
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+            <Text key={d} style={styles.dowText}>
+              {isWide ? d : d[0]}
+            </Text>
+          ))}
+        </View>
+
+        <View style={styles.grid}>
+          {monthCells.map((d) => {
+            const inMonth = d.getMonth() === monthAnchor.getMonth();
+            const isToday = isSameDay(d, today);
+            const isSelected = isSameDay(d, selectedDay);
+            const inSelectedWeek =
+              d >= selectedWeekStart && d <= addDays(selectedWeekStart, 6);
+            const hasEvents = (occByDay[dateKey(d)] ?? []).length > 0;
+            return (
+              <Pressable
+                key={d.toISOString()}
+                onPress={() => setSelectedDay(d)}
+                style={[
+                  styles.cell,
+                  inSelectedWeek && { backgroundColor: '#f1f5f9' },
+                  isSelected && { backgroundColor: accent + '22' },
+                ]}
+              >
+                <View style={styles.cellInner}>
+                  <Text
+                    style={[
+                      styles.cellNum,
+                      !inMonth && styles.cellNumOutMonth,
+                      isToday && { color: primary, fontWeight: '900' },
+                    ]}
+                  >
+                    {d.getDate()}
+                  </Text>
+                  {hasEvents ? (
+                    <View style={[styles.dot, { backgroundColor: primary }]} />
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Week heading */}
+      <View style={styles.weekBar}>
+        <Text style={[styles.weekTitle, { color: primary }]}>Week of {weekRange}</Text>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            onPress={() => setSelectedDay((d) => addDays(d, -7))}
+            style={styles.navBtnSmall}
+          >
+            <Text style={styles.navBtnText}>‹</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setSelectedDay(today);
+              setMonthAnchor(startOfMonth(today));
+            }}
+            style={styles.todayBtn}
+          >
+            <Text style={styles.todayBtnText}>Today</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSelectedDay((d) => addDays(d, 7))}
+            style={styles.navBtnSmall}
+          >
+            <Text style={styles.navBtnText}>›</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {feedDays.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>Nothing scheduled this week.</Text>
+        </View>
+      ) : (
+        feedDays.map(({ day, occs }) => (
+          <View key={day.toISOString()} style={styles.daySection}>
             <Text style={[styles.dayHeading, { color: primary }]}>
-              {d.toLocaleDateString(undefined, {
+              {day.toLocaleDateString(undefined, {
                 weekday: 'long',
                 month: 'long',
                 day: 'numeric',
               })}
             </Text>
             <View style={styles.dayList}>
-              {list.map((o) => {
+              {occs.map((o) => {
                 const key = `${o.event.id}|${o.dateKey}`;
                 const bk = bookingsByKey[key];
                 const spotsLeft =
@@ -245,8 +405,8 @@ export function PublicScheduleSection() {
               })}
             </View>
           </View>
-        );
-      })}
+        ))
+      )}
     </View>
   );
 }
@@ -258,7 +418,87 @@ function labelForType(t: string) {
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 28 },
+  root: { gap: 20, maxWidth: 920, width: '100%', alignSelf: 'stretch' },
+  err: { color: '#DC2626', fontSize: 13 },
+
+  calCard: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    gap: 12,
+  },
+  calHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calTitle: { fontSize: 18, fontWeight: '800' },
+  navBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  navBtnSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  navBtnText: { fontSize: 18, color: '#0F172A', fontWeight: '700', lineHeight: 18 },
+
+  dowRow: { flexDirection: 'row' },
+  dowText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    paddingVertical: 6,
+  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    padding: 4,
+  },
+  cellInner: {
+    flex: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    gap: 3,
+  },
+  cellNum: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+  cellNumOutMonth: { color: '#cbd5e1' },
+  dot: { width: 5, height: 5, borderRadius: 3 },
+
+  weekBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  weekTitle: { fontSize: 16, fontWeight: '800', flex: 1 },
+  todayBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
+  },
+  todayBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+
   empty: {
     padding: 16,
     borderRadius: 12,
@@ -267,9 +507,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   emptyText: { fontSize: 14, color: '#475569' },
-  err: { color: '#DC2626', fontSize: 13 },
-  daySection: { gap: 10 },
-  dayHeading: { fontSize: 18, fontWeight: '800' },
+  daySection: { gap: 8 },
+  dayHeading: { fontSize: 16, fontWeight: '800' },
   dayList: { gap: 8 },
   row: {
     flexDirection: 'row',
@@ -291,11 +530,7 @@ const styles = StyleSheet.create({
   pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   pillText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
   spots: { fontSize: 12, color: '#475569' },
-  actionBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
+  actionBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   cancelBtn: { borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff' },
   cancelBtnText: { color: '#DC2626', fontWeight: '700', fontSize: 13 },
