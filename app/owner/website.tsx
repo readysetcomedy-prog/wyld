@@ -41,6 +41,8 @@ type Modules = {
   news_visible: boolean;
   faq_visible: boolean;
   store_visible: boolean;
+  multi_location_enabled: boolean;
+  max_locations: number;
 };
 
 type Settings = {
@@ -146,6 +148,9 @@ export default function Website() {
   const { profile } = useAuth();
   const [gym, setGym] = useState<Gym | null>(null);
   const [themeRow, setThemeRow] = useState<Theme | null>(null);
+  // When null = editing default ("All locations / shared"). UUID = editing that location's overrides.
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  const [locations, setLocations] = useState<{ id: string; label: string | null; slug: string | null; is_primary: boolean }[]>([]);
   const [modules, setModules] = useState<Modules | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [pages, setPages] = useState<Record<string, PageContent>>({});
@@ -157,42 +162,92 @@ export default function Website() {
 
   const gymId = profile?.gym_id ?? null;
 
+  // Load gym + modules + settings + locations once per gym.
   useEffect(() => {
     if (!gymId) return;
     (async () => {
-      const [
-        { data: g },
-        { data: t },
-        { data: m },
-        { data: s },
-        { data: pp },
-        b,
-      ] = await Promise.all([
+      const [{ data: g }, { data: m }, { data: s }, { data: locs }, b] = await Promise.all([
         supabase.from('gyms').select('id, name, slug, custom_domain').eq('id', gymId).maybeSingle(),
-        supabase.from('gym_themes').select('*').eq('gym_id', gymId).maybeSingle(),
         supabase
           .from('gym_modules')
           .select(
-            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible'
+            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled, max_locations'
           )
           .eq('gym_id', gymId)
           .maybeSingle(),
         supabase.from('gym_site_settings').select('*').eq('gym_id', gymId).maybeSingle(),
-        supabase.from('gym_pages').select('page_key, content').eq('gym_id', gymId),
+        supabase
+          .from('gym_locations')
+          .select('id, label, slug, is_primary')
+          .eq('gym_id', gymId)
+          .order('display_order'),
         fetchBaseUrl(),
       ]);
       setBaseUrl(b);
       setGym((g as Gym | null) ?? null);
-      setThemeRow((t as Theme | null) ?? null);
       setModules((m as Modules | null) ?? null);
       setSettings((s as Settings | null) ?? null);
+      setLocations((locs as any) ?? []);
+    })();
+  }, [gymId]);
+
+  // (Re)load theme + pages for the active location, merging defaults below
+  // the per-location overrides so the editor shows the effective values.
+  useEffect(() => {
+    if (!gymId) return;
+    (async () => {
+      const [{ data: defTheme }, locThemeRes, { data: defPages }, locPagesRes] = await Promise.all([
+        supabase
+          .from('gym_themes')
+          .select('*')
+          .eq('gym_id', gymId)
+          .is('location_id', null)
+          .maybeSingle(),
+        activeLocationId
+          ? supabase
+              .from('gym_themes')
+              .select('*')
+              .eq('gym_id', gymId)
+              .eq('location_id', activeLocationId)
+              .maybeSingle()
+          : Promise.resolve({ data: null as any }),
+        supabase
+          .from('gym_pages')
+          .select('page_key, content')
+          .eq('gym_id', gymId)
+          .is('location_id', null),
+        activeLocationId
+          ? supabase
+              .from('gym_pages')
+              .select('page_key, content')
+              .eq('gym_id', gymId)
+              .eq('location_id', activeLocationId)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const base = (defTheme as any) ?? null;
+      const loc = (locThemeRes as any).data ?? null;
+      const merged: Theme | null = base || loc
+        ? ({
+            gym_id: gymId,
+            primary_color: loc?.primary_color ?? base?.primary_color ?? '#0F172A',
+            accent_color: loc?.accent_color ?? base?.accent_color ?? '#14B8A6',
+            logo_url: loc?.logo_url ?? base?.logo_url ?? null,
+            style_preset: loc?.style_preset ?? base?.style_preset ?? 'clean',
+            hero_variant: loc?.hero_variant ?? base?.hero_variant ?? 'split',
+            section_dividers: loc?.section_dividers ?? base?.section_dividers ?? false,
+          } as Theme)
+        : null;
+      setThemeRow(merged);
       const map: Record<string, PageContent> = {};
-      (pp ?? []).forEach((row: any) => {
+      (defPages ?? []).forEach((row: any) => {
+        map[row.page_key] = row.content ?? {};
+      });
+      ((locPagesRes as any).data ?? []).forEach((row: any) => {
         map[row.page_key] = row.content ?? {};
       });
       setPages(map);
     })();
-  }, [gymId]);
+  }, [gymId, activeLocationId]);
 
   function notifySaved(label: string) {
     setSavedNote(label);
@@ -200,15 +255,42 @@ export default function Website() {
   }
 
   async function saveTheme(patch: Partial<Theme>) {
-    if (!themeRow) return;
+    if (!themeRow || !gymId) return;
     const next = { ...themeRow, ...patch };
     setThemeRow(next);
-    const { error } = await supabase
-      .from('gym_themes')
-      .update(patch)
-      .eq('gym_id', themeRow.gym_id);
-    if (error) setError(error.message);
-    else notifySaved('Theme saved');
+    // Find existing row for (gym_id, activeLocationId|null) and update; else
+    // insert. Per-location rows are created the first time the owner edits
+    // anything while a location is selected.
+    let q = supabase.from('gym_themes').select('id').eq('gym_id', gymId);
+    q = activeLocationId ? q.eq('location_id', activeLocationId) : q.is('location_id', null);
+    const { data: existing } = await q.maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from('gym_themes')
+        .update(patch)
+        .eq('id', (existing as any).id);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    } else {
+      const insertRow: any = {
+        gym_id: gymId,
+        location_id: activeLocationId,
+        primary_color: next.primary_color,
+        accent_color: next.accent_color,
+        logo_url: next.logo_url,
+        style_preset: next.style_preset,
+        hero_variant: next.hero_variant,
+        section_dividers: next.section_dividers,
+      };
+      const { error } = await supabase.from('gym_themes').insert(insertRow);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    }
+    notifySaved('Theme saved');
   }
 
   async function saveModules(patch: Partial<Modules>) {
@@ -239,12 +321,32 @@ export default function Website() {
     const merged = { ...current, ...patch };
     setPages({ ...pages, [key]: merged });
     setSavingPage(true);
-    const { error } = await supabase
+    let q = supabase
       .from('gym_pages')
-      .upsert({ gym_id: gymId, page_key: key, content: merged }, { onConflict: 'gym_id,page_key' });
-    setSavingPage(false);
-    if (error) setError(error.message);
-    else notifySaved('Page saved');
+      .select('id')
+      .eq('gym_id', gymId)
+      .eq('page_key', key);
+    q = activeLocationId ? q.eq('location_id', activeLocationId) : q.is('location_id', null);
+    const { data: existing } = await q.maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from('gym_pages')
+        .update({ content: merged })
+        .eq('id', (existing as any).id);
+      setSavingPage(false);
+      if (error) setError(error.message);
+      else notifySaved('Page saved');
+    } else {
+      const { error } = await supabase.from('gym_pages').insert({
+        gym_id: gymId,
+        page_key: key,
+        content: merged,
+        location_id: activeLocationId,
+      });
+      setSavingPage(false);
+      if (error) setError(error.message);
+      else notifySaved('Page saved');
+    }
   }
 
   async function uploadLogo() {
@@ -310,6 +412,56 @@ export default function Website() {
         {savedNote ? <Text style={styles.saved}>{savedNote}</Text> : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
+
+      {modules.multi_location_enabled && locations.length > 0 ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Editing location</Text>
+          <Text style={styles.cardSub}>
+            Pick which location you&apos;re editing. &quot;Default&quot; sets the baseline used by
+            every location; per-location edits override the baseline only where you change
+            them — anything you leave alone still uses the default. Switching locations
+            doesn&apos;t erase work you&apos;ve already done.
+          </Text>
+          <View style={styles.locPickerRow}>
+            <Pressable
+              style={[
+                styles.locPickerPill,
+                activeLocationId === null && styles.locPickerPillActive,
+              ]}
+              onPress={() => setActiveLocationId(null)}
+            >
+              <Text
+                style={[
+                  styles.locPickerText,
+                  activeLocationId === null && styles.locPickerTextActive,
+                ]}
+              >
+                Default (all locations)
+              </Text>
+            </Pressable>
+            {locations.map((l) => (
+              <Pressable
+                key={l.id}
+                style={[
+                  styles.locPickerPill,
+                  activeLocationId === l.id && styles.locPickerPillActive,
+                ]}
+                onPress={() => setActiveLocationId(l.id)}
+              >
+                <Text
+                  style={[
+                    styles.locPickerText,
+                    activeLocationId === l.id && styles.locPickerTextActive,
+                  ]}
+                >
+                  {l.label || 'Untitled location'}
+                  {l.is_primary ? ' ★' : ''}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Theme</Text>
@@ -709,7 +861,11 @@ export default function Website() {
           appear on your Contact page. If you don&apos;t add any, the single contact info above
           is used as a fallback.
         </Text>
-        <LocationsManager gymId={gymId} />
+        <LocationsManager
+          gymId={gymId}
+          multiLocationEnabled={modules.multi_location_enabled}
+          maxLocations={modules.max_locations}
+        />
       </View>
 
       {activePage === 'news' ? (
@@ -1305,6 +1461,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   toggleLabel: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  locPickerRow: { flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' },
+  locPickerPill: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  locPickerPillActive: {
+    backgroundColor: theme.colors.wyldPurple,
+    borderColor: theme.colors.wyldPurple,
+  },
+  locPickerText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  locPickerTextActive: { color: '#fff' },
   presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
   presetTile: {
     width: 160,

@@ -1,5 +1,17 @@
 import { createContext, useContext, ReactNode } from 'react';
 
+export type GymSiteLocation = {
+  id: string;
+  label: string | null;
+  slug: string | null;
+  is_primary: boolean;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+};
+
 export type GymSite = {
   gym: {
     id: string;
@@ -8,6 +20,14 @@ export type GymSite = {
     city: string | null;
     state: string | null;
   };
+  // Locations the gym has set up. Empty array if none.
+  locations: GymSiteLocation[];
+  // The location the visitor is currently viewing (or null on the
+  // pick-a-location landing). For single-location gyms this is the
+  // primary location if one exists.
+  currentLocation: GymSiteLocation | null;
+  // True when admin granted multi_location for this gym.
+  multiLocationEnabled: boolean;
   theme: {
     primary_color: string;
     accent_color: string;

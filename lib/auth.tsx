@@ -46,6 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session?.user) {
+        // Clear any stale profile from a prior user so consumers don't
+        // route based on the previous identity while the new profile loads.
+        setProfile((prev) => (prev && prev.id !== session.user.id ? null : prev));
         loadProfile(session.user.id);
       } else {
         setProfile(null);

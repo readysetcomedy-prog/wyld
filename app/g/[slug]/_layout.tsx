@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Slot,
   useLocalSearchParams,
@@ -14,16 +14,67 @@ import {
   StyleSheet,
   ActivityIndicator,
   useWindowDimensions,
-  Linking,
   Platform,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { GymSiteProvider, GymSite } from '@/components/GymSiteContext';
+import { GymSiteProvider, GymSite, GymSiteLocation } from '@/components/GymSiteContext';
 import { SocialIcons } from '@/components/SocialIcons';
+import { PhoneLink, EmailLink } from '@/components/ContactLink';
+
+const DEFAULT_MODULES = {
+  calendar_enabled: false,
+  store_enabled: false,
+  news_enabled: false,
+  faq_enabled: false,
+  bookings_enabled: false,
+  about_enabled: true,
+  services_enabled: true,
+  contact_enabled: true,
+  news_visible: true,
+  faq_visible: true,
+  store_visible: true,
+};
+const DEFAULT_THEME = {
+  primary_color: '#0F172A',
+  accent_color: '#14B8A6',
+  logo_url: null,
+  style_preset: 'clean' as const,
+  hero_variant: 'split' as const,
+  section_dividers: false,
+};
+const DEFAULT_SETTINGS = {
+  contact_email: null,
+  contact_phone: null,
+  address_line1: null,
+  city: null,
+  state: null,
+  zip: null,
+  hours: null,
+  social_instagram: null,
+  social_facebook: null,
+  social_x: null,
+  social_tiktok: null,
+};
+
+function normalizeTheme(row: any) {
+  if (!row) return null;
+  return {
+    primary_color: row.primary_color ?? DEFAULT_THEME.primary_color,
+    accent_color: row.accent_color ?? DEFAULT_THEME.accent_color,
+    logo_url: row.logo_url ?? null,
+    style_preset: row.style_preset ?? 'clean',
+    hero_variant: row.hero_variant ?? 'split',
+    section_dividers: !!row.section_dividers,
+  };
+}
 
 export default function SiteLayout() {
-  const { slug: rawSlug } = useLocalSearchParams<{ slug: string }>();
+  const { slug: rawSlug, loc: rawLoc } = useLocalSearchParams<{
+    slug: string;
+    loc?: string;
+  }>();
   const slug = typeof rawSlug === 'string' ? rawSlug.trim().toLowerCase() : '';
+  const locParam = typeof rawLoc === 'string' && rawLoc ? rawLoc.toLowerCase() : null;
   const router = useRouter();
   const pathname = usePathname();
   const { width } = useWindowDimensions();
@@ -52,105 +103,128 @@ export default function SiteLayout() {
         return;
       }
       const [
-        { data: theme, error: themeErr },
         { data: modules, error: modErr },
         { data: settings, error: setErr },
-        { data: pages, error: pagesErr },
+        { data: locationRows, error: locErr },
       ] = await Promise.all([
-        supabase.from('gym_themes').select('*').eq('gym_id', gym.id).maybeSingle(),
         supabase.from('gym_modules').select('*').eq('gym_id', gym.id).maybeSingle(),
         supabase.from('gym_site_settings').select('*').eq('gym_id', gym.id).maybeSingle(),
-        supabase.from('gym_pages').select('page_key, content').eq('gym_id', gym.id),
+        supabase
+          .from('gym_locations')
+          .select('id, label, slug, is_primary, address_line1, address_line2, city, state, zip, display_order')
+          .eq('gym_id', gym.id)
+          .order('display_order'),
       ]);
       if (cancelled) return;
-      const firstErr = themeErr || modErr || setErr || pagesErr;
+      const firstErr = modErr || setErr || locErr;
       if (firstErr) {
         setLoadError(firstErr.message);
         return;
       }
+
+      const locations: GymSiteLocation[] = (locationRows ?? []) as any;
+      const multiLocationEnabled = !!(modules as any)?.multi_location_enabled;
+
+      // Resolve the current location.
+      // - locParam wins if it matches a location's slug
+      // - otherwise primary, otherwise first, otherwise null
+      let currentLocation: GymSiteLocation | null = null;
+      if (locParam) {
+        currentLocation =
+          locations.find((l) => l.slug?.toLowerCase() === locParam) ?? null;
+      }
+      if (!currentLocation) {
+        currentLocation = locations.find((l) => l.is_primary) ?? locations[0] ?? null;
+      }
+
+      // Fetch theme & pages for both the gym default (location_id IS NULL) and
+      // the current location (if any). Merge: per-location wins over default.
+      const themeReqs: Promise<any>[] = [
+        supabase
+          .from('gym_themes')
+          .select('*')
+          .eq('gym_id', gym.id)
+          .is('location_id', null)
+          .maybeSingle(),
+      ];
+      const pagesReqs: Promise<any>[] = [
+        supabase
+          .from('gym_pages')
+          .select('page_key, content')
+          .eq('gym_id', gym.id)
+          .is('location_id', null),
+      ];
+      if (currentLocation) {
+        themeReqs.push(
+          supabase
+            .from('gym_themes')
+            .select('*')
+            .eq('gym_id', gym.id)
+            .eq('location_id', currentLocation.id)
+            .maybeSingle()
+        );
+        pagesReqs.push(
+          supabase
+            .from('gym_pages')
+            .select('page_key, content')
+            .eq('gym_id', gym.id)
+            .eq('location_id', currentLocation.id)
+        );
+      }
+      const [
+        [{ data: defaultTheme }, ...locThemeArr],
+        [{ data: defaultPages }, ...locPagesArr],
+      ] = (await Promise.all([Promise.all(themeReqs), Promise.all(pagesReqs)])) as any[];
+      if (cancelled) return;
+
+      const baseTheme = normalizeTheme(defaultTheme) ?? DEFAULT_THEME;
+      const locTheme = normalizeTheme(locThemeArr?.[0]?.data);
+      const mergedTheme = locTheme ? { ...baseTheme, ...filterNonNull(locTheme) } : baseTheme;
+
       const pagesMap: Record<string, any> = {};
-      (pages ?? []).forEach((row: any) => {
+      (defaultPages ?? []).forEach((row: any) => {
         pagesMap[row.page_key] = row.content ?? {};
       });
+      (locPagesArr?.[0]?.data ?? []).forEach((row: any) => {
+        pagesMap[row.page_key] = row.content ?? {};
+      });
+
       setSite({
         gym,
-        theme: theme
-          ? {
-              primary_color: theme.primary_color ?? '#0F172A',
-              accent_color: theme.accent_color ?? '#14B8A6',
-              logo_url: theme.logo_url ?? null,
-              style_preset: theme.style_preset ?? 'clean',
-              hero_variant: theme.hero_variant ?? 'split',
-              section_dividers: !!theme.section_dividers,
-            }
-          : {
-              primary_color: '#0F172A',
-              accent_color: '#14B8A6',
-              logo_url: null,
-              style_preset: 'clean',
-              hero_variant: 'split',
-              section_dividers: false,
-            },
-        modules: modules ?? {
-          calendar_enabled: false,
-          store_enabled: false,
-          news_enabled: false,
-          faq_enabled: false,
-          bookings_enabled: false,
-          about_enabled: true,
-          services_enabled: true,
-          contact_enabled: true,
-          news_visible: true,
-          faq_visible: true,
-          store_visible: true,
-        },
-        settings: settings ?? {
-          contact_email: null,
-          contact_phone: null,
-          address_line1: null,
-          city: null,
-          state: null,
-          zip: null,
-          hours: null,
-          social_instagram: null,
-          social_facebook: null,
-          social_x: null,
-          social_tiktok: null,
-        },
+        theme: mergedTheme,
+        modules: { ...DEFAULT_MODULES, ...(modules ?? {}) },
+        settings: { ...DEFAULT_SETTINGS, ...(settings ?? {}) },
         pages: pagesMap,
+        locations,
+        currentLocation,
+        multiLocationEnabled,
       });
     })();
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, locParam]);
 
-  // Update browser tab title + favicon to match the gym (web only).
-  // Capture the originals on mount so we can restore them on unmount —
-  // otherwise visiting a gym leaves its title/favicon on the WyLD pages.
+  // Tab title + favicon, restored on unmount.
   const originalTitleRef = useRef<string | null>(null);
   const originalFaviconRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     originalTitleRef.current = document.title;
     const link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
     originalFaviconRef.current = link?.href ?? null;
     return () => {
-      if (originalTitleRef.current !== null) {
-        document.title = originalTitleRef.current;
-      }
+      if (originalTitleRef.current !== null) document.title = originalTitleRef.current;
       const l = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
-      if (l && originalFaviconRef.current) {
-        l.href = originalFaviconRef.current;
-      }
+      if (l && originalFaviconRef.current) l.href = originalFaviconRef.current;
     };
   }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     if (site) {
-      document.title = site.gym.name;
+      const locName = site.currentLocation?.label;
+      document.title = locName ? `${site.gym.name} — ${locName}` : site.gym.name;
       if (site.theme.logo_url) {
         let link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
         if (!link) {
@@ -162,6 +236,12 @@ export default function SiteLayout() {
       }
     }
   }, [site]);
+
+  // Build path-with-current-location query string for nav links.
+  const locQuery = useMemo(() => {
+    if (!site?.currentLocation?.slug) return '';
+    return `?loc=${site.currentLocation.slug}`;
+  }, [site?.currentLocation?.slug]);
 
   if (loadError) {
     return (
@@ -206,20 +286,35 @@ export default function SiteLayout() {
   const primary = site.theme.primary_color;
   const accent = site.theme.accent_color;
 
+  // When multi_location is on, the visitor must pick a location before they
+  // get the rest of the nav. Hide nav while no location is chosen.
+  const showPickerLanding =
+    site.multiLocationEnabled && site.locations.length > 1 && !locParam;
+
   const m = site.modules;
   const showStore = m.store_enabled && m.store_visible;
   const showNews = m.news_enabled && m.news_visible;
   const showFaq = m.faq_enabled && m.faq_visible;
-  const NAV: { label: string; path: string }[] = [
-    { label: 'Home', path: `/g/${slug}` },
-    ...(m.services_enabled ? [{ label: 'Services', path: `/g/${slug}/services` }] : []),
-    ...(m.calendar_enabled ? [{ label: 'Schedule', path: `/g/${slug}/schedule` }] : []),
-    ...(showStore ? [{ label: 'Store', path: `/g/${slug}/store` }] : []),
-    ...(m.about_enabled ? [{ label: 'About', path: `/g/${slug}/about` }] : []),
-    ...(showNews ? [{ label: 'News', path: `/g/${slug}/news` }] : []),
-    ...(showFaq ? [{ label: 'FAQ', path: `/g/${slug}/faq` }] : []),
-    ...(m.contact_enabled ? [{ label: 'Contact', path: `/g/${slug}/contact` }] : []),
-  ];
+  const NAV: { label: string; path: string }[] = showPickerLanding
+    ? []
+    : [
+        { label: 'Home', path: `/g/${slug}${locQuery}` },
+        ...(m.services_enabled
+          ? [{ label: 'Services', path: `/g/${slug}/services${locQuery}` }]
+          : []),
+        ...(m.calendar_enabled
+          ? [{ label: 'Schedule', path: `/g/${slug}/schedule${locQuery}` }]
+          : []),
+        ...(showStore ? [{ label: 'Store', path: `/g/${slug}/store${locQuery}` }] : []),
+        ...(m.about_enabled
+          ? [{ label: 'About', path: `/g/${slug}/about${locQuery}` }]
+          : []),
+        ...(showNews ? [{ label: 'News', path: `/g/${slug}/news${locQuery}` }] : []),
+        ...(showFaq ? [{ label: 'FAQ', path: `/g/${slug}/faq${locQuery}` }] : []),
+        ...(m.contact_enabled
+          ? [{ label: 'Contact', path: `/g/${slug}/contact${locQuery}` }]
+          : []),
+      ];
 
   return (
     <GymSiteProvider value={site}>
@@ -227,44 +322,64 @@ export default function SiteLayout() {
         <View style={[styles.header, isWide && styles.headerWide, { borderBottomColor: '#e2e8f0' }]}>
           <Pressable
             style={styles.brand}
-            onPress={() => router.push(`/g/${slug}` as never)}
+            onPress={() =>
+              router.push(
+                (showPickerLanding ? `/g/${slug}` : `/g/${slug}${locQuery}`) as never
+              )
+            }
             accessibilityLabel={site.gym.name}
           >
             {site.theme.logo_url ? (
               <Image source={{ uri: site.theme.logo_url }} style={styles.logo} resizeMode="contain" />
             ) : null}
-            <Text style={[styles.brandName, { color: primary }]}>{site.gym.name}</Text>
+            <View>
+              <Text style={[styles.brandName, { color: primary }]}>{site.gym.name}</Text>
+              {site.currentLocation && site.locations.length > 1 ? (
+                <Text style={styles.brandLocation}>{site.currentLocation.label}</Text>
+              ) : null}
+            </View>
           </Pressable>
 
-          <ScrollView
-            horizontal={!isWide}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.nav, isWide && styles.navWide]}
-          >
-            {NAV.map((item) => {
-              const isActive =
-                pathname === item.path ||
-                (item.label === 'Home' && pathname === `/g/${slug}`);
-              return (
-                <Pressable key={item.path} onPress={() => router.push(item.path as never)}>
-                  <Text
-                    style={[
-                      styles.navItem,
-                      { color: isActive ? accent : '#475569' },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => router.push(`/g/${slug}/login` as never)}
-              style={[styles.loginBtn, { backgroundColor: accent }]}
+          {NAV.length > 0 ? (
+            <ScrollView
+              horizontal={!isWide}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.nav, isWide && styles.navWide]}
             >
-              <Text style={styles.loginBtnText}>Member login</Text>
-            </Pressable>
-          </ScrollView>
+              {NAV.map((item) => {
+                const itemPath = item.path.split('?')[0];
+                const isActive =
+                  pathname === itemPath ||
+                  (item.label === 'Home' && pathname === `/g/${slug}`);
+                return (
+                  <Pressable key={item.path} onPress={() => router.push(item.path as never)}>
+                    <Text
+                      style={[
+                        styles.navItem,
+                        { color: isActive ? accent : '#475569' },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              {site.multiLocationEnabled && site.locations.length > 1 ? (
+                <Pressable
+                  onPress={() => router.push(`/g/${slug}` as never)}
+                  style={styles.locSwitchBtn}
+                >
+                  <Text style={styles.locSwitchBtnText}>Switch location</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => router.push(`/g/${slug}/login` as never)}
+                style={[styles.loginBtn, { backgroundColor: accent }]}
+              >
+                <Text style={styles.loginBtnText}>Member login</Text>
+              </Pressable>
+            </ScrollView>
+          ) : null}
         </View>
 
         <Slot />
@@ -272,7 +387,12 @@ export default function SiteLayout() {
         <View style={[styles.footer, { backgroundColor: primary }]}>
           <View style={[styles.footerInner, isWide && styles.footerInnerWide]}>
             <View>
-              <Text style={styles.footerName}>{site.gym.name}</Text>
+              <Text style={styles.footerName}>
+                {site.gym.name}
+                {site.currentLocation && site.locations.length > 1
+                  ? ` — ${site.currentLocation.label}`
+                  : ''}
+              </Text>
               {site.settings.address_line1 ? (
                 <Text style={styles.footerLine}>
                   {site.settings.address_line1}
@@ -282,10 +402,10 @@ export default function SiteLayout() {
                 </Text>
               ) : null}
               {site.settings.contact_phone ? (
-                <Text style={styles.footerLine}>{site.settings.contact_phone}</Text>
+                <PhoneLink phone={site.settings.contact_phone} style={styles.footerLine} />
               ) : null}
               {site.settings.contact_email ? (
-                <Text style={styles.footerLine}>{site.settings.contact_email}</Text>
+                <EmailLink email={site.settings.contact_email} style={styles.footerLine} />
               ) : null}
             </View>
             <SocialIcons settings={site.settings} accent={accent} />
@@ -297,6 +417,14 @@ export default function SiteLayout() {
       </ScrollView>
     </GymSiteProvider>
   );
+}
+
+function filterNonNull<T extends Record<string, any>>(obj: T): Partial<T> {
+  const out: any = {};
+  Object.entries(obj).forEach(([k, v]) => {
+    if (v !== null && v !== undefined) out[k] = v;
+  });
+  return out;
 }
 
 const styles = StyleSheet.create({
@@ -324,10 +452,19 @@ const styles = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   logo: { width: 64, height: 64 },
   brandName: { fontSize: 24, fontWeight: '800', letterSpacing: 0.2 },
+  brandLocation: { fontSize: 13, color: '#94a3b8', fontWeight: '600' },
 
   nav: { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 4 },
   navWide: { paddingVertical: 0 },
   navItem: { fontSize: 14, fontWeight: '700' },
+  locSwitchBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  locSwitchBtnText: { fontSize: 12, fontWeight: '700', color: '#475569' },
   loginBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginLeft: 8 },
   loginBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 

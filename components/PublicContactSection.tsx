@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { GymHours, hasAnyHours } from '@/components/GymHours';
 import { useGymSite } from '@/components/GymSiteContext';
 import { StyledBlock, BlockStyle } from '@/components/StyledBlock';
+import { PhoneLink, EmailLink } from '@/components/ContactLink';
 
 type LocContact = {
   id: string;
@@ -181,10 +182,18 @@ export function PublicContactSection() {
             </Text>
           ) : null}
           {fallback.contact_email ? (
-            <Text style={styles.contactLine}>Email: {fallback.contact_email}</Text>
+            <EmailLink
+              email={fallback.contact_email}
+              prefix="Email: "
+              style={styles.contactLine}
+            />
           ) : null}
           {fallback.contact_phone ? (
-            <Text style={styles.contactLine}>Phone: {fallback.contact_phone}</Text>
+            <PhoneLink
+              phone={fallback.contact_phone}
+              prefix="Phone: "
+              style={styles.contactLine}
+            />
           ) : null}
         </View>
       ) : (
@@ -211,20 +220,24 @@ export function PublicContactSection() {
                 {emails.length > 0 ? (
                   <View style={styles.contactGroup}>
                     {emails.map((c) => (
-                      <Text key={c.id} style={styles.contactLine}>
-                        {c.label ? `${c.label}: ` : ''}
-                        {c.value}
-                      </Text>
+                      <EmailLink
+                        key={c.id}
+                        email={c.value}
+                        prefix={c.label ? `${c.label}: ` : ''}
+                        style={styles.contactLine}
+                      />
                     ))}
                   </View>
                 ) : null}
                 {phones.length > 0 ? (
                   <View style={styles.contactGroup}>
                     {phones.map((c) => (
-                      <Text key={c.id} style={styles.contactLine}>
-                        {c.label ? `${c.label}: ` : ''}
-                        {c.value}
-                      </Text>
+                      <PhoneLink
+                        key={c.id}
+                        phone={c.value}
+                        prefix={c.label ? `${c.label}: ` : ''}
+                        style={styles.contactLine}
+                      />
                     ))}
                   </View>
                 ) : null}
