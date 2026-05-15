@@ -12,12 +12,22 @@ export type GymSite = {
     primary_color: string;
     accent_color: string;
     logo_url: string | null;
+    style_preset: 'clean' | 'bold' | 'warm' | 'modern';
+    hero_variant: 'split' | 'fullbleed';
+    section_dividers: boolean;
   };
   modules: {
     calendar_enabled: boolean;
     store_enabled: boolean;
     news_enabled: boolean;
     faq_enabled: boolean;
+    bookings_enabled: boolean;
+    about_enabled: boolean;
+    services_enabled: boolean;
+    contact_enabled: boolean;
+    news_visible: boolean;
+    faq_visible: boolean;
+    store_visible: boolean;
   };
   settings: {
     contact_email: string | null;

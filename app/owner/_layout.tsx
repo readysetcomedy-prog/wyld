@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import {
   View,
@@ -10,27 +11,70 @@ import {
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { supabase } from '@/lib/supabase';
 
-const TABS: { label: string; href: string }[] = [
-  { label: 'Billing', href: '/owner/billing' },
+type ModuleKey =
+  | 'bookings_enabled'
+  | 'store_enabled'
+  | 'employees_enabled'
+  | 'time_cards_enabled'
+  | 'analytics_enabled'
+  | 'door_enabled'
+  | 'offerings_enabled'
+  | 'billing_enabled'
+  | 'marketing_enabled';
+
+type Tab = { label: string; href: string; gated?: ModuleKey };
+
+// Tabs with `gated` only render when the admin has flipped the corresponding
+// module flag on for this gym. Always-on tabs (Website, Messages, Calendar,
+// Members) are core and don't need a paid module.
+const TABS: Tab[] = [
+  { label: 'Billing', href: '/owner/billing', gated: 'billing_enabled' },
   { label: 'Website', href: '/owner/website' },
+  { label: 'Messages', href: '/owner/messages' },
   { label: 'Calendar', href: '/owner/calendar' },
-  { label: 'Bookings', href: '/owner/bookings' },
+  { label: 'Bookings', href: '/owner/bookings', gated: 'bookings_enabled' },
   { label: 'Members', href: '/owner/members' },
-  { label: 'Employees', href: '/owner/employees' },
-  { label: 'Time Cards', href: '/owner/time-cards' },
-  { label: 'Store', href: '/owner/store' },
-  { label: 'Analytics & Reporting', href: '/owner/analytics' },
-  { label: 'Door Management', href: '/owner/door' },
-  { label: 'Offerings', href: '/owner/offerings' },
+  { label: 'Employees', href: '/owner/employees', gated: 'employees_enabled' },
+  { label: 'Time Cards', href: '/owner/time-cards', gated: 'time_cards_enabled' },
+  { label: 'Store', href: '/owner/store', gated: 'store_enabled' },
+  { label: 'Marketing', href: '/owner/marketing', gated: 'marketing_enabled' },
+  { label: 'Analytics & Reporting', href: '/owner/analytics', gated: 'analytics_enabled' },
+  { label: 'Door Management', href: '/owner/door', gated: 'door_enabled' },
+  { label: 'Offerings', href: '/owner/offerings', gated: 'offerings_enabled' },
 ];
 
 export default function OwnerLayout() {
   const { session, profile, loading, signOut } = useAuth();
+  const unread = useUnreadMessages('owner', profile?.gym_id ?? null);
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
   const pathname = usePathname();
   const router = useRouter();
+  const [modules, setModules] = useState<Record<string, boolean> | null>(null);
+
+  useEffect(() => {
+    if (!profile?.gym_id) {
+      setModules(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('gym_modules')
+        .select(
+          'bookings_enabled, store_enabled, employees_enabled, time_cards_enabled, analytics_enabled, door_enabled, offerings_enabled, billing_enabled, marketing_enabled'
+        )
+        .eq('gym_id', profile.gym_id)
+        .maybeSingle();
+      if (!cancelled) setModules((data as any) ?? {});
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.gym_id]);
 
   if (loading) return null;
   if (!session) return <Redirect href="/sign-in" />;
@@ -54,8 +98,9 @@ export default function OwnerLayout() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={isWide ? styles.tabsWide : styles.tabsMobile}
         >
-          {TABS.map((tab) => {
+          {TABS.filter((t) => !t.gated || modules?.[t.gated] === true).map((tab) => {
             const isActive = pathname === tab.href;
+            const badge = tab.href === '/owner/messages' && unread > 0 ? unread : 0;
             return (
               <Pressable
                 key={tab.href}
@@ -65,15 +110,22 @@ export default function OwnerLayout() {
                 ]}
                 onPress={() => router.push(tab.href as never)}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    isActive && styles.tabTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
+                <View style={styles.tabInner}>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      isActive && styles.tabTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {badge > 0 ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{badge}</Text>
+                    </View>
+                  ) : null}
+                </View>
               </Pressable>
             );
           })}
@@ -166,6 +218,16 @@ const styles = StyleSheet.create({
   },
   tabText: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
   tabTextActive: { color: '#fff' },
+  tabInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badge: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 999,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 
   signOut: {
     marginTop: 'auto',

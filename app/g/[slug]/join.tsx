@@ -83,8 +83,7 @@ export default function BrandedJoin() {
           Join {site.gym.name}
         </Text>
         <Text style={styles.sub}>
-          Create a WyLD account to become a member here. Same account works at any WyLD
-          partner gym.
+          Create your member account at {site.gym.name}.
         </Text>
 
         <View style={styles.field}>
@@ -140,10 +139,14 @@ export default function BrandedJoin() {
           style={styles.linkRow}
         >
           <Text style={styles.linkText}>
-            Already have a WyLD account?{' '}
+            Already have an account?{' '}
             <Text style={[styles.link, { color: site.theme.accent_color }]}>Sign in</Text>
           </Text>
         </Pressable>
+
+        <Text style={styles.disclaimer}>
+          Creating an account will take you to our partner's secure member dashboard.
+        </Text>
       </View>
     </View>
   );
@@ -181,4 +184,14 @@ const styles = StyleSheet.create({
   linkRow: { marginTop: 8, alignItems: 'center' },
   linkText: { fontSize: 14, color: '#475569' },
   link: { fontWeight: '700' },
+  disclaimer: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
 });

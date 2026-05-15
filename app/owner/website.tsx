@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -15,12 +16,17 @@ import { pickAndUploadImages } from '@/components/ImageUpload';
 import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
 import { ColorPickerField } from '@/components/ColorPicker';
 import { DAY_KEYS, DAY_LABELS, type HoursMap } from '@/components/GymHours';
+import { LocationsManager } from '@/components/LocationsManager';
+import { PRESET_OPTIONS, PresetName } from '@/lib/stylePresets';
 
 type Theme = {
   gym_id: string;
   primary_color: string;
   accent_color: string;
   logo_url: string | null;
+  style_preset: 'clean' | 'bold' | 'warm' | 'modern';
+  hero_variant: 'split' | 'fullbleed';
+  section_dividers: boolean;
 };
 
 type Modules = {
@@ -29,6 +35,12 @@ type Modules = {
   faq_enabled: boolean;
   calendar_enabled: boolean;
   store_enabled: boolean;
+  about_enabled: boolean;
+  services_enabled: boolean;
+  contact_enabled: boolean;
+  news_visible: boolean;
+  faq_visible: boolean;
+  store_visible: boolean;
 };
 
 type Settings = {
@@ -127,7 +139,9 @@ export default function Website() {
         supabase.from('gym_themes').select('*').eq('gym_id', gymId).maybeSingle(),
         supabase
           .from('gym_modules')
-          .select('gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled')
+          .select(
+            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible'
+          )
           .eq('gym_id', gymId)
           .maybeSingle(),
         supabase.from('gym_site_settings').select('*').eq('gym_id', gymId).maybeSingle(),
@@ -162,6 +176,17 @@ export default function Website() {
       .eq('gym_id', themeRow.gym_id);
     if (error) setError(error.message);
     else notifySaved('Theme saved');
+  }
+
+  async function saveModules(patch: Partial<Modules>) {
+    if (!modules) return;
+    setModules({ ...modules, ...patch });
+    const { error } = await supabase
+      .from('gym_modules')
+      .update(patch)
+      .eq('gym_id', modules.gym_id);
+    if (error) setError(error.message);
+    else notifySaved('Visibility saved');
   }
 
   async function saveSettings(patch: Partial<Settings>) {
@@ -293,6 +318,102 @@ export default function Website() {
             onChange={(v) => setThemeRow({ ...themeRow, accent_color: v })}
             onCommit={(v) => saveTheme({ accent_color: v })}
           />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Style</Text>
+        <Text style={styles.cardSub}>
+          Pick a preset — it sets card shape, section tint, and headline weight together
+          so the site stays consistent. Add a hero variant and section dividers for more
+          flair.
+        </Text>
+
+        <View style={styles.presetGrid}>
+          {PRESET_OPTIONS.map((opt) => {
+            const active = themeRow.style_preset === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.presetTile, active && { borderColor: theme.colors.wyldPurple, borderWidth: 2 }]}
+                onPress={() => saveTheme({ style_preset: opt.value })}
+              >
+                <View style={[styles.presetSwatch, presetSwatchStyle(opt.value)]} />
+                <Text style={styles.presetLabel}>{opt.label}</Text>
+                <Text style={styles.presetBlurb}>{opt.blurb}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.styleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Hero layout</Text>
+            <Text style={styles.cardSub}>
+              Split: text on one side, image on the other. Full-bleed: image fills the
+              hero with text overlaid.
+            </Text>
+          </View>
+          <View style={styles.segGroup}>
+            {(['split', 'fullbleed'] as const).map((v) => (
+              <Pressable
+                key={v}
+                style={[styles.segItem, themeRow.hero_variant === v && styles.segItemActive]}
+                onPress={() => saveTheme({ hero_variant: v })}
+              >
+                <Text
+                  style={[
+                    styles.segItemText,
+                    themeRow.hero_variant === v && styles.segItemTextActive,
+                  ]}
+                >
+                  {v === 'split' ? 'Split' : 'Full-bleed'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.styleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Section dividers</Text>
+            <Text style={styles.cardSub}>
+              Adds a subtle angled cut between the hero and the first section.
+            </Text>
+          </View>
+          <Switch
+            value={themeRow.section_dividers}
+            onValueChange={(v) => saveTheme({ section_dividers: v })}
+          />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Page visibility</Text>
+        <Text style={styles.cardSub}>
+          Toggle which tabs appear on your public site. Home is always shown. Tabs that
+          aren&apos;t in the list aren&apos;t enabled for your gym yet — ask WyLD to add them.
+        </Text>
+        <View style={styles.toggleGrid}>
+          {[
+            { key: 'services_enabled' as const, label: 'Services', show: true },
+            { key: 'calendar_enabled' as const, label: 'Schedule', show: true },
+            { key: 'about_enabled' as const, label: 'About', show: true },
+            { key: 'contact_enabled' as const, label: 'Contact', show: true },
+            { key: 'news_visible' as const, label: 'News / Blog', show: modules.news_enabled },
+            { key: 'faq_visible' as const, label: 'FAQ', show: modules.faq_enabled },
+            { key: 'store_visible' as const, label: 'Store', show: modules.store_enabled },
+          ]
+            .filter((r) => r.show)
+            .map((row) => (
+              <View key={row.key} style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>{row.label}</Text>
+                <Switch
+                  value={!!modules[row.key]}
+                  onValueChange={(v) => saveModules({ [row.key]: v } as Partial<Modules>)}
+                />
+              </View>
+            ))}
         </View>
       </View>
 
@@ -481,6 +602,16 @@ export default function Website() {
             ))}
           </View>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Locations</Text>
+        <Text style={styles.cardSub}>
+          Add one or more locations, each with its own address, emails, and phones. These
+          appear on your Contact page. If you don&apos;t add any, the single contact info above
+          is used as a fallback.
+        </Text>
+        <LocationsManager gymId={gymId} />
       </View>
 
       {activePage === 'news' ? (
@@ -855,6 +986,20 @@ function FaqItemsManager({
   );
 }
 
+function presetSwatchStyle(name: PresetName) {
+  switch (name) {
+    case 'bold':
+      return { backgroundColor: '#1e293b', borderRadius: 8, borderColor: '#1e293b' };
+    case 'warm':
+      return { backgroundColor: '#fdf6e8', borderRadius: 18, borderColor: '#f1ead9' };
+    case 'modern':
+      return { backgroundColor: '#fff', borderRadius: 4, borderColor: '#0F172A', borderWidth: 1 };
+    case 'clean':
+    default:
+      return { backgroundColor: '#f8fafc', borderRadius: 12, borderColor: '#e2e8f0' };
+  }
+}
+
 const styles = StyleSheet.create({
   container: { gap: theme.spacing.lg, maxWidth: 960 },
   headerBlock: { gap: 4 },
@@ -891,7 +1036,7 @@ const styles = StyleSheet.create({
   },
   logoEmpty: { alignItems: 'center', justifyContent: 'center' },
 
-  field: { gap: 4, minWidth: 200, flexGrow: 1, flexBasis: 240 },
+  field: { gap: 4, minWidth: 200, flexGrow: 1, flexBasis: 0 },
   label: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
   hintSmall: { fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 },
   input: {
@@ -990,6 +1135,64 @@ const styles = StyleSheet.create({
   galleryRemoveText: { color: '#fff', fontWeight: '800', fontSize: 14, lineHeight: 16 },
 
   subheading: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
+  toggleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    flexGrow: 1,
+    flexBasis: 220,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#fff',
+  },
+  toggleLabel: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
+  presetTile: {
+    width: 160,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  presetSwatch: {
+    width: '100%',
+    height: 60,
+    borderWidth: 1,
+  },
+  presetLabel: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
+  presetBlurb: { fontSize: 12, color: theme.colors.textSecondary, lineHeight: 16 },
+  styleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  segGroup: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+  },
+  segItem: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: '#fff',
+  },
+  segItemActive: { backgroundColor: theme.colors.wyldPurple },
+  segItemText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  segItemTextActive: { color: '#fff' },
 
   btnSecondary: {
     paddingHorizontal: theme.spacing.md,

@@ -10,15 +10,18 @@ import {
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Gyms', href: '/admin/gyms', match: (p) => p.startsWith('/admin/gyms') },
   { label: 'Users', href: '/admin/users', match: (p) => p === '/admin/users' },
+  { label: 'Messages', href: '/admin/messages', match: (p) => p === '/admin/messages' },
   { label: 'Settings', href: '/admin/settings', match: (p) => p === '/admin/settings' },
 ];
 
 export default function AdminLayout() {
   const { session, profile, loading, signOut } = useAuth();
+  const unread = useUnreadMessages('admin');
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
   const pathname = usePathname();
@@ -46,6 +49,7 @@ export default function AdminLayout() {
         >
           {TABS.map((tab) => {
             const isActive = tab.match(pathname);
+            const badge = tab.href === '/admin/messages' && unread > 0 ? unread : 0;
             return (
               <Pressable
                 key={tab.href}
@@ -55,12 +59,19 @@ export default function AdminLayout() {
                 ]}
                 onPress={() => router.push(tab.href as never)}
               >
-                <Text
-                  style={[styles.tabText, isActive && styles.tabTextActive]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
+                <View style={styles.tabInner}>
+                  <Text
+                    style={[styles.tabText, isActive && styles.tabTextActive]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {badge > 0 ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{badge}</Text>
+                    </View>
+                  ) : null}
+                </View>
               </Pressable>
             );
           })}
@@ -158,6 +169,16 @@ const styles = StyleSheet.create({
   },
   tabText: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
   tabTextActive: { color: '#fff' },
+  tabInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badge: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 999,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 
   signOut: {
     marginTop: 'auto',

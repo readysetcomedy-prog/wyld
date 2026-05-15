@@ -37,6 +37,7 @@ type Modules = {
   billing_enabled: boolean;
   news_enabled: boolean;
   faq_enabled: boolean;
+  marketing_enabled: boolean;
 };
 
 type Owner = { id: string; full_name: string | null; email: string };
@@ -64,6 +65,7 @@ const MODULE_GROUPS: {
       { key: 'door_enabled', label: 'Door Management', hint: 'Lock state + access log.' },
       { key: 'analytics_enabled', label: 'Analytics & Reporting', hint: 'Revenue, attendance, tax exports.' },
       { key: 'billing_enabled', label: 'Billing', hint: 'Owner-side billing tab.' },
+      { key: 'marketing_enabled', label: 'Marketing Materials', hint: 'Owner-only asset library (flyers, social posts, signage).' },
     ],
   },
 ];

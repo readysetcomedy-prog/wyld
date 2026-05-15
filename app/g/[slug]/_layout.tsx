@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Slot,
   useLocalSearchParams,
@@ -74,12 +74,35 @@ export default function SiteLayout() {
       });
       setSite({
         gym,
-        theme: theme ?? { primary_color: '#0F172A', accent_color: '#14B8A6', logo_url: null },
+        theme: theme
+          ? {
+              primary_color: theme.primary_color ?? '#0F172A',
+              accent_color: theme.accent_color ?? '#14B8A6',
+              logo_url: theme.logo_url ?? null,
+              style_preset: theme.style_preset ?? 'clean',
+              hero_variant: theme.hero_variant ?? 'split',
+              section_dividers: !!theme.section_dividers,
+            }
+          : {
+              primary_color: '#0F172A',
+              accent_color: '#14B8A6',
+              logo_url: null,
+              style_preset: 'clean',
+              hero_variant: 'split',
+              section_dividers: false,
+            },
         modules: modules ?? {
           calendar_enabled: false,
           store_enabled: false,
           news_enabled: false,
           faq_enabled: false,
+          bookings_enabled: false,
+          about_enabled: true,
+          services_enabled: true,
+          contact_enabled: true,
+          news_visible: true,
+          faq_visible: true,
+          store_visible: true,
         },
         settings: settings ?? {
           contact_email: null,
@@ -102,7 +125,28 @@ export default function SiteLayout() {
     };
   }, [slug]);
 
-  // Update browser tab title + favicon to match the gym (web only)
+  // Update browser tab title + favicon to match the gym (web only).
+  // Capture the originals on mount so we can restore them on unmount —
+  // otherwise visiting a gym leaves its title/favicon on the WyLD pages.
+  const originalTitleRef = useRef<string | null>(null);
+  const originalFaviconRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    originalTitleRef.current = document.title;
+    const link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    originalFaviconRef.current = link?.href ?? null;
+    return () => {
+      if (originalTitleRef.current !== null) {
+        document.title = originalTitleRef.current;
+      }
+      const l = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+      if (l && originalFaviconRef.current) {
+        l.href = originalFaviconRef.current;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     if (site) {
@@ -162,15 +206,19 @@ export default function SiteLayout() {
   const primary = site.theme.primary_color;
   const accent = site.theme.accent_color;
 
+  const m = site.modules;
+  const showStore = m.store_enabled && m.store_visible;
+  const showNews = m.news_enabled && m.news_visible;
+  const showFaq = m.faq_enabled && m.faq_visible;
   const NAV: { label: string; path: string }[] = [
     { label: 'Home', path: `/g/${slug}` },
-    { label: 'Services', path: `/g/${slug}/services` },
-    ...(site.modules.calendar_enabled ? [{ label: 'Schedule', path: `/g/${slug}/schedule` }] : []),
-    ...(site.modules.store_enabled ? [{ label: 'Store', path: `/g/${slug}/store` }] : []),
-    { label: 'About', path: `/g/${slug}/about` },
-    ...(site.modules.news_enabled ? [{ label: 'News', path: `/g/${slug}/news` }] : []),
-    ...(site.modules.faq_enabled ? [{ label: 'FAQ', path: `/g/${slug}/faq` }] : []),
-    { label: 'Contact', path: `/g/${slug}/contact` },
+    ...(m.services_enabled ? [{ label: 'Services', path: `/g/${slug}/services` }] : []),
+    ...(m.calendar_enabled ? [{ label: 'Schedule', path: `/g/${slug}/schedule` }] : []),
+    ...(showStore ? [{ label: 'Store', path: `/g/${slug}/store` }] : []),
+    ...(m.about_enabled ? [{ label: 'About', path: `/g/${slug}/about` }] : []),
+    ...(showNews ? [{ label: 'News', path: `/g/${slug}/news` }] : []),
+    ...(showFaq ? [{ label: 'FAQ', path: `/g/${slug}/faq` }] : []),
+    ...(m.contact_enabled ? [{ label: 'Contact', path: `/g/${slug}/contact` }] : []),
   ];
 
   return (
@@ -273,9 +321,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logo: { width: 48, height: 48 },
-  brandName: { fontSize: 22, fontWeight: '800' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  logo: { width: 64, height: 64 },
+  brandName: { fontSize: 24, fontWeight: '800', letterSpacing: 0.2 },
 
   nav: { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 4 },
   navWide: { paddingVertical: 0 },

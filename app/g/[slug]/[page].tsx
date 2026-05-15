@@ -2,8 +2,10 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, Redirect } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { Slideshow } from '@/components/Slideshow';
-import { GymHours, hasAnyHours } from '@/components/GymHours';
 import { FaqAccordion } from '@/components/FaqAccordion';
+import { PublicContactSection } from '@/components/PublicContactSection';
+import { PublicScheduleSection } from '@/components/PublicScheduleSection';
+import { PublicStoreSection } from '@/components/PublicStoreSection';
 
 const VALID_PAGES = ['about', 'services', 'contact', 'news', 'faq', 'schedule', 'store'] as const;
 type PageKey = (typeof VALID_PAGES)[number];
@@ -29,17 +31,28 @@ export default function Page() {
   }
   const key = page as PageKey;
 
-  // Module-gated pages
-  if (key === 'schedule' && !site.modules.calendar_enabled) {
+  // Module-gated pages. News/FAQ/Store also require the owner to have
+  // published the page on top of admin granting the module.
+  const m = site.modules;
+  if (key === 'schedule' && !m.calendar_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'store' && !site.modules.store_enabled) {
+  if (key === 'store' && !(m.store_enabled && m.store_visible)) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'news' && !site.modules.news_enabled) {
+  if (key === 'news' && !(m.news_enabled && m.news_visible)) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
-  if (key === 'faq' && !site.modules.faq_enabled) {
+  if (key === 'faq' && !(m.faq_enabled && m.faq_visible)) {
+    return <Redirect href={`/g/${slug}` as never} />;
+  }
+  if (key === 'about' && !m.about_enabled) {
+    return <Redirect href={`/g/${slug}` as never} />;
+  }
+  if (key === 'services' && !m.services_enabled) {
+    return <Redirect href={`/g/${slug}` as never} />;
+  }
+  if (key === 'contact' && !m.contact_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;
   }
 
@@ -99,45 +112,11 @@ export default function Page() {
         </View>
       ) : null}
 
-      {key === 'schedule' ? (
-        <View style={styles.dataNote}>
-          <Text style={styles.dataNoteText}>
-            Class schedule will appear here once {site.gym.name} adds it.
-          </Text>
-        </View>
-      ) : null}
+      {key === 'schedule' ? <PublicScheduleSection /> : null}
 
-      {key === 'store' ? (
-        <View style={styles.dataNote}>
-          <Text style={styles.dataNoteText}>
-            Store items will appear here once {site.gym.name} adds them.
-          </Text>
-        </View>
-      ) : null}
+      {key === 'store' ? <PublicStoreSection /> : null}
 
-      {key === 'contact' ? (
-        <>
-          <View style={styles.contactBlock}>
-            {site.settings.contact_email ? (
-              <Text style={styles.contactLine}>Email: {site.settings.contact_email}</Text>
-            ) : null}
-            {site.settings.contact_phone ? (
-              <Text style={styles.contactLine}>Phone: {site.settings.contact_phone}</Text>
-            ) : null}
-            {site.settings.address_line1 ? (
-              <Text style={styles.contactLine}>
-                {site.settings.address_line1}
-                {site.settings.city ? `, ${site.settings.city}` : ''}
-                {site.settings.state ? `, ${site.settings.state}` : ''}
-                {site.settings.zip ? ` ${site.settings.zip}` : ''}
-              </Text>
-            ) : null}
-          </View>
-          {hasAnyHours(site.settings.hours) ? (
-            <GymHours hours={site.settings.hours ?? {}} primaryColor={site.theme.primary_color} />
-          ) : null}
-        </>
-      ) : null}
+      {key === 'contact' ? <PublicContactSection /> : null}
     </View>
   );
 }
@@ -164,6 +143,4 @@ const styles = StyleSheet.create({
     maxWidth: 760,
   },
   dataNoteText: { fontSize: 14, color: '#475569', lineHeight: 20 },
-  contactBlock: { gap: 4, marginTop: 8 },
-  contactLine: { fontSize: 16, color: '#0F172A' },
 });
