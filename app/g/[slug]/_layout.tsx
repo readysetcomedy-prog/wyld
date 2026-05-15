@@ -85,6 +85,9 @@ export default function SiteLayout() {
   const [site, setSite] = useState<GymSite | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Mobile nav scroll-more indicator
+  const [navMore, setNavMore] = useState(false);
+  const navViewportW = useRef(0);
 
   useEffect(() => {
     if (!slug) return;
@@ -340,44 +343,66 @@ export default function SiteLayout() {
           </Pressable>
 
           {NAV.length > 0 ? (
-            <ScrollView
-              horizontal={!isWide}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.nav, isWide && styles.navWide]}
-            >
-              {NAV.map((item) => {
-                const itemPath = item.path.split('?')[0];
-                const isActive =
-                  pathname === itemPath ||
-                  (item.label === 'Home' && pathname === `/g/${slug}`);
-                return (
-                  <Pressable key={item.path} onPress={() => router.push(item.path as never)}>
-                    <Text
-                      style={[
-                        styles.navItem,
-                        { color: isActive ? accent : '#475569' },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-              {site.multiLocationEnabled && site.locations.length > 1 ? (
-                <Pressable
-                  onPress={() => router.push(`/g/${slug}` as never)}
-                  style={styles.locSwitchBtn}
-                >
-                  <Text style={styles.locSwitchBtnText}>Switch location</Text>
-                </Pressable>
-              ) : null}
-              <Pressable
-                onPress={() => router.push(`/g/${slug}/login` as never)}
-                style={[styles.loginBtn, { backgroundColor: accent }]}
+            <View style={styles.navWrap}>
+              <ScrollView
+                horizontal={!isWide}
+                showsHorizontalScrollIndicator={false}
+                scrollEventThrottle={16}
+                onScroll={(e) => {
+                  const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+                  setNavMore(
+                    contentOffset.x + layoutMeasurement.width < contentSize.width - 4
+                  );
+                }}
+                onContentSizeChange={(w) => {
+                  if (navViewportW.current > 0) {
+                    setNavMore(w > navViewportW.current + 4);
+                  }
+                }}
+                onLayout={(e) => {
+                  navViewportW.current = e.nativeEvent.layout.width;
+                }}
+                contentContainerStyle={[styles.nav, isWide && styles.navWide]}
               >
-                <Text style={styles.loginBtnText}>Member login</Text>
-              </Pressable>
-            </ScrollView>
+                {NAV.map((item) => {
+                  const itemPath = item.path.split('?')[0];
+                  const isActive =
+                    pathname === itemPath ||
+                    (item.label === 'Home' && pathname === `/g/${slug}`);
+                  return (
+                    <Pressable key={item.path} onPress={() => router.push(item.path as never)}>
+                      <Text
+                        style={[
+                          styles.navItem,
+                          { color: isActive ? accent : '#475569' },
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {site.multiLocationEnabled && site.locations.length > 1 ? (
+                  <Pressable
+                    onPress={() => router.push(`/g/${slug}` as never)}
+                    style={styles.locSwitchBtn}
+                  >
+                    <Text style={styles.locSwitchBtnText}>Switch location</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => router.push(`/g/${slug}/login` as never)}
+                  style={[styles.loginBtn, { backgroundColor: accent }]}
+                >
+                  <Text style={styles.loginBtnText}>Member login</Text>
+                </Pressable>
+              </ScrollView>
+              {!isWide && navMore ? (
+                <View style={styles.navFade} pointerEvents="none">
+                  <Text style={[styles.navFadeChevron, { color: accent }]}>›</Text>
+                </View>
+              ) : null}
+            </View>
           ) : null}
         </View>
 
@@ -536,9 +561,21 @@ const styles = StyleSheet.create({
   brandName: { fontSize: 24, fontWeight: '800', letterSpacing: 0.2 },
   brandLocation: { fontSize: 13, color: '#94a3b8', fontWeight: '600' },
 
-  nav: { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 4 },
-  navWide: { paddingVertical: 0 },
+  navWrap: { position: 'relative' },
+  nav: { flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 4, paddingRight: 34 },
+  navWide: { paddingVertical: 0, paddingRight: 0 },
   navItem: { fontSize: 14, fontWeight: '700' },
+  navFade: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 34,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  navFadeChevron: { fontSize: 22, fontWeight: '900', lineHeight: 24 },
   locSwitchBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
