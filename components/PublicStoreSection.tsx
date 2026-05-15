@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Platform,
+} from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useGymSite } from '@/components/GymSiteContext';
+
+const PAGE = 12;
 
 type Product = {
   id: string;
@@ -27,6 +37,22 @@ export function PublicStoreSection() {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>('featured');
+  const [visible, setVisible] = useState(PAGE);
+
+  useEffect(() => {
+    setVisible(PAGE);
+  }, [category, sort]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onScroll = () => {
+      const nearBottom =
+        window.innerHeight + window.scrollY >= document.body.offsetHeight - 600;
+      if (nearBottom) setVisible((v) => v + PAGE);
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,7 +150,7 @@ export function PublicStoreSection() {
       </View>
 
       <View style={styles.grid}>
-        {shown.map((p) => (
+        {shown.slice(0, visible).map((p) => (
           <View key={p.id} style={styles.card}>
             <View>
               {p.image_url ? (
@@ -155,6 +181,14 @@ export function PublicStoreSection() {
           </View>
         ))}
       </View>
+      {visible < shown.length ? (
+        <Pressable
+          style={styles.loadMore}
+          onPress={() => setVisible((v) => v + PAGE)}
+        >
+          <Text style={styles.loadMoreText}>Load more</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -217,4 +251,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   emptyText: { fontSize: 14, color: '#475569' },
+  loadMore: {
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginTop: 8,
+  },
+  loadMoreText: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
 });
+

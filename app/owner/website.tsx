@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   Switch,
+  ScrollView,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -747,6 +748,15 @@ export default function Website() {
         ) : null}
       </View>
 
+      {activePage === 'news' ? <NewsPostsManager gymId={gymId} /> : null}
+
+      {activePage === 'faq' ? (
+        <FaqItemsManager
+          items={(pages.faq?.items as FaqItem[] | undefined) ?? []}
+          onChange={(items) => savePage('faq', { items } as Partial<PageContent>)}
+        />
+      ) : null}
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Settings</Text>
         <Text style={styles.cardSub}>
@@ -866,23 +876,13 @@ export default function Website() {
           maxLocations={modules.max_locations}
         />
       </View>
-
-      {activePage === 'news' ? (
-        <NewsPostsManager gymId={gymId} />
-      ) : null}
-
-      {activePage === 'faq' ? (
-        <FaqItemsManager
-          items={(pages.faq?.items as FaqItem[] | undefined) ?? []}
-          onChange={(items) => savePage('faq', { items } as Partial<PageContent>)}
-        />
-      ) : null}
     </View>
   );
 }
 
 function NewsPostsManager({ gymId }: { gymId: string }) {
   const [posts, setPosts] = useState<NewsPost[] | null>(null);
+  const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<NewsPost | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -984,30 +984,59 @@ function NewsPostsManager({ gymId }: { gymId: string }) {
       ) : posts.length === 0 ? (
         <Text style={styles.dim}>No posts yet.</Text>
       ) : (
-        <View style={{ gap: 8 }}>
-          {posts.map((p) => {
-            const isPublished = p.published_at && new Date(p.published_at) <= new Date();
-            return (
-              <View key={p.id} style={styles.postRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.postTitle}>{p.title || '(Untitled)'}</Text>
-                  <Text style={styles.postMeta}>
-                    {isPublished
-                      ? `Published ${new Date(p.published_at!).toLocaleDateString()}`
-                      : 'Draft'}{' '}
-                    · /{p.slug}
-                  </Text>
-                </View>
-                <Pressable style={styles.btnSecondary} onPress={() => setEditing(p)}>
-                  <Text style={styles.btnSecondaryText}>Edit</Text>
-                </Pressable>
-                <Pressable style={styles.btnGhost} onPress={() => deletePost(p.id)}>
-                  <Text style={styles.btnGhostText}>Delete</Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
+        (() => {
+          const q = search.trim().toLowerCase();
+          const filtered = q
+            ? posts.filter(
+                (p) =>
+                  p.title.toLowerCase().includes(q) ||
+                  p.slug.toLowerCase().includes(q) ||
+                  (p.body ?? '').toLowerCase().includes(q)
+              )
+            : posts;
+          return (
+            <>
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search posts by title, slug, or text…"
+                placeholderTextColor="#94a3b8"
+                style={styles.input}
+              />
+              {filtered.length === 0 ? (
+                <Text style={styles.dim}>No posts match that search.</Text>
+              ) : (
+                <ScrollView style={styles.postScroll} nestedScrollEnabled>
+                  <View style={{ gap: 8 }}>
+                    {filtered.map((p) => {
+                      const isPublished =
+                        p.published_at && new Date(p.published_at) <= new Date();
+                      return (
+                        <View key={p.id} style={styles.postRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.postTitle}>{p.title || '(Untitled)'}</Text>
+                            <Text style={styles.postMeta}>
+                              {isPublished
+                                ? `Published ${new Date(p.published_at!).toLocaleDateString()}`
+                                : 'Draft'}{' '}
+                              · /{p.slug}
+                            </Text>
+                          </View>
+                          <Pressable style={styles.btnSecondary} onPress={() => setEditing(p)}>
+                            <Text style={styles.btnSecondaryText}>Edit</Text>
+                          </Pressable>
+                          <Pressable style={styles.btnGhost} onPress={() => deletePost(p.id)}>
+                            <Text style={styles.btnGhostText}>Delete</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              )}
+            </>
+          );
+        })()
       )}
 
       {editing ? (
@@ -1559,6 +1588,14 @@ const styles = StyleSheet.create({
   },
   btnSecondaryText: { color: theme.colors.charcoal, fontWeight: '700', fontSize: 13 },
 
+  postScroll: {
+    maxHeight: 340,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.sm,
+    backgroundColor: '#fbfcfe',
+  },
   postRow: {
     flexDirection: 'row',
     alignItems: 'center',
