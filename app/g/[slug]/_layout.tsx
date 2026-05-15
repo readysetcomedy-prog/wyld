@@ -383,6 +383,56 @@ export default function SiteLayout() {
         <Slot />
 
         <View style={[styles.footer, { backgroundColor: primary }]}>
+          <View style={[styles.footerTop, isWide && styles.footerTopWide]}>
+            {NAV.length > 0 ? (
+              <View style={styles.footerNavCol}>
+                <Text style={styles.footerColTitle}>Explore</Text>
+                {NAV.map((item) => (
+                  <Pressable
+                    key={item.path}
+                    onPress={() => router.push(item.path as never)}
+                  >
+                    <Text style={styles.footerNavLink}>{item.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.footerAppCol}>
+              <Text style={styles.footerAppTitle}>
+                Download the WyLD Inc app to take full advantage of all{' '}
+                {site.gym.name}&apos;s features
+              </Text>
+              <View style={styles.storeBadges}>
+                <StoreBadge supertext="Download on the" main="App Store" glyph="" />
+                <StoreBadge supertext="Get it on" main="Google Play" glyph="▶" />
+              </View>
+              <View style={styles.featureList}>
+                {[
+                  { label: 'Book a class', note: null },
+                  { label: 'Find a gym buddy', note: null },
+                  { label: 'Talk to other members', note: null },
+                  {
+                    label: '24/7 gym access',
+                    note: 'where your gym offers it',
+                  },
+                ].map((f) => (
+                  <View key={f.label} style={styles.featureRow}>
+                    <Text style={[styles.featureCheck, { color: accent }]}>✓</Text>
+                    <Text style={styles.featureText}>
+                      {f.label}
+                      {f.note ? (
+                        <Text style={styles.featureNote}> ({f.note})</Text>
+                      ) : null}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.footerDivider} />
+
           <View style={[styles.footerInner, isWide && styles.footerInnerWide]}>
             <View>
               <Text style={styles.footerName}>
@@ -412,6 +462,26 @@ export default function SiteLayout() {
         </View>
       </ScrollView>
     </GymSiteProvider>
+  );
+}
+
+function StoreBadge({
+  supertext,
+  main,
+  glyph,
+}: {
+  supertext: string;
+  main: string;
+  glyph: string;
+}) {
+  return (
+    <View style={styles.storeBadge}>
+      <Text style={styles.storeBadgeGlyph}>{glyph}</Text>
+      <View>
+        <Text style={styles.storeBadgeSuper}>{supertext}</Text>
+        <Text style={styles.storeBadgeMain}>{main}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -468,6 +538,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 32,
     marginTop: 64,
+  },
+  footerTop: {
+    gap: 32,
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+    flexDirection: 'column',
+  },
+  footerTopWide: { flexDirection: 'row', justifyContent: 'space-between' },
+  footerNavCol: { gap: 8 },
+  footerColTitle: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  footerNavLink: { color: 'rgba(255,255,255,0.82)', fontSize: 14, paddingVertical: 3 },
+  footerAppCol: { gap: 14, maxWidth: 460 },
+  footerAppTitle: { color: '#fff', fontSize: 16, fontWeight: '800', lineHeight: 23 },
+  storeBadges: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  storeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  storeBadgeGlyph: { color: '#fff', fontSize: 20 },
+  storeBadgeSuper: { color: 'rgba(255,255,255,0.7)', fontSize: 9, letterSpacing: 0.3 },
+  storeBadgeMain: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  featureList: { gap: 6 },
+  featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  featureCheck: { fontSize: 14, fontWeight: '900' },
+  featureText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, lineHeight: 20, flex: 1 },
+  featureNote: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontStyle: 'italic' },
+  footerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    maxWidth: 1240,
+    width: '100%',
+    alignSelf: 'center',
+    marginVertical: 28,
   },
   footerInner: {
     gap: 20,
