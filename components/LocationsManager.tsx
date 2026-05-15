@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+
+function slugify(s: string) {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 export type LocationContact = {
   id: string;
@@ -16,6 +25,8 @@ export type GymLocation = {
   id: string;
   gym_id: string;
   label: string | null;
+  slug: string | null;
+  is_primary: boolean;
   address_line1: string | null;
   address_line2: string | null;
   city: string | null;
@@ -25,7 +36,16 @@ export type GymLocation = {
   contacts: LocationContact[];
 };
 
-export function LocationsManager({ gymId }: { gymId: string }) {
+export function LocationsManager({
+  gymId,
+  multiLocationEnabled,
+  maxLocations,
+}: {
+  gymId: string;
+  multiLocationEnabled: boolean;
+  maxLocations: number;
+}) {
+  const router = useRouter();
   const [locations, setLocations] = useState<GymLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +82,17 @@ export function LocationsManager({ gymId }: { gymId: string }) {
 
   async function addLocation() {
     const display_order = locations.length;
+    const isFirst = locations.length === 0;
+    const baseSlug = isFirst ? 'main' : `location-${locations.length + 1}`;
     const { data, error } = await supabase
       .from('gym_locations')
-      .insert({ gym_id: gymId, label: 'New location', display_order })
+      .insert({
+        gym_id: gymId,
+        label: isFirst ? 'Main location' : `Location ${locations.length + 1}`,
+        slug: baseSlug,
+        is_primary: isFirst,
+        display_order,
+      })
       .select()
       .single();
     if (error) {
@@ -72,6 +100,22 @@ export function LocationsManager({ gymId }: { gymId: string }) {
       return;
     }
     setLocations([...locations, { ...(data as any), contacts: [] }]);
+  }
+
+  async function setPrimary(id: string) {
+    // Unset all then set the chosen one. Two-step to satisfy the partial
+    // unique index on (gym_id) where is_primary=true.
+    const updated = locations.map((l) => ({ ...l, is_primary: l.id === id }));
+    setLocations(updated);
+    await supabase
+      .from('gym_locations')
+      .update({ is_primary: false })
+      .eq('gym_id', gymId);
+    const { error } = await supabase
+      .from('gym_locations')
+      .update({ is_primary: true })
+      .eq('id', id);
+    if (error) setError(error.message);
   }
 
   async function updateLocation(id: string, patch: Partial<GymLocation>) {
@@ -154,9 +198,40 @@ export function LocationsManager({ gymId }: { gymId: string }) {
               placeholderTextColor="#94a3b8"
               style={styles.locLabel}
             />
-            <Pressable onPress={() => deleteLocation(loc.id)} style={styles.deleteBtn}>
-              <Text style={styles.deleteBtnText}>Delete</Text>
-            </Pressable>
+            {loc.is_primary ? (
+              <View style={styles.primaryBadge}>
+                <Text style={styles.primaryBadgeText}>Primary</Text>
+              </View>
+            ) : (
+              <Pressable onPress={() => setPrimary(loc.id)} style={styles.makePrimaryBtn}>
+                <Text style={styles.makePrimaryBtnText}>Make primary</Text>
+              </Pressable>
+            )}
+            {!loc.is_primary ? (
+              <Pressable onPress={() => deleteLocation(loc.id)} style={styles.deleteBtn}>
+                <Text style={styles.deleteBtnText}>Delete</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.row}>
+            <Cell label="URL slug">
+              <TextInput
+                value={loc.slug ?? ''}
+                onChangeText={(v) =>
+                  setLocations(
+                    locations.map((l) => (l.id === loc.id ? { ...l, slug: slugify(v) } : l))
+                  )
+                }
+                onBlur={() =>
+                  updateLocation(loc.id, { slug: slugify(loc.slug ?? '') || 'location' })
+                }
+                placeholder="downtown"
+                placeholderTextColor="#94a3b8"
+                style={styles.input}
+                autoCapitalize="none"
+              />
+            </Cell>
           </View>
 
           <View style={styles.row}>
@@ -286,9 +361,38 @@ export function LocationsManager({ gymId }: { gymId: string }) {
         </View>
       ))}
 
-      <Pressable style={styles.btn} onPress={addLocation}>
-        <Text style={styles.btnText}>+ Add location</Text>
-      </Pressable>
+      {(() => {
+        const effectiveMax = multiLocationEnabled ? Math.max(2, maxLocations) : 1;
+        const count = locations.length;
+        const canAdd = count < effectiveMax;
+        if (canAdd) {
+          return (
+            <Pressable style={styles.btn} onPress={addLocation}>
+              <Text style={styles.btnText}>+ Add location</Text>
+            </Pressable>
+          );
+        }
+        if (!multiLocationEnabled) {
+          return (
+            <Pressable
+              style={styles.upgradeBtn}
+              onPress={() => router.push('/owner/billing' as never)}
+            >
+              <Text style={styles.upgradeBtnText}>Upgrade to add more locations</Text>
+            </Pressable>
+          );
+        }
+        return (
+          <Pressable
+            style={styles.upgradeBtn}
+            onPress={() => router.push('/owner/billing' as never)}
+          >
+            <Text style={styles.upgradeBtnText}>
+              Upgrade to add more locations, or edit/change a current location
+            </Text>
+          </Pressable>
+        );
+      })()}
     </View>
   );
 }
@@ -336,6 +440,32 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   deleteBtnText: { fontSize: 13, fontWeight: '700', color: theme.colors.danger },
+  primaryBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: theme.colors.wyldPurple,
+  },
+  primaryBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  makePrimaryBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  makePrimaryBtnText: { fontSize: 12, fontWeight: '700', color: theme.colors.charcoal },
+  upgradeBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 10,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: theme.colors.wyldPurple,
+    borderStyle: 'dashed',
+  },
+  upgradeBtnText: { color: theme.colors.wyldPurple, fontWeight: '800', fontSize: 14 },
   row: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   cell: { flexGrow: 1, flexBasis: 0, minWidth: 140, gap: 4 },
   cellLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },

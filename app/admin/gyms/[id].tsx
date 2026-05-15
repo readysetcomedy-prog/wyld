@@ -38,6 +38,8 @@ type Modules = {
   news_enabled: boolean;
   faq_enabled: boolean;
   marketing_enabled: boolean;
+  multi_location_enabled: boolean;
+  max_locations: number;
 };
 
 type Owner = { id: string; full_name: string | null; email: string };
@@ -257,6 +259,75 @@ export default function GymDetail() {
           <Text style={styles.cardSub}>
             Toggles drive both the gym's owner dashboard tabs and the public-site pages.
           </Text>
+          <View style={styles.group}>
+            <Text style={styles.groupLabel}>Multi-location</Text>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleText}>
+                <Text style={styles.toggleLabel}>Multiple locations</Text>
+                <Text style={styles.toggleHint}>
+                  Lets the owner add more than one location. When off, the gym always has
+                  one site. Set the maximum allowed below.
+                </Text>
+              </View>
+              <Switch
+                value={modules.multi_location_enabled}
+                onValueChange={async (v) => {
+                  if (!modules) return;
+                  const prevEnabled = modules.multi_location_enabled;
+                  const prevMax = modules.max_locations;
+                  const nextMax = v ? Math.max(2, modules.max_locations) : 1;
+                  setModules({
+                    ...modules,
+                    multi_location_enabled: v,
+                    max_locations: nextMax,
+                  });
+                  const { error } = await supabase
+                    .from('gym_modules')
+                    .update({ multi_location_enabled: v, max_locations: nextMax })
+                    .eq('gym_id', modules.gym_id);
+                  if (error) {
+                    setModules({
+                      ...modules,
+                      multi_location_enabled: prevEnabled,
+                      max_locations: prevMax,
+                    });
+                    setError(error.message);
+                  }
+                }}
+                trackColor={{ false: '#cbd5e1', true: theme.colors.wyldPurple }}
+                thumbColor="#fff"
+              />
+            </View>
+            {modules.multi_location_enabled ? (
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleText}>
+                  <Text style={styles.toggleLabel}>Max locations</Text>
+                  <Text style={styles.toggleHint}>
+                    Owner is allowed up to this many locations (minimum 2). Past that,
+                    the owner sees an upgrade prompt.
+                  </Text>
+                </View>
+                <TextInput
+                  value={String(modules.max_locations)}
+                  onChangeText={(v) => {
+                    const n = Math.max(2, parseInt(v.replace(/[^0-9]/g, '') || '2', 10));
+                    setModules({ ...modules, max_locations: n });
+                  }}
+                  onBlur={async () => {
+                    if (!modules) return;
+                    const n = Math.max(2, modules.max_locations);
+                    await supabase
+                      .from('gym_modules')
+                      .update({ max_locations: n })
+                      .eq('gym_id', modules.gym_id);
+                  }}
+                  keyboardType="number-pad"
+                  style={styles.numInput}
+                />
+              </View>
+            ) : null}
+          </View>
+
           {MODULE_GROUPS.map((group) => (
             <View key={group.label} style={styles.group}>
               <Text style={styles.groupLabel}>{group.label}</Text>
@@ -365,4 +436,17 @@ const styles = StyleSheet.create({
   toggleText: { flex: 1, gap: 2 },
   toggleLabel: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
   toggleHint: { fontSize: 12, color: theme.colors.textSecondary },
+  numInput: {
+    width: 70,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: theme.colors.charcoal,
+    backgroundColor: '#fff',
+  },
 });

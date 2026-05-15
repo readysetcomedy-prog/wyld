@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, ImageBackground, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { Slideshow } from '@/components/Slideshow';
@@ -8,10 +8,57 @@ import { getPresetStyles } from '@/lib/stylePresets';
 
 export default function Home() {
   const site = useGymSite();
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug, loc: rawLoc } = useLocalSearchParams<{ slug: string; loc?: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+
+  // Multi-location landing: visitor hasn't picked a location and the gym has
+  // multiple. Show a chooser instead of a full site.
+  const showPickerLanding =
+    site.multiLocationEnabled && site.locations.length > 1 && !rawLoc;
+
+  if (showPickerLanding) {
+    return (
+      <View style={[pickerStyles.page, isWide && pickerStyles.pageWide]}>
+        {site.theme.logo_url ? (
+          <Image source={{ uri: site.theme.logo_url }} style={pickerStyles.logo} resizeMode="contain" />
+        ) : null}
+        <Text style={[pickerStyles.title, { color: site.theme.primary_color }]}>
+          {site.gym.name}
+        </Text>
+        <Text style={pickerStyles.sub}>Pick a location to continue.</Text>
+        <View style={pickerStyles.grid}>
+          {site.locations.map((l) => (
+            <Pressable
+              key={l.id}
+              style={[pickerStyles.tile, { borderColor: site.theme.accent_color }]}
+              onPress={() => router.push(`/g/${slug}?loc=${l.slug}` as never)}
+            >
+              <Text style={[pickerStyles.tileTitle, { color: site.theme.primary_color }]}>
+                {l.label}
+              </Text>
+              {l.address_line1 ? (
+                <Text style={pickerStyles.tileMeta}>
+                  {l.address_line1}
+                  {l.city ? `, ${l.city}` : ''}
+                  {l.state ? `, ${l.state}` : ''}
+                </Text>
+              ) : null}
+              {l.is_primary ? (
+                <View
+                  style={[pickerStyles.primaryBadge, { backgroundColor: site.theme.accent_color }]}
+                >
+                  <Text style={pickerStyles.primaryBadgeText}>Primary</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   const page = site.pages.home ?? {};
   const blockStyles: Record<string, BlockStyle> = (page.styles ?? {}) as any;
 
@@ -36,6 +83,7 @@ export default function Home() {
     letterSpacing: preset.headline.letterSpacing,
   } as const;
 
+  const locQuery = site.currentLocation?.slug ? `?loc=${site.currentLocation.slug}` : '';
   const CTAs = (
     <View style={styles.ctaRow}>
       <Pressable
@@ -47,7 +95,7 @@ export default function Home() {
       {site.modules.services_enabled ? (
         <Pressable
           style={[styles.ctaOutline, { borderColor: fullbleed ? '#fff' : primary }]}
-          onPress={() => router.push(`/g/${slug}/services` as never)}
+          onPress={() => router.push(`/g/${slug}/services${locQuery}` as never)}
         >
           <Text style={[styles.ctaOutlineText, { color: fullbleed ? '#fff' : primary }]}>
             See services
@@ -184,4 +232,44 @@ const styles = StyleSheet.create({
   },
 
   bodyPara: { fontSize: 16, color: '#0F172A', lineHeight: 26 },
+});
+
+const pickerStyles = StyleSheet.create({
+  page: {
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 16,
+  },
+  pageWide: { paddingVertical: 80 },
+  logo: { width: 96, height: 96, marginBottom: 8 },
+  title: { fontSize: 36, fontWeight: '800', textAlign: 'center' },
+  sub: { fontSize: 16, color: '#475569', textAlign: 'center', marginBottom: 12 },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
+    maxWidth: 880,
+  },
+  tile: {
+    width: 280,
+    padding: 20,
+    borderWidth: 2,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    gap: 6,
+    position: 'relative',
+  },
+  tileTitle: { fontSize: 20, fontWeight: '800' },
+  tileMeta: { fontSize: 13, color: '#475569', lineHeight: 18 },
+  primaryBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  primaryBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.4 },
 });
