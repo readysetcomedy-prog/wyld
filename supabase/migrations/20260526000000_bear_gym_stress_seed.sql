@@ -160,8 +160,8 @@ begin
     (g, null, 'Bear Gym Hoodie', 'Midweight fleece hoodie, unisex sizing.', 5400, 'HOOD-001', 'Front desk shelf B', true, 1),
     (g, null, 'Lifting Chalk Block', 'Single 56g block of magnesium carbonate.', 350, 'CHALK-01', 'Back room bin 4', true, 2),
     (g, null, 'Stainless Shaker', 'Insulated 24oz shaker bottle.', 1900, 'SHAKE-01', 'Back room bin 7', true, 3),
-    (g, l_downtown, 'Downtown Anniversary Tank', 'Limited run for the Downtown location.', 3200, 'TANK-DT1', 'Downtown counter', true, 4),
-    (g, l_north, 'North Boulder Strongman Shirt', 'Strongman team shirt, North Boulder only.', 3000, 'SHIRT-NB1', 'North counter', true, 5),
+    (g, null, 'Downtown Anniversary Tank', 'Anniversary tank, limited run.', 3200, 'TANK-DT1', 'Downtown counter', true, 4),
+    (g, null, 'North Boulder Strongman Shirt', 'Strongman team shirt.', 3000, 'SHIRT-NB1', 'North counter', true, 5),
     (g, null, 'Wrist Wraps', 'Stiff 18-inch wraps for heavy pressing.', 2200, 'WRAP-01', 'Back room bin 4', false, 6);
 
   -- ----------------------------------------------------------
