@@ -1036,7 +1036,7 @@ const styles = StyleSheet.create({
   },
   logoEmpty: { alignItems: 'center', justifyContent: 'center' },
 
-  field: { gap: 4, minWidth: 200, flexGrow: 1, flexBasis: 0 },
+  field: { gap: 4, minWidth: 200, flexGrow: 1, flexBasis: 'auto' },
   label: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
   hintSmall: { fontSize: 12, color: theme.colors.textSecondary, marginBottom: 6 },
   input: {
