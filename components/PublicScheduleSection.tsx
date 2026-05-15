@@ -68,10 +68,15 @@ export function PublicScheduleSection() {
 
   async function load() {
     const horizonEnd = new Date(Date.now() + HORIZON_DAYS * 86400_000).toISOString();
+    // Show shared events (location_id null) plus the current location's own.
+    const locFilter = site.currentLocation
+      ? `location_id.is.null,location_id.eq.${site.currentLocation.id}`
+      : 'location_id.is.null';
     const { data: evs } = await supabase
       .from('gym_events')
       .select('*')
       .eq('gym_id', site.gym.id)
+      .or(locFilter)
       .lt('starts_at', horizonEnd)
       .order('starts_at');
     setEvents((evs as GymEvent[]) ?? []);

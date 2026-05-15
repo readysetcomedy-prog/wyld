@@ -31,16 +31,21 @@ export default function NewsList() {
 
   useEffect(() => {
     (async () => {
+      // Shared posts (location_id null) plus the current location's own.
+      const locFilter = site.currentLocation
+        ? `location_id.is.null,location_id.eq.${site.currentLocation.id}`
+        : 'location_id.is.null';
       const { data } = await supabase
         .from('gym_news_posts')
         .select('id, slug, title, body, cover_image_url, published_at')
         .eq('gym_id', site.gym.id)
+        .or(locFilter)
         .not('published_at', 'is', null)
         .lte('published_at', new Date().toISOString())
         .order('published_at', { ascending: false });
       setPosts((data as Post[]) ?? []);
     })();
-  }, [site.gym.id]);
+  }, [site.gym.id, site.currentLocation?.id]);
 
   if (!site.modules.news_enabled) {
     return <Redirect href={`/g/${slug}` as never} />;

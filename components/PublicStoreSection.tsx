@@ -25,18 +25,23 @@ export function PublicStoreSection() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Shared products (location_id null) plus the current location's own.
+      const locFilter = site.currentLocation
+        ? `location_id.is.null,location_id.eq.${site.currentLocation.id}`
+        : 'location_id.is.null';
       const { data } = await supabase
         .from('gym_products')
         .select('id, name, description, price_cents, currency, image_url')
         .eq('gym_id', site.gym.id)
         .eq('published', true)
+        .or(locFilter)
         .order('display_order');
       if (!cancelled) setProducts((data as Product[]) ?? []);
     })();
     return () => {
       cancelled = true;
     };
-  }, [site.gym.id]);
+  }, [site.gym.id, site.currentLocation?.id]);
 
   if (products === null) return <ActivityIndicator color={site.theme.primary_color} />;
   if (products.length === 0) {
