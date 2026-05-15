@@ -546,8 +546,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'column',
   },
-  footerTopWide: { flexDirection: 'row', justifyContent: 'space-between' },
-  footerNavCol: { gap: 8 },
+  footerTopWide: { flexDirection: 'row', justifyContent: 'flex-start', gap: 72 },
+  footerNavCol: { gap: 8, minWidth: 160 },
   footerColTitle: {
     color: '#fff',
     fontSize: 13,
