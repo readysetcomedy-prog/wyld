@@ -3,8 +3,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { Slideshow } from '@/components/Slideshow';
 import { GymHours, hasAnyHours } from '@/components/GymHours';
+import { StyledBlock, BlockStyle } from '@/components/StyledBlock';
 import { getPresetStyles } from '@/lib/stylePresets';
-import { rgba } from '@/lib/colors';
 
 export default function Home() {
   const site = useGymSite();
@@ -13,6 +13,7 @@ export default function Home() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const page = site.pages.home ?? {};
+  const blockStyles: Record<string, BlockStyle> = (page.styles ?? {}) as any;
 
   const headline = page.headline || `Welcome to ${site.gym.name}`;
   const subheadline = page.subheadline || '';
@@ -27,17 +28,6 @@ export default function Home() {
 
   const introParas = body.split('\n').filter((p) => p.trim());
   const showHours = hasAnyHours(site.settings.hours);
-
-  const cardStyle = {
-    backgroundColor: preset.card.backgroundColor,
-    borderRadius: preset.card.borderRadius,
-    borderWidth: preset.card.borderWidth,
-    borderColor: preset.card.borderColor,
-    shadowColor: '#0f172a',
-    shadowOpacity: preset.card.shadowOpacity,
-    shadowRadius: preset.card.shadowRadius,
-    shadowOffset: { width: 0, height: 4 },
-  };
 
   const headlineStyle = {
     color: fullbleed ? '#fff' : primary,
@@ -56,18 +46,10 @@ export default function Home() {
       </Pressable>
       {site.modules.services_enabled ? (
         <Pressable
-          style={[
-            styles.ctaOutline,
-            { borderColor: fullbleed ? '#fff' : primary },
-          ]}
+          style={[styles.ctaOutline, { borderColor: fullbleed ? '#fff' : primary }]}
           onPress={() => router.push(`/g/${slug}/services` as never)}
         >
-          <Text
-            style={[
-              styles.ctaOutlineText,
-              { color: fullbleed ? '#fff' : primary },
-            ]}
-          >
+          <Text style={[styles.ctaOutlineText, { color: fullbleed ? '#fff' : primary }]}>
             See services
           </Text>
         </Pressable>
@@ -135,26 +117,25 @@ export default function Home() {
       ) : null}
 
       {introParas.length > 0 ? (
-        <View
-          style={[
-            styles.introCard,
-            cardStyle,
-            preset.sectionTint !== 'transparent' && { backgroundColor: preset.sectionTint },
-            { borderLeftWidth: 4, borderLeftColor: primary },
-          ]}
+        <StyledBlock
+          style={blockStyles.intro}
+          defaults={{ tint: true, stripe: true, width: 'wide', align: 'left' }}
         >
           {introParas.map((para, i) => (
-            <Text key={i} style={styles.bodyPara}>
+            <Text key={i} style={[styles.bodyPara, { textAlign: blockStyles.intro?.align ?? 'left' }]}>
               {para}
             </Text>
           ))}
-        </View>
+        </StyledBlock>
       ) : null}
 
       {showHours ? (
-        <View style={[styles.hoursCard, cardStyle]}>
+        <StyledBlock
+          style={blockStyles.hours}
+          defaults={{ box: true, width: 'narrow', align: 'left' }}
+        >
           <GymHours hours={site.settings.hours ?? {}} primaryColor={primary} />
-        </View>
+        </StyledBlock>
       ) : null}
     </View>
   );
@@ -191,17 +172,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
-  heroFullOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  heroFullInner: {
-    padding: 32,
-    maxWidth: 720,
-  },
+  heroFullOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  heroFullInner: { padding: 32, maxWidth: 720 },
 
   dividerWrap: { height: 32, marginVertical: -8, overflow: 'hidden' },
   divider: {
@@ -211,18 +183,5 @@ const styles = StyleSheet.create({
     transform: [{ skewY: '-2deg' }],
   },
 
-  introCard: {
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    gap: 12,
-  },
   bodyPara: { fontSize: 16, color: '#0F172A', lineHeight: 26 },
-  hoursCard: {
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    shadowOffset: { width: 0, height: 4 },
-    alignSelf: 'flex-start',
-    maxWidth: 520,
-    width: '100%',
-  },
 });

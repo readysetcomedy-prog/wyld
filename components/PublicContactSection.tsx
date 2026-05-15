@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { GymHours, hasAnyHours } from '@/components/GymHours';
 import { useGymSite } from '@/components/GymSiteContext';
+import { StyledBlock, BlockStyle } from '@/components/StyledBlock';
 
 type LocContact = {
   id: string;
@@ -234,7 +235,12 @@ export function PublicContactSection() {
       )}
 
       {hasAnyHours(site.settings.hours) ? (
-        <GymHours hours={site.settings.hours ?? {}} primaryColor={primary} />
+        <StyledBlock
+          style={(((site.pages.contact ?? {}).styles ?? {}) as Record<string, BlockStyle>).hours}
+          defaults={{ box: true, width: 'narrow' }}
+        >
+          <GymHours hours={site.settings.hours ?? {}} primaryColor={primary} />
+        </StyledBlock>
       ) : null}
 
       <View style={styles.formCard}>
@@ -318,6 +324,7 @@ const styles = StyleSheet.create({
   locCard: {
     flexGrow: 1,
     flexBasis: 280,
+    maxWidth: 420,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e2e8f0',

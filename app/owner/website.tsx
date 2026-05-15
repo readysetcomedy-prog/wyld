@@ -81,6 +81,14 @@ type Gym = {
 
 type FaqItem = { id: string; q: string; a: string };
 
+type BlockStyle = {
+  box?: boolean;
+  tint?: boolean;
+  stripe?: boolean;
+  width?: 'narrow' | 'wide' | 'full';
+  align?: 'left' | 'center';
+};
+
 type PageContent = {
   headline?: string;
   subheadline?: string;
@@ -88,16 +96,37 @@ type PageContent = {
   intro?: string;
   gallery?: string[];
   items?: FaqItem[];
+  styles?: Record<string, BlockStyle>;
 };
 
-const PAGE_KEYS = ['home', 'about', 'services', 'contact', 'news', 'faq'] as const;
+const PAGE_KEYS = ['home', 'about', 'services', 'contact', 'schedule', 'store', 'news', 'faq'] as const;
 type PageKey = (typeof PAGE_KEYS)[number];
+
+// Which named blocks each page exposes for per-section styling.
+const PAGE_BLOCKS: Record<PageKey, { key: string; label: string }[]> = {
+  home: [
+    { key: 'intro', label: 'Intro paragraph' },
+    { key: 'hours', label: 'Hours card' },
+  ],
+  about: [{ key: 'body', label: 'Body' }],
+  services: [{ key: 'body', label: 'Body' }],
+  contact: [
+    { key: 'body', label: '"Get in touch" intro' },
+    { key: 'hours', label: 'Hours card' },
+  ],
+  schedule: [{ key: 'body', label: 'Intro above the calendar' }],
+  store: [{ key: 'body', label: 'Intro above the products' }],
+  news: [{ key: 'body', label: 'Intro' }],
+  faq: [{ key: 'body', label: 'Intro' }],
+};
 
 const PAGE_LABELS: Record<PageKey, string> = {
   home: 'Home',
   about: 'About',
   services: 'Services',
   contact: 'Contact',
+  schedule: 'Schedule',
+  store: 'Store',
   news: 'News / Blog',
   faq: 'FAQ',
 };
@@ -105,6 +134,10 @@ const PAGE_LABELS: Record<PageKey, string> = {
 const PAGE_NOTES: Partial<Record<PageKey, string>> = {
   services:
     'Pricing comes from your Offerings tab. The text below appears above your services list.',
+  schedule:
+    'The calendar below your intro is auto-populated from the Calendar tab.',
+  store:
+    'The product grid below your intro is auto-populated from the Store tab.',
   news: 'Only visible on your site if News is turned on by an admin.',
   faq: 'Only visible on your site if FAQ is turned on by an admin.',
 };
@@ -496,6 +529,71 @@ export default function Website() {
             <Text style={styles.btnText}>Upload images</Text>
           </Pressable>
         </View>
+
+        {PAGE_BLOCKS[activePage].length > 0 ? (
+          <View style={styles.sectionStyles}>
+            <Text style={styles.subheading}>Section styling</Text>
+            <Text style={styles.hintSmall}>
+              Optional per-section toggles. The site preset still drives the actual look —
+              these just turn pieces of it on or off.
+            </Text>
+            {PAGE_BLOCKS[activePage].map((block) => {
+              const blockStyle = (page.styles ?? {})[block.key] ?? {};
+              const updateBlock = (patch: Partial<BlockStyle>) => {
+                const nextStyles = {
+                  ...(page.styles ?? {}),
+                  [block.key]: { ...blockStyle, ...patch },
+                };
+                savePage(activePage, { styles: nextStyles });
+              };
+              return (
+                <View key={block.key} style={styles.blockCard}>
+                  <Text style={styles.blockTitle}>{block.label}</Text>
+                  <View style={styles.blockToggles}>
+                    <ToggleChip
+                      label="Box"
+                      value={!!blockStyle.box}
+                      onChange={(v) => updateBlock({ box: v })}
+                    />
+                    <ToggleChip
+                      label="Tinted"
+                      value={!!blockStyle.tint}
+                      onChange={(v) => updateBlock({ tint: v })}
+                    />
+                    <ToggleChip
+                      label="Accent stripe"
+                      value={!!blockStyle.stripe}
+                      onChange={(v) => updateBlock({ stripe: v })}
+                    />
+                  </View>
+                  <View style={styles.blockSegRow}>
+                    <Text style={styles.blockSegLabel}>Width</Text>
+                    <Segmented
+                      options={[
+                        { label: 'Narrow', value: 'narrow' },
+                        { label: 'Wide', value: 'wide' },
+                        { label: 'Full', value: 'full' },
+                      ]}
+                      value={blockStyle.width ?? 'wide'}
+                      onChange={(v) => updateBlock({ width: v as any })}
+                    />
+                  </View>
+                  <View style={styles.blockSegRow}>
+                    <Text style={styles.blockSegLabel}>Align</Text>
+                    <Segmented
+                      options={[
+                        { label: 'Left', value: 'left' },
+                        { label: 'Center', value: 'center' },
+                      ]}
+                      value={blockStyle.align ?? 'left'}
+                      onChange={(v) => updateBlock({ align: v as any })}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -986,6 +1084,56 @@ function FaqItemsManager({
   );
 }
 
+function ToggleChip({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      style={[styles.chip, value && styles.chipActive]}
+    >
+      <Text style={[styles.chipText, value && styles.chipTextActive]}>
+        {value ? '✓ ' : ''}
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function Segmented({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={styles.segGroup}>
+      {options.map((o) => (
+        <Pressable
+          key={o.value}
+          onPress={() => onChange(o.value)}
+          style={[styles.segItem, value === o.value && styles.segItemActive]}
+        >
+          <Text
+            style={[styles.segItemText, value === o.value && styles.segItemTextActive]}
+          >
+            {o.label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 function presetSwatchStyle(name: PresetName) {
   switch (name) {
     case 'bold':
@@ -1105,12 +1253,14 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: theme.colors.border,
     backgroundColor: '#fff',
+    marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
   galleryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
   galleryItem: { position: 'relative' },
@@ -1193,6 +1343,41 @@ const styles = StyleSheet.create({
   segItemActive: { backgroundColor: theme.colors.wyldPurple },
   segItemText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
   segItemTextActive: { color: '#fff' },
+  sectionStyles: {
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    gap: theme.spacing.sm,
+  },
+  blockCard: {
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 10,
+  },
+  blockTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
+  blockToggles: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  blockSegRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  blockSegLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    width: 50,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  chipActive: { backgroundColor: theme.colors.wyldPurple, borderColor: theme.colors.wyldPurple },
+  chipText: { fontSize: 12, fontWeight: '700', color: theme.colors.charcoal },
+  chipTextActive: { color: '#fff' },
 
   btnSecondary: {
     paddingHorizontal: theme.spacing.md,
