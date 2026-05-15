@@ -330,7 +330,12 @@ export default function SiteLayout() {
             {site.theme.logo_url ? (
               <Image source={{ uri: site.theme.logo_url }} style={styles.logo} resizeMode="contain" />
             ) : null}
-            <Text style={[styles.brandName, { color: primary }]}>{site.gym.name}</Text>
+            <View>
+              <Text style={[styles.brandName, { color: primary }]}>{site.gym.name}</Text>
+              {site.currentLocation ? (
+                <Text style={styles.brandLocation}>{site.currentLocation.label}</Text>
+              ) : null}
+            </View>
           </Pressable>
 
           {NAV.length > 0 ? (
@@ -380,7 +385,10 @@ export default function SiteLayout() {
         <View style={[styles.footer, { backgroundColor: primary }]}>
           <View style={[styles.footerInner, isWide && styles.footerInnerWide]}>
             <View>
-              <Text style={styles.footerName}>{site.gym.name}</Text>
+              <Text style={styles.footerName}>
+                {site.gym.name}
+                {site.currentLocation ? ` — ${site.currentLocation.label}` : ''}
+              </Text>
               {site.settings.address_line1 ? (
                 <Text style={styles.footerLine}>
                   {site.settings.address_line1}
