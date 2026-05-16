@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Switch,
   ScrollView,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { expandEvents, GymEvent, EventOccurrence } from '@/lib/events';
+import { MonthCalendar } from '@/components/MonthCalendar';
 
 const TYPE_OPTIONS: { value: 'class' | 'event' | 'open_slot'; label: string }[] = [
   { value: 'class', label: 'Class' },
@@ -120,6 +122,7 @@ export default function OwnerCalendar() {
   const today = useMemo(() => startOfDay(new Date()), []);
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
   const [selectedDay, setSelectedDay] = useState<Date>(today);
+  const [dayModal, setDayModal] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
     if (!gymId) return;
@@ -437,67 +440,18 @@ export default function OwnerCalendar() {
       )}
 
       {/* Month calendar */}
-      <View style={styles.calCard}>
-        <View style={styles.calHeader}>
-          <Pressable
-            onPress={() => setMonthAnchor((m) => addMonths(m, -1))}
-            style={styles.navBtn}
-          >
-            <Text style={styles.navBtnText}>‹</Text>
-          </Pressable>
-          <Text style={styles.calTitle}>{monthLabel}</Text>
-          <Pressable
-            onPress={() => setMonthAnchor((m) => addMonths(m, 1))}
-            style={styles.navBtn}
-          >
-            <Text style={styles.navBtnText}>›</Text>
-          </Pressable>
-        </View>
-        <View style={styles.dowRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-            <Text key={d} style={styles.dowText}>
-              {isWide ? d : d[0]}
-            </Text>
-          ))}
-        </View>
-        <View style={styles.grid}>
-          {monthCells.map((d) => {
-            const inMonth = d.getMonth() === monthAnchor.getMonth();
-            const isToday = isSameDay(d, today);
-            const isSelected = isSameDay(d, selectedDay);
-            const inWeek = d >= selectedWeekStart && d <= addDays(selectedWeekStart, 6);
-            const count = (occByDay[dateKey(d)] ?? []).length;
-            return (
-              <Pressable
-                key={d.toISOString()}
-                onPress={() => setSelectedDay(d)}
-                style={[
-                  styles.cell,
-                  inWeek && { backgroundColor: '#f1f5f9' },
-                  isSelected && { backgroundColor: '#ede9fe' },
-                ]}
-              >
-                <View style={styles.cellInner}>
-                  <Text
-                    style={[
-                      styles.cellNum,
-                      !inMonth && styles.cellNumOut,
-                      isToday && { color: theme.colors.wyldPurple, fontWeight: '900' },
-                    ]}
-                  >
-                    {d.getDate()}
-                  </Text>
-                  {count > 0 ? (
-                    <View style={styles.countPill}>
-                      <Text style={styles.countPillText}>{count}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+      <MonthCalendar
+        monthAnchor={monthAnchor}
+        onMonthChange={setMonthAnchor}
+        today={today}
+        selectedWeekStart={selectedWeekStart}
+        countForDay={(d) => (occByDay[dateKey(d)] ?? []).length}
+        onDayPress={(d) => setDayModal(d)}
+        onWeekPress={(ws) => setSelectedDay(ws)}
+        compact={!isWide}
+        primary={theme.colors.charcoal}
+        accent={theme.colors.wyldPurple}
+      />
 
       {/* Week heading */}
       <View style={styles.weekBar}>
@@ -589,6 +543,83 @@ export default function OwnerCalendar() {
           </View>
         ))
       )}
+
+      <Modal
+        visible={dayModal != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDayModal(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setDayModal(null)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation?.()}>
+            {dayModal ? (
+              <>
+                <Text style={styles.modalTitle}>
+                  {dayModal.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <ScrollView style={{ maxHeight: 320 }}>
+                  {(occByDay[dateKey(dayModal)] ?? []).length === 0 ? (
+                    <Text style={styles.dim}>Nothing scheduled on this day yet.</Text>
+                  ) : (
+                    (occByDay[dateKey(dayModal)] ?? []).map((o) => {
+                      const bl = bookingsByKey[`${o.event.id}|${o.dateKey}`] ?? [];
+                      return (
+                        <View key={`${o.event.id}|${o.dateKey}`} style={styles.modalEvent}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.modalEventTime}>
+                              {o.start.toLocaleTimeString([], {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}{' '}
+                              · {o.event.title}
+                            </Text>
+                            <Text style={styles.modalEventMeta}>
+                              {o.event.event_type === 'open_slot'
+                                ? 'Open slot'
+                                : o.event.event_type}
+                              {o.event.capacity != null
+                                ? ` · ${bl.length}/${o.event.capacity} booked`
+                                : ''}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => {
+                              editEvent(o.event);
+                              setDayModal(null);
+                            }}
+                            style={styles.editBtn}
+                          >
+                            <Text style={styles.editBtnText}>Edit</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })
+                  )}
+                </ScrollView>
+                <View style={styles.modalButtons}>
+                  <Pressable
+                    style={styles.btn}
+                    onPress={() => {
+                      setForm(EMPTY_FORM(dayModal));
+                      setSelectedDay(dayModal);
+                      setDayModal(null);
+                    }}
+                  >
+                    <Text style={styles.btnText}>+ Add to this day</Text>
+                  </Pressable>
+                  <Pressable style={styles.btnGhost} onPress={() => setDayModal(null)}>
+                    <Text style={styles.btnGhostText}>Close</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -808,4 +839,32 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   editBtnText: { fontSize: 12, fontWeight: '700', color: theme.colors.charcoal },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 460,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 18,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.charcoal },
+  modalEvent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  modalEventTime: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  modalEventMeta: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
+  modalButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
 });

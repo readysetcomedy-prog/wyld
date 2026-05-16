@@ -5,12 +5,15 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useGymSite } from '@/components/GymSiteContext';
 import { expandEvents, EventOccurrence, GymEvent } from '@/lib/events';
+import { MonthCalendar } from '@/components/MonthCalendar';
 
 const HORIZON_DAYS = 90;
 
@@ -65,6 +68,7 @@ export function PublicScheduleSection() {
   const today = useMemo(() => startOfDay(new Date()), []);
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
   const [selectedDay, setSelectedDay] = useState<Date>(today);
+  const [dayModal, setDayModal] = useState<Date | null>(null);
 
   async function load() {
     const horizonEnd = new Date(Date.now() + HORIZON_DAYS * 86400_000).toISOString();
@@ -198,6 +202,77 @@ export function PublicScheduleSection() {
   const accent = site.theme.accent_color;
   const bookingsEnabled = site.modules.bookings_enabled;
 
+  function renderOcc(o: EventOccurrence) {
+    const key = `${o.event.id}|${o.dateKey}`;
+    const bk = bookingsByKey[key];
+    const spotsLeft =
+      o.event.capacity != null
+        ? Math.max(0, o.event.capacity - (bk?.count ?? 0))
+        : null;
+    const canBook =
+      bookingsEnabled &&
+      o.event.capacity != null &&
+      spotsLeft! > 0 &&
+      isMember &&
+      !bk?.mine;
+    const canCancel = !!bk?.mine;
+    return (
+      <View key={key} style={styles.row}>
+        <View style={styles.timeCol}>
+          <Text style={styles.time}>
+            {o.start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          </Text>
+          <Text style={styles.timeSub}>
+            {o.end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          </Text>
+        </View>
+        <View style={styles.bodyCol}>
+          <Text style={styles.title}>{o.event.title}</Text>
+          {o.event.description ? (
+            <Text style={styles.desc}>{o.event.description}</Text>
+          ) : null}
+          <View style={styles.metaRow}>
+            <View style={[styles.pill, { backgroundColor: accent + '22' }]}>
+              <Text style={[styles.pillText, { color: accent }]}>
+                {labelForType(o.event.event_type)}
+              </Text>
+            </View>
+            {o.event.capacity != null ? (
+              <Text style={styles.spots}>
+                {spotsLeft === 0
+                  ? 'Full'
+                  : `${spotsLeft} of ${o.event.capacity} ${
+                      spotsLeft === 1 ? 'spot' : 'spots'
+                    } open`}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+        {canCancel ? (
+          <Pressable
+            onPress={() => cancel(o)}
+            disabled={busy === key}
+            style={[styles.actionBtn, styles.cancelBtn]}
+          >
+            <Text style={styles.cancelBtnText}>Cancel booking</Text>
+          </Pressable>
+        ) : canBook ? (
+          <Pressable
+            onPress={() => book(o)}
+            disabled={busy === key}
+            style={[styles.actionBtn, { backgroundColor: accent }]}
+          >
+            <Text style={styles.actionBtnText}>Book</Text>
+          </Pressable>
+        ) : bookingsEnabled && o.event.capacity != null && !session ? (
+          <Text style={styles.muted}>Sign in to book</Text>
+        ) : bookingsEnabled && o.event.capacity != null && !isMember ? (
+          <Text style={styles.muted}>Members only</Text>
+        ) : null}
+      </View>
+    );
+  }
+
   if (events === null) return <ActivityIndicator color={primary} />;
 
   const monthLabel = monthAnchor.toLocaleDateString(undefined, {
@@ -222,68 +297,18 @@ export function PublicScheduleSection() {
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
       {/* Calendar grid */}
-      <View style={styles.calCard}>
-        <View style={styles.calHeader}>
-          <Pressable
-            onPress={() => setMonthAnchor((m) => addMonths(m, -1))}
-            style={styles.navBtn}
-          >
-            <Text style={styles.navBtnText}>‹</Text>
-          </Pressable>
-          <Text style={[styles.calTitle, { color: primary }]}>{monthLabel}</Text>
-          <Pressable
-            onPress={() => setMonthAnchor((m) => addMonths(m, 1))}
-            style={styles.navBtn}
-          >
-            <Text style={styles.navBtnText}>›</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.dowRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-            <Text key={d} style={styles.dowText}>
-              {isWide ? d : d[0]}
-            </Text>
-          ))}
-        </View>
-
-        <View style={styles.grid}>
-          {monthCells.map((d) => {
-            const inMonth = d.getMonth() === monthAnchor.getMonth();
-            const isToday = isSameDay(d, today);
-            const isSelected = isSameDay(d, selectedDay);
-            const inSelectedWeek =
-              d >= selectedWeekStart && d <= addDays(selectedWeekStart, 6);
-            const hasEvents = (occByDay[dateKey(d)] ?? []).length > 0;
-            return (
-              <Pressable
-                key={d.toISOString()}
-                onPress={() => setSelectedDay(d)}
-                style={[
-                  styles.cell,
-                  inSelectedWeek && { backgroundColor: '#f1f5f9' },
-                  isSelected && { backgroundColor: accent + '22' },
-                ]}
-              >
-                <View style={styles.cellInner}>
-                  <Text
-                    style={[
-                      styles.cellNum,
-                      !inMonth && styles.cellNumOutMonth,
-                      isToday && { color: primary, fontWeight: '900' },
-                    ]}
-                  >
-                    {d.getDate()}
-                  </Text>
-                  {hasEvents ? (
-                    <View style={[styles.dot, { backgroundColor: primary }]} />
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+      <MonthCalendar
+        monthAnchor={monthAnchor}
+        onMonthChange={setMonthAnchor}
+        today={today}
+        selectedWeekStart={selectedWeekStart}
+        countForDay={(d) => (occByDay[dateKey(d)] ?? []).length}
+        onDayPress={(d) => setDayModal(d)}
+        onWeekPress={(ws) => setSelectedDay(ws)}
+        compact={!isWide}
+        primary={primary}
+        accent={accent}
+      />
 
       {/* Week heading */}
       <View style={styles.weekBar}>
@@ -327,91 +352,48 @@ export function PublicScheduleSection() {
                 day: 'numeric',
               })}
             </Text>
-            <View style={styles.dayList}>
-              {occs.map((o) => {
-                const key = `${o.event.id}|${o.dateKey}`;
-                const bk = bookingsByKey[key];
-                const spotsLeft =
-                  o.event.capacity != null
-                    ? Math.max(0, o.event.capacity - (bk?.count ?? 0))
-                    : null;
-                const canBook =
-                  bookingsEnabled &&
-                  o.event.capacity != null &&
-                  spotsLeft! > 0 &&
-                  isMember &&
-                  !bk?.mine;
-                const canCancel = !!bk?.mine;
-                return (
-                  <View key={key} style={styles.row}>
-                    <View style={styles.timeCol}>
-                      <Text style={styles.time}>
-                        {o.start.toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                      <Text style={styles.timeSub}>
-                        {o.end.toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                    </View>
-                    <View style={styles.bodyCol}>
-                      <Text style={styles.title}>{o.event.title}</Text>
-                      {o.event.description ? (
-                        <Text style={styles.desc}>{o.event.description}</Text>
-                      ) : null}
-                      <View style={styles.metaRow}>
-                        <View style={[styles.pill, { backgroundColor: accent + '22' }]}>
-                          <Text style={[styles.pillText, { color: accent }]}>
-                            {labelForType(o.event.event_type)}
-                          </Text>
-                        </View>
-                        {o.event.capacity != null ? (
-                          <Text style={styles.spots}>
-                            {spotsLeft === 0
-                              ? 'Full'
-                              : `${spotsLeft} of ${o.event.capacity} ${
-                                  spotsLeft === 1 ? 'spot' : 'spots'
-                                } open`}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                    {canCancel ? (
-                      <Pressable
-                        onPress={() => cancel(o)}
-                        disabled={busy === key}
-                        style={[styles.actionBtn, styles.cancelBtn]}
-                      >
-                        <Text style={styles.cancelBtnText}>Cancel booking</Text>
-                      </Pressable>
-                    ) : canBook ? (
-                      <Pressable
-                        onPress={() => book(o)}
-                        disabled={busy === key}
-                        style={[styles.actionBtn, { backgroundColor: accent }]}
-                      >
-                        <Text style={styles.actionBtnText}>Book</Text>
-                      </Pressable>
-                    ) : bookingsEnabled &&
-                      o.event.capacity != null &&
-                      !session ? (
-                      <Text style={styles.muted}>Sign in to book</Text>
-                    ) : bookingsEnabled &&
-                      o.event.capacity != null &&
-                      !isMember ? (
-                      <Text style={styles.muted}>Members only</Text>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
+            <View style={styles.dayList}>{occs.map((o) => renderOcc(o))}</View>
           </View>
         ))
       )}
+
+      <Modal
+        visible={dayModal != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDayModal(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setDayModal(null)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation?.()}>
+            {dayModal ? (
+              <>
+                <Text style={[styles.modalTitle, { color: primary }]}>
+                  {dayModal.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <ScrollView style={{ maxHeight: 380 }}>
+                  <View style={styles.dayList}>
+                    {(occByDay[dateKey(dayModal)] ?? []).length === 0 ? (
+                      <Text style={styles.muted}>Nothing scheduled on this day.</Text>
+                    ) : (
+                      (occByDay[dateKey(dayModal)] ?? []).map((o) => renderOcc(o))
+                    )}
+                  </View>
+                </ScrollView>
+                <Pressable
+                  style={[styles.modalClose, { borderColor: accent }]}
+                  onPress={() => setDayModal(null)}
+                >
+                  <Text style={[styles.modalCloseText, { color: accent }]}>Close</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -425,6 +407,31 @@ function labelForType(t: string) {
 const styles = StyleSheet.create({
   root: { gap: 20, maxWidth: 920, width: '100%', alignSelf: 'stretch' },
   err: { color: '#DC2626', fontSize: 13 },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 520,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 18,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
+  modalClose: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  modalCloseText: { fontSize: 14, fontWeight: '700' },
 
   calCard: {
     padding: 16,

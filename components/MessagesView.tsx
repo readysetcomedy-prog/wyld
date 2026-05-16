@@ -244,35 +244,21 @@ export function MessagesView({
       <View style={styles.sidebar}>
         <Text style={styles.sidebarTitle}>Conversations</Text>
         {mode === 'owner' && locations.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.locFilterScroll}
-            contentContainerStyle={styles.locFilterRow}
+          <select
+            value={locFilter ?? 'all'}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setLocFilter(v === 'all' ? null : v);
+            }}
+            style={locSelectStyle}
           >
-            <Pressable
-              onPress={() => setLocFilter(null)}
-              style={[styles.locChip, locFilter === null && styles.locChipActive]}
-            >
-              <Text style={[styles.locChipText, locFilter === null && styles.locChipTextActive]}>
-                All
-              </Text>
-            </Pressable>
+            <option value="all">All locations</option>
             {locations.map((l) => (
-              <Pressable
-                key={l.id}
-                onPress={() => setLocFilter(l.id)}
-                style={[styles.locChip, locFilter === l.id && styles.locChipActive]}
-              >
-                <Text
-                  style={[styles.locChipText, locFilter === l.id && styles.locChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {l.label || 'Location'}
-                </Text>
-              </Pressable>
+              <option key={l.id} value={l.id}>
+                {l.label || 'Location'}
+              </option>
             ))}
-          </ScrollView>
+          </select>
         ) : null}
         {mode === 'member' && !threads.some((t) => t.kind === 'admin_user') ? (
           <Pressable
@@ -402,6 +388,19 @@ function isFromMe(m: Message, mode: ViewMode, myId: string | null) {
   return m.sender_user_id === myId;
 }
 
+const locSelectStyle: any = {
+  border: `1px solid ${theme.colors.border}`,
+  borderRadius: 8,
+  padding: '8px 10px',
+  fontSize: 13,
+  fontWeight: 600,
+  background: '#fff',
+  color: theme.colors.charcoal,
+  width: '100%',
+  boxSizing: 'border-box',
+  fontFamily: 'inherit',
+};
+
 const styles = StyleSheet.create({
   root: { flexDirection: 'row', gap: 16, minHeight: 500, flex: 1 },
   sidebar: {
@@ -414,23 +413,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sidebarTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
-  locFilterScroll: { flexGrow: 0, flexShrink: 0 },
-  locFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 4, alignItems: 'center' },
-  locChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#fff',
-    alignSelf: 'flex-start',
-  },
-  locChipActive: {
-    backgroundColor: theme.colors.wyldPurple,
-    borderColor: theme.colors.wyldPurple,
-  },
-  locChipText: { fontSize: 11, fontWeight: '700', color: theme.colors.charcoal },
-  locChipTextActive: { color: '#fff' },
   list: { flexGrow: 0 },
   dim: { color: theme.colors.textSecondary, fontStyle: 'italic', fontSize: 13 },
   threadRow: {
