@@ -247,6 +247,7 @@ export function MessagesView({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.locFilterScroll}
             contentContainerStyle={styles.locFilterRow}
           >
             <Pressable
@@ -265,6 +266,7 @@ export function MessagesView({
               >
                 <Text
                   style={[styles.locChipText, locFilter === l.id && styles.locChipTextActive]}
+                  numberOfLines={1}
                 >
                   {l.label || 'Location'}
                 </Text>
@@ -412,14 +414,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sidebarTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
-  locFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
+  locFilterScroll: { flexGrow: 0, flexShrink: 0 },
+  locFilterRow: { flexDirection: 'row', gap: 6, paddingVertical: 4, alignItems: 'center' },
   locChip: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: '#fff',
+    alignSelf: 'flex-start',
   },
   locChipActive: {
     backgroundColor: theme.colors.wyldPurple,
