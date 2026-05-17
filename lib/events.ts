@@ -11,6 +11,7 @@ export type GymEvent = {
   capacity: number | null;
   recurrence: 'weekly' | null;
   recurrence_until: string | null;
+  location_id: string | null;
 };
 
 export type EventOccurrence = {

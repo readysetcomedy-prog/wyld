@@ -9,7 +9,6 @@ import {
   Switch,
   ScrollView,
   Modal,
-  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +17,8 @@ import { theme } from '@/lib/theme';
 import { expandEvents, GymEvent, EventOccurrence } from '@/lib/events';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { DateTimeField } from '@/components/DateTimeField';
+import { Select } from '@/components/Select';
+import { useScrollToTop } from '@/lib/scrollContext';
 
 const TYPE_OPTIONS: { value: 'class' | 'event' | 'open_slot'; label: string }[] = [
   { value: 'class', label: 'Class' },
@@ -45,6 +46,7 @@ type FormState = {
   capacity: string;
   recurring: boolean;
   recurrence_until: Date | null;
+  location_id: string | null;
 };
 
 function pad(n: number) {
@@ -85,7 +87,7 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-const EMPTY_FORM = (seed?: Date): FormState => {
+const EMPTY_FORM = (seed?: Date, locationId?: string | null): FormState => {
   const start = new Date(seed ?? new Date());
   start.setMinutes(0, 0, 0);
   start.setHours(start.getHours() + 1);
@@ -100,6 +102,7 @@ const EMPTY_FORM = (seed?: Date): FormState => {
     capacity: '',
     recurring: false,
     recurrence_until: null,
+    location_id: locationId ?? null,
   };
 };
 
@@ -112,6 +115,10 @@ export default function OwnerCalendar() {
   const [events, setEvents] = useState<GymEvent[] | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsEnabled, setBookingsEnabled] = useState(false);
+  const [multiLocation, setMultiLocation] = useState(false);
+  const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
+  const [locFilter, setLocFilter] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState<FormState | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -121,23 +128,33 @@ export default function OwnerCalendar() {
   const [selectedDay, setSelectedDay] = useState<Date>(today);
   const [dayModal, setDayModal] = useState<Date | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const scrollDashboardToTop = useScrollToTop();
 
-  // Bring the editor form into view — it renders near the top of the page,
-  // so opening it from the day popup would otherwise be off-screen.
+  // Bring the editor form into view — it renders near the top of the page.
+  // The real scroller is the owner layout's ScrollView, reached via context.
   function scrollToForm() {
+    scrollDashboardToTop();
     scrollRef.current?.scrollTo({ y: 0, animated: true });
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
   }
 
   const load = useCallback(async () => {
     if (!gymId) return;
-    const [{ data: m }, { data: evs }] = await Promise.all([
-      supabase.from('gym_modules').select('bookings_enabled').eq('gym_id', gymId).maybeSingle(),
+    const [{ data: m }, { data: evs }, { data: locs }] = await Promise.all([
+      supabase
+        .from('gym_modules')
+        .select('bookings_enabled, multi_location_enabled')
+        .eq('gym_id', gymId)
+        .maybeSingle(),
       supabase.from('gym_events').select('*').eq('gym_id', gymId).order('starts_at'),
+      supabase
+        .from('gym_locations')
+        .select('id, label')
+        .eq('gym_id', gymId)
+        .order('display_order'),
     ]);
     setBookingsEnabled(!!(m as any)?.bookings_enabled);
+    setMultiLocation(!!(m as any)?.multi_location_enabled);
+    setLocations((locs as any) ?? []);
     const eventRows = (evs as GymEvent[]) ?? [];
     setEvents(eventRows);
 
@@ -171,8 +188,34 @@ export default function OwnerCalendar() {
 
   const occurrences = useMemo(() => {
     if (!events) return [];
-    return expandEvents(events, HORIZON_DAYS);
-  }, [events]);
+    // When a location is selected, show that location's events plus shared.
+    const visible = locFilter
+      ? events.filter((e) => e.location_id === locFilter || e.location_id == null)
+      : events;
+    return expandEvents(visible, HORIZON_DAYS);
+  }, [events, locFilter]);
+
+  // Search across the whole horizon by title, description, type, or date.
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return occurrences.filter((o) => {
+      const dateStr = o.start
+        .toLocaleDateString(undefined, {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+        .toLowerCase();
+      return (
+        o.event.title.toLowerCase().includes(q) ||
+        (o.event.description ?? '').toLowerCase().includes(q) ||
+        o.event.event_type.toLowerCase().includes(q) ||
+        dateStr.includes(q)
+      );
+    });
+  }, [occurrences, search]);
 
   const occByDay = useMemo(() => {
     const m: Record<string, EventOccurrence[]> = {};
@@ -230,6 +273,7 @@ export default function OwnerCalendar() {
       recurrence: form.recurring ? 'weekly' : null,
       recurrence_until:
         form.recurring && form.recurrence_until ? toDateOnly(form.recurrence_until) : null,
+      location_id: form.location_id,
     };
 
     setSaving(true);
@@ -272,6 +316,7 @@ export default function OwnerCalendar() {
       capacity: e.capacity == null ? '' : String(e.capacity),
       recurring: e.recurrence === 'weekly',
       recurrence_until: e.recurrence_until ? new Date(e.recurrence_until + 'T00:00:00') : null,
+      location_id: e.location_id ?? null,
     });
   }
 
@@ -296,9 +341,21 @@ export default function OwnerCalendar() {
     day: 'numeric',
   })} – ${weekDays[6].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 
-  const feedDays = weekDays
-    .map((d) => ({ day: d, occs: occByDay[dateKey(d)] ?? [] }))
-    .filter((x) => x.occs.length > 0);
+  // Feed: search results when searching, otherwise the selected week.
+  const feedDays = (() => {
+    const source = searchResults
+      ? (() => {
+          const m: Record<string, EventOccurrence[]> = {};
+          searchResults.forEach((o) => {
+            (m[dateKey(o.start)] ??= []).push(o);
+          });
+          return Object.keys(m)
+            .sort()
+            .map((k) => ({ day: new Date(k + 'T00:00:00'), occs: m[k] }));
+        })()
+      : weekDays.map((d) => ({ day: d, occs: occByDay[dateKey(d)] ?? [] }));
+    return source.filter((x) => x.occs.length > 0);
+  })();
 
   return (
     <ScrollView ref={scrollRef} contentContainerStyle={styles.root}>
@@ -314,8 +371,38 @@ export default function OwnerCalendar() {
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
+      <View style={styles.controls}>
+        {multiLocation && locations.length > 0 ? (
+          <View style={styles.controlField}>
+            <Text style={styles.controlLabel}>Location</Text>
+            <Select
+              ariaLabel="Filter calendar by location"
+              value={locFilter ?? 'all'}
+              onChange={(v) => setLocFilter(v === 'all' ? null : v)}
+              options={[
+                { value: 'all', label: 'All locations' },
+                ...locations.map((l) => ({ value: l.id, label: l.label || 'Location' })),
+              ]}
+            />
+          </View>
+        ) : null}
+        <View style={[styles.controlField, { flex: 1, minWidth: 200 }]}>
+          <Text style={styles.controlLabel}>Search</Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by class, type, or date…"
+            placeholderTextColor="#94a3b8"
+            style={styles.input}
+          />
+        </View>
+      </View>
+
       {!form ? (
-        <Pressable style={styles.btn} onPress={() => setForm(EMPTY_FORM(selectedDay))}>
+        <Pressable
+          style={styles.btn}
+          onPress={() => setForm(EMPTY_FORM(selectedDay, locFilter))}
+        >
           <Text style={styles.btnText}>+ Add to calendar</Text>
         </Pressable>
       ) : (
@@ -422,6 +509,23 @@ export default function OwnerCalendar() {
             </View>
           </View>
 
+          {multiLocation && locations.length > 0 ? (
+            <View>
+              <Text style={styles.label}>Location</Text>
+              <Select
+                ariaLabel="Event location"
+                value={form.location_id ?? 'all'}
+                onChange={(v) =>
+                  setForm({ ...form, location_id: v === 'all' ? null : v })
+                }
+                options={[
+                  { value: 'all', label: 'All locations (shared)' },
+                  ...locations.map((l) => ({ value: l.id, label: l.label || 'Location' })),
+                ]}
+              />
+            </View>
+          ) : null}
+
           <View style={styles.formButtons}>
             <Pressable style={styles.btn} onPress={saveEvent} disabled={saving}>
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
@@ -452,36 +556,47 @@ export default function OwnerCalendar() {
         accent={theme.colors.wyldPurple}
       />
 
-      {/* Week heading */}
-      <View style={styles.weekBar}>
-        <Text style={styles.weekTitle}>Week of {weekRange}</Text>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <Pressable
-            onPress={() => setSelectedDay((d) => addDays(d, -7))}
-            style={styles.navBtnSm}
-          >
-            <Text style={styles.navBtnText}>‹</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setSelectedDay(today);
-              setMonthAnchor(startOfMonth(today));
-            }}
-            style={styles.todayBtn}
-          >
-            <Text style={styles.todayBtnText}>Today</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setSelectedDay((d) => addDays(d, 7))}
-            style={styles.navBtnSm}
-          >
-            <Text style={styles.navBtnText}>›</Text>
-          </Pressable>
+      {/* Week heading (hidden while searching) */}
+      {searchResults ? (
+        <View style={styles.weekBar}>
+          <Text style={styles.weekTitle}>
+            {searchResults.length} result{searchResults.length === 1 ? '' : 's'} for
+            &ldquo;{search.trim()}&rdquo;
+          </Text>
         </View>
-      </View>
+      ) : (
+        <View style={styles.weekBar}>
+          <Text style={styles.weekTitle}>Week of {weekRange}</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <Pressable
+              onPress={() => setSelectedDay((d) => addDays(d, -7))}
+              style={styles.navBtnSm}
+            >
+              <Text style={styles.navBtnText}>‹</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setSelectedDay(today);
+                setMonthAnchor(startOfMonth(today));
+              }}
+              style={styles.todayBtn}
+            >
+              <Text style={styles.todayBtnText}>Today</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSelectedDay((d) => addDays(d, 7))}
+              style={styles.navBtnSm}
+            >
+              <Text style={styles.navBtnText}>›</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {feedDays.length === 0 ? (
-        <Text style={styles.dim}>Nothing scheduled this week.</Text>
+        <Text style={styles.dim}>
+          {searchResults ? 'No events match your search.' : 'Nothing scheduled this week.'}
+        </Text>
       ) : (
         feedDays.map(({ day, occs }) => (
           <View key={day.toISOString()} style={styles.daySection}>
@@ -604,7 +719,7 @@ export default function OwnerCalendar() {
                   <Pressable
                     style={styles.btn}
                     onPress={() => {
-                      setForm(EMPTY_FORM(dayModal));
+                      setForm(EMPTY_FORM(dayModal, locFilter));
                       setSelectedDay(dayModal);
                       setDayModal(null);
                       scrollToForm();
@@ -631,6 +746,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: theme.colors.charcoal },
   sub: { fontSize: 14, color: theme.colors.textSecondary, marginTop: 4 },
   err: { color: theme.colors.danger, fontSize: 13 },
+  controls: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' },
+  controlField: { gap: 4 },
+  controlLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
   dim: { fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' },
 
   btn: {
