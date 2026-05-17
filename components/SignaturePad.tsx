@@ -1,105 +1,133 @@
-import { useRef } from 'react';
-import { Platform } from 'react-native';
+import { useRef, useState } from 'react';
+import { View, Text, Pressable, PanResponder, StyleSheet } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { theme } from '@/lib/theme';
 
-// Web canvas signature pad. Reports the drawn signature as a PNG data URL.
+// Cross-platform signature pad — PanResponder for input, react-native-svg
+// for rendering. The signature is reported as a JSON string of strokes
+// (arrays of {x,y} points) so it can be re-rendered later on any platform.
+
+type Pt = { x: number; y: number };
+
+const PAD_HEIGHT = 160;
+
+function pathOf(pts: Pt[]) {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) {
+    const p = pts[0];
+    return `M${p.x} ${p.y} L${p.x + 0.1} ${p.y}`;
+  }
+  return (
+    `M${pts[0].x} ${pts[0].y} ` +
+    pts.slice(1).map((p) => `L${p.x} ${p.y}`).join(' ')
+  );
+}
 
 export function SignaturePad({
   onChange,
 }: {
-  onChange: (dataUrl: string | null) => void;
+  onChange: (data: string | null) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawing = useRef(false);
-  const dirty = useRef(false);
+  const [strokes, setStrokes] = useState<Pt[][]>([]);
+  const current = useRef<Pt[]>([]);
+  const [, tick] = useState(0);
+  const rerender = () => tick((n) => n + 1);
 
-  if (Platform.OS !== 'web') return null;
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        current.current = [{ x: e.nativeEvent.locationX, y: e.nativeEvent.locationY }];
+        rerender();
+      },
+      onPanResponderMove: (e) => {
+        current.current.push({ x: e.nativeEvent.locationX, y: e.nativeEvent.locationY });
+        rerender();
+      },
+      onPanResponderRelease: () => {
+        if (current.current.length > 0) {
+          setStrokes((prev) => {
+            const next = [...prev, current.current];
+            onChange(JSON.stringify(next));
+            return next;
+          });
+        }
+        current.current = [];
+      },
+    })
+  ).current;
 
-  const ctx = () => canvasRef.current?.getContext('2d') ?? null;
-
-  const pos = (e: any) => {
-    const c = canvasRef.current!;
-    const r = c.getBoundingClientRect();
-    return {
-      x: ((e.clientX - r.left) / r.width) * c.width,
-      y: ((e.clientY - r.top) / r.height) * c.height,
-    };
-  };
-
-  const start = (e: any) => {
-    drawing.current = true;
-    const g = ctx();
-    if (!g) return;
-    const p = pos(e);
-    g.beginPath();
-    g.moveTo(p.x, p.y);
-  };
-  const move = (e: any) => {
-    if (!drawing.current) return;
-    const g = ctx();
-    if (!g) return;
-    const p = pos(e);
-    g.lineTo(p.x, p.y);
-    g.strokeStyle = '#0F172A';
-    g.lineWidth = 2.5;
-    g.lineCap = 'round';
-    g.lineJoin = 'round';
-    g.stroke();
-    dirty.current = true;
-  };
-  const end = () => {
-    if (!drawing.current) return;
-    drawing.current = false;
-    if (dirty.current && canvasRef.current) {
-      onChange(canvasRef.current.toDataURL('image/png'));
-    }
-  };
-  const clear = () => {
-    const c = canvasRef.current;
-    const g = ctx();
-    if (c && g) g.clearRect(0, 0, c.width, c.height);
-    dirty.current = false;
+  function clear() {
+    setStrokes([]);
+    current.current = [];
     onChange(null);
-  };
+    rerender();
+  }
 
   return (
-    <div>
-      <canvas
-        ref={canvasRef}
-        width={520}
-        height={150}
-        onPointerDown={start}
-        onPointerMove={move}
-        onPointerUp={end}
-        onPointerLeave={end}
-        style={{
-          width: '100%',
-          maxWidth: 520,
-          height: 150,
-          border: '1px solid #e2e8f0',
-          borderRadius: 8,
-          background: '#fff',
-          touchAction: 'none',
-          cursor: 'crosshair',
-          display: 'block',
-        }}
-      />
-      <button
-        type="button"
-        onClick={clear}
-        style={{
-          marginTop: 6,
-          border: '1px solid #e2e8f0',
-          borderRadius: 8,
-          background: '#fff',
-          color: '#475569',
-          fontSize: 12,
-          fontWeight: 700,
-          padding: '5px 12px',
-          cursor: 'pointer',
-        }}
-      >
-        Clear signature
-      </button>
-    </div>
+    <View>
+      <View style={styles.pad} {...pan.panHandlers}>
+        <Svg width="100%" height={PAD_HEIGHT}>
+          {strokes.map((s, i) => (
+            <Path
+              key={i}
+              d={pathOf(s)}
+              stroke="#0F172A"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          ))}
+          {current.current.length > 0 ? (
+            <Path
+              d={pathOf(current.current)}
+              stroke="#0F172A"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          ) : null}
+        </Svg>
+        {strokes.length === 0 && current.current.length === 0 ? (
+          <Text style={styles.hint}>Sign here</Text>
+        ) : null}
+      </View>
+      <Pressable style={styles.clearBtn} onPress={clear}>
+        <Text style={styles.clearText}>Clear signature</Text>
+      </Pressable>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  pad: {
+    height: PAD_HEIGHT,
+    maxWidth: 520,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  hint: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: PAD_HEIGHT / 2 - 10,
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  clearBtn: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  clearText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
+});
