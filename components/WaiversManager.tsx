@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,13 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
-import { RichTextEditor } from '@/components/RichTextEditor';
-import { PREMADE_WAIVER_HTML, PREMADE_WAIVER_TITLE } from '@/lib/waiverTemplate';
+import { BlockEditor } from '@/components/BlockEditor';
+import {
+  WaiverBlock,
+  parseBlocks,
+  premadeWaiverBlocks,
+  PREMADE_WAIVER_TITLE,
+} from '@/lib/waiverTemplate';
 
 type Waiver = {
   id: string;
@@ -25,7 +30,7 @@ type Sig = { id: string; participant_name: string; signed_at: string; member_id:
 type Editing = {
   id?: string;
   title: string;
-  content: string;
+  blocks: WaiverBlock[];
   applies_to_all: boolean;
   offeringIds: string[];
 };
@@ -39,7 +44,6 @@ export function WaiversManager({ gymId }: { gymId: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [sigsFor, setSigsFor] = useState<string | null>(null);
   const [sigs, setSigs] = useState<Sig[]>([]);
-  const contentRef = useRef('');
 
   const load = useCallback(async () => {
     const [{ data: w }, { data: o }] = await Promise.all([
@@ -55,7 +59,6 @@ export function WaiversManager({ gymId }: { gymId: string }) {
   }, [load]);
 
   function openEditor(e: Editing) {
-    contentRef.current = e.content;
     setEditing(e);
     setEditorKey((k) => k + 1);
   }
@@ -68,7 +71,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
     openEditor({
       id: w.id,
       title: w.title,
-      content: w.content,
+      blocks: parseBlocks(w.content),
       applies_to_all: w.applies_to_all,
       offeringIds: (links ?? []).map((l: any) => l.offering_id),
     });
@@ -85,7 +88,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
     const payload = {
       gym_id: gymId,
       title: editing.title.trim(),
-      content: contentRef.current,
+      content: JSON.stringify(editing.blocks),
       applies_to_all: editing.applies_to_all,
     };
     let waiverId = editing.id;
@@ -161,7 +164,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
           <Pressable
             style={styles.btn}
             onPress={() =>
-              openEditor({ title: '', content: '', applies_to_all: true, offeringIds: [] })
+              openEditor({ title: '', blocks: [], applies_to_all: true, offeringIds: [] })
             }
           >
             <Text style={styles.btnText}>+ New waiver</Text>
@@ -171,7 +174,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
             onPress={() =>
               openEditor({
                 title: PREMADE_WAIVER_TITLE,
-                content: PREMADE_WAIVER_HTML,
+                blocks: premadeWaiverBlocks(),
                 applies_to_all: true,
                 offeringIds: [],
               })
@@ -194,12 +197,10 @@ export function WaiversManager({ gymId }: { gymId: string }) {
           />
 
           <Text style={styles.label}>Waiver text</Text>
-          <RichTextEditor
+          <BlockEditor
             key={editorKey}
-            initialHtml={editing.content}
-            onChange={(html) => {
-              contentRef.current = html;
-            }}
+            blocks={editing.blocks}
+            onChange={(blocks) => setEditing((e) => (e ? { ...e, blocks } : e))}
           />
 
           <Text style={styles.label}>Applies to</Text>
