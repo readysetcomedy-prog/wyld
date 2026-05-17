@@ -176,7 +176,7 @@ export function PublicContactSection() {
   const phones = (loc?.contacts ?? []).filter((c) => c.kind === 'phone');
 
   const locationCard = (
-    <View style={styles.col}>
+    <View style={[styles.col, isWide && styles.colWide]}>
       <View style={styles.card}>
         <Text style={[styles.cardTitle, { color: primary }]}>
           {loc?.label || 'Visit us'}
@@ -239,7 +239,7 @@ export function PublicContactSection() {
   );
 
   const messageForm = (
-    <View style={styles.col}>
+    <View style={[styles.col, isWide && styles.colWide]}>
       <View style={styles.formCard}>
         <Text style={[styles.formTitle, { color: primary }]}>Send a message</Text>
         {sent ? (
@@ -344,7 +344,9 @@ const styles = StyleSheet.create({
   root: { gap: 20 },
   twoCol: { gap: 20, flexDirection: 'column' },
   twoColWide: { flexDirection: 'row', alignItems: 'flex-start' },
-  col: { flex: 1, gap: 16, minWidth: 0 },
+  // Column stacks full-width on mobile; only splits width (flex:1) when wide.
+  col: { gap: 16, width: '100%' },
+  colWide: { flex: 1, width: 'auto', minWidth: 0 },
 
   card: {
     backgroundColor: '#fff',
