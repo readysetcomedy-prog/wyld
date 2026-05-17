@@ -6,13 +6,13 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { SignaturePad } from '@/components/SignaturePad';
-import { UNAUTHORIZED_ENTRY_NOTICE } from '@/lib/waiverTemplate';
+import { WaiverBlocksView } from '@/components/WaiverBlocksView';
+import { UNAUTHORIZED_ENTRY_NOTICE, parseBlocks } from '@/lib/waiverTemplate';
 
 type Waiver = {
   id: string;
@@ -45,19 +45,6 @@ const emptySign = (name: string): SignState => ({
   unauthorized_initials: '',
   agreed: false,
 });
-
-function WaiverBody({ html }: { html: string }) {
-  if (Platform.OS === 'web') {
-    return (
-      <div
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: html }}
-        style={{ fontSize: 14, lineHeight: 1.6, color: '#0F172A' }}
-      />
-    );
-  }
-  return <Text style={{ fontSize: 14, color: '#0F172A' }}>{html.replace(/<[^>]+>/g, ' ')}</Text>;
-}
 
 export default function MemberWaivers() {
   const { profile } = useAuth();
@@ -210,7 +197,7 @@ export default function MemberWaivers() {
               {isOpen && form ? (
                 <View style={styles.signArea}>
                   <View style={styles.waiverBox}>
-                    <WaiverBody html={w.content} />
+                    <WaiverBlocksView blocks={parseBlocks(w.content)} />
                   </View>
 
                   <Text style={styles.section}>Your information</Text>

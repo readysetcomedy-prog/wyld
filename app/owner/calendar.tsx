@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { expandEvents, GymEvent, EventOccurrence } from '@/lib/events';
 import { MonthCalendar } from '@/components/MonthCalendar';
+import { DateTimeField } from '@/components/DateTimeField';
 
 const TYPE_OPTIONS: { value: 'class' | 'event' | 'open_slot'; label: string }[] = [
   { value: 'class', label: 'Class' },
@@ -39,23 +40,18 @@ type FormState = {
   title: string;
   description: string;
   event_type: 'class' | 'event' | 'open_slot';
-  starts_at: string;
-  ends_at: string;
+  starts_at: Date;
+  ends_at: Date;
   capacity: string;
   recurring: boolean;
-  recurrence_until: string;
+  recurrence_until: Date | null;
 };
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
 }
-function toLocalInput(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours()
-  )}:${pad(d.getMinutes())}`;
-}
-function fromLocalInput(s: string) {
-  return new Date(s);
+function toDateOnly(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -99,11 +95,11 @@ const EMPTY_FORM = (seed?: Date): FormState => {
     title: '',
     description: '',
     event_type: 'class',
-    starts_at: toLocalInput(start),
-    ends_at: toLocalInput(end),
+    starts_at: start,
+    ends_at: end,
     capacity: '',
     recurring: false,
-    recurrence_until: '',
+    recurrence_until: null,
   };
 };
 
@@ -212,12 +208,8 @@ export default function OwnerCalendar() {
       setErr('Title is required.');
       return;
     }
-    const startsAt = fromLocalInput(form.starts_at);
-    const endsAt = fromLocalInput(form.ends_at);
-    if (isNaN(startsAt.getTime())) {
-      setErr('Invalid start time.');
-      return;
-    }
+    const startsAt = form.starts_at;
+    const endsAt = form.ends_at;
     if (endsAt <= startsAt) {
       setErr('End must be after start.');
       return;
@@ -236,7 +228,8 @@ export default function OwnerCalendar() {
       ends_at: endsAt.toISOString(),
       capacity: cap,
       recurrence: form.recurring ? 'weekly' : null,
-      recurrence_until: form.recurring && form.recurrence_until ? form.recurrence_until : null,
+      recurrence_until:
+        form.recurring && form.recurrence_until ? toDateOnly(form.recurrence_until) : null,
     };
 
     setSaving(true);
@@ -274,11 +267,11 @@ export default function OwnerCalendar() {
       title: e.title,
       description: e.description ?? '',
       event_type: e.event_type,
-      starts_at: toLocalInput(new Date(e.starts_at)),
-      ends_at: toLocalInput(new Date(e.ends_at)),
+      starts_at: new Date(e.starts_at),
+      ends_at: new Date(e.ends_at),
       capacity: e.capacity == null ? '' : String(e.capacity),
       recurring: e.recurrence === 'weekly',
-      recurrence_until: e.recurrence_until ?? '',
+      recurrence_until: e.recurrence_until ? new Date(e.recurrence_until + 'T00:00:00') : null,
     });
   }
 
@@ -370,24 +363,24 @@ export default function OwnerCalendar() {
           <View style={styles.row}>
             <View style={styles.flex}>
               <Text style={styles.label}>Starts</Text>
-              <input
-                type="datetime-local"
+              <DateTimeField
                 value={form.starts_at}
-                onChange={(e) =>
-                  setForm({ ...form, starts_at: (e.target as HTMLInputElement).value })
-                }
-                style={dateInputStyle}
+                onChange={(d) => {
+                  // Keep the same duration when the start moves.
+                  const dur = form.ends_at.getTime() - form.starts_at.getTime();
+                  setForm({
+                    ...form,
+                    starts_at: d,
+                    ends_at: new Date(d.getTime() + Math.max(dur, 0)),
+                  });
+                }}
               />
             </View>
             <View style={styles.flex}>
               <Text style={styles.label}>Ends</Text>
-              <input
-                type="datetime-local"
+              <DateTimeField
                 value={form.ends_at}
-                onChange={(e) =>
-                  setForm({ ...form, ends_at: (e.target as HTMLInputElement).value })
-                }
-                style={dateInputStyle}
+                onChange={(d) => setForm({ ...form, ends_at: d })}
               />
             </View>
           </View>
@@ -418,16 +411,11 @@ export default function OwnerCalendar() {
               {form.recurring ? (
                 <>
                   <Text style={styles.label}>Until (optional)</Text>
-                  <input
-                    type="date"
+                  <DateTimeField
+                    mode="date"
+                    placeholder="No end date"
                     value={form.recurrence_until}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        recurrence_until: (e.target as HTMLInputElement).value,
-                      })
-                    }
-                    style={dateInputStyle}
+                    onChange={(d) => setForm({ ...form, recurrence_until: d })}
                   />
                 </>
               ) : null}
@@ -636,18 +624,6 @@ export default function OwnerCalendar() {
     </ScrollView>
   );
 }
-
-const dateInputStyle: any = {
-  border: '1px solid #e2e8f0',
-  borderRadius: 10,
-  padding: '10px 12px',
-  fontSize: 14,
-  background: '#fff',
-  color: '#0F172A',
-  width: '100%',
-  boxSizing: 'border-box',
-  fontFamily: 'inherit',
-};
 
 const styles = StyleSheet.create({
   root: { padding: 0, gap: 16 },

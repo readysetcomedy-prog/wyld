@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   Image,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useGymSite } from '@/components/GymSiteContext';
 import { supabase } from '@/lib/supabase';
+import { DateTimeField } from '@/components/DateTimeField';
 
 type Post = {
   id: string;
@@ -39,8 +41,8 @@ export default function NewsList() {
   // Filters
   const [keyword, setKeyword] = useState('');
   const [appliedKeyword, setAppliedKeyword] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState<Date | null>(null);
+  const [dateTo, setDateTo] = useState<Date | null>(null);
 
   const loadingRef = useRef(false);
   const locId = site.currentLocation?.id ?? null;
@@ -66,7 +68,11 @@ export default function NewsList() {
         const kw = appliedKeyword.trim().replace(/[%,]/g, '');
         q = q.or(`title.ilike.%${kw}%,body.ilike.%${kw}%`);
       }
-      if (dateFrom) q = q.gte('published_at', new Date(dateFrom).toISOString());
+      if (dateFrom) {
+        const start = new Date(dateFrom);
+        start.setHours(0, 0, 0, 0);
+        q = q.gte('published_at', start.toISOString());
+      }
       if (dateTo) {
         const end = new Date(dateTo);
         end.setHours(23, 59, 59, 999);
@@ -130,39 +136,32 @@ export default function NewsList() {
       <View style={[styles.filterBar, isWide && styles.filterBarWide]}>
         <View style={styles.filterField}>
           <Text style={styles.filterLabel}>Search</Text>
-          {Platform.OS === 'web' ? (
-            <input
-              value={keyword}
-              onChange={(e) => setKeyword((e.target as HTMLInputElement).value)}
-              onKeyDown={(e) => {
-                if ((e as any).key === 'Enter') setAppliedKeyword(keyword);
-              }}
-              placeholder="Keyword in title or post"
-              style={webInput as any}
-            />
-          ) : null}
+          <TextInput
+            value={keyword}
+            onChangeText={setKeyword}
+            onSubmitEditing={() => setAppliedKeyword(keyword)}
+            placeholder="Keyword in title or post"
+            placeholderTextColor="#94a3b8"
+            style={styles.searchInput}
+          />
         </View>
         <View style={styles.filterField}>
           <Text style={styles.filterLabel}>From</Text>
-          {Platform.OS === 'web' ? (
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom((e.target as HTMLInputElement).value)}
-              style={webInput as any}
-            />
-          ) : null}
+          <DateTimeField
+            mode="date"
+            placeholder="Any time"
+            value={dateFrom}
+            onChange={setDateFrom}
+          />
         </View>
         <View style={styles.filterField}>
           <Text style={styles.filterLabel}>To</Text>
-          {Platform.OS === 'web' ? (
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo((e.target as HTMLInputElement).value)}
-              style={webInput as any}
-            />
-          ) : null}
+          <DateTimeField
+            mode="date"
+            placeholder="Any time"
+            value={dateTo}
+            onChange={setDateTo}
+          />
         </View>
         <Pressable
           style={[styles.searchBtn, { backgroundColor: site.theme.accent_color }]}
@@ -176,8 +175,8 @@ export default function NewsList() {
             onPress={() => {
               setKeyword('');
               setAppliedKeyword('');
-              setDateFrom('');
-              setDateTo('');
+              setDateFrom(null);
+              setDateTo(null);
             }}
           >
             <Text style={styles.clearBtnText}>Clear</Text>
@@ -237,18 +236,6 @@ export default function NewsList() {
   );
 }
 
-const webInput = {
-  border: '1px solid #e2e8f0',
-  borderRadius: 10,
-  padding: '9px 12px',
-  fontSize: 14,
-  background: '#fff',
-  color: '#0F172A',
-  width: '100%',
-  boxSizing: 'border-box',
-  fontFamily: 'inherit',
-};
-
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 20, paddingVertical: 24, gap: 24 },
   pageWide: {
@@ -275,6 +262,16 @@ const styles = StyleSheet.create({
   filterBarWide: { flexDirection: 'row', alignItems: 'flex-end' },
   filterField: { flex: 1, gap: 4, minWidth: 140 },
   filterLabel: { fontSize: 12, fontWeight: '700', color: '#475569' },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    color: '#0F172A',
+  },
   searchBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 10 },
   searchBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   clearBtn: {

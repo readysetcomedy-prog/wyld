@@ -11,6 +11,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { Select } from '@/components/Select';
 
 export type ViewMode = 'owner' | 'member' | 'admin';
 
@@ -244,21 +245,16 @@ export function MessagesView({
       <View style={styles.sidebar}>
         <Text style={styles.sidebarTitle}>Conversations</Text>
         {mode === 'owner' && locations.length > 0 ? (
-          <select
+          <Select
+            ariaLabel="Filter by location"
+            fullWidth
             value={locFilter ?? 'all'}
-            onChange={(e) => {
-              const v = (e.target as HTMLSelectElement).value;
-              setLocFilter(v === 'all' ? null : v);
-            }}
-            style={locSelectStyle}
-          >
-            <option value="all">All locations</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label || 'Location'}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setLocFilter(v === 'all' ? null : v)}
+            options={[
+              { value: 'all', label: 'All locations' },
+              ...locations.map((l) => ({ value: l.id, label: l.label || 'Location' })),
+            ]}
+          />
         ) : null}
         {mode === 'member' && !threads.some((t) => t.kind === 'admin_user') ? (
           <Pressable
@@ -387,19 +383,6 @@ function isFromMe(m: Message, mode: ViewMode, myId: string | null) {
   if (mode === 'admin') return m.sender_is_admin;
   return m.sender_user_id === myId;
 }
-
-const locSelectStyle: any = {
-  border: `1px solid ${theme.colors.border}`,
-  borderRadius: 8,
-  padding: '8px 10px',
-  fontSize: 13,
-  fontWeight: 600,
-  background: '#fff',
-  color: theme.colors.charcoal,
-  width: '100%',
-  boxSizing: 'border-box',
-  fontFamily: 'inherit',
-};
 
 const styles = StyleSheet.create({
   root: { flexDirection: 'row', gap: 16, minHeight: 500, flex: 1 },
