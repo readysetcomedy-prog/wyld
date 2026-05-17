@@ -129,13 +129,22 @@ export default function OwnerCalendar() {
   const [dayModal, setDayModal] = useState<Date | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const scrollDashboardToTop = useScrollToTop();
+  // Set when the form is opened from the day popup — triggers a scroll once
+  // the popup has closed and the form has mounted.
+  const wantScroll = useRef(false);
 
-  // Bring the editor form into view — it renders near the top of the page.
-  // The real scroller is the owner layout's ScrollView, reached via context.
-  function scrollToForm() {
-    scrollDashboardToTop();
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }
+  // Run the scroll after the render that mounts the form and closes the
+  // day popup, otherwise that layout shift snaps the scroll position back.
+  useEffect(() => {
+    if (form && !dayModal && wantScroll.current) {
+      wantScroll.current = false;
+      const t = setTimeout(() => {
+        scrollDashboardToTop();
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }, 220);
+      return () => clearTimeout(t);
+    }
+  }, [form, dayModal, scrollDashboardToTop]);
 
   const load = useCallback(async () => {
     if (!gymId) return;
@@ -703,8 +712,8 @@ export default function OwnerCalendar() {
                           <Pressable
                             onPress={() => {
                               editEvent(o.event);
+                              wantScroll.current = true;
                               setDayModal(null);
-                              scrollToForm();
                             }}
                             style={styles.editBtn}
                           >
@@ -721,8 +730,8 @@ export default function OwnerCalendar() {
                     onPress={() => {
                       setForm(EMPTY_FORM(dayModal, locFilter));
                       setSelectedDay(dayModal);
+                      wantScroll.current = true;
                       setDayModal(null);
-                      scrollToForm();
                     }}
                   >
                     <Text style={styles.btnText}>+ Add to this day</Text>
