@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   StyleSheet,
   ActivityIndicator,
@@ -64,6 +65,7 @@ export function PublicScheduleSection() {
   const [isMember, setIsMember] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const today = useMemo(() => startOfDay(new Date()), []);
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
@@ -132,6 +134,27 @@ export function PublicScheduleSection() {
     if (!events) return [];
     return expandEvents(events, HORIZON_DAYS);
   }, [events]);
+
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return occurrences.filter((o) => {
+      const dateStr = o.start
+        .toLocaleDateString(undefined, {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+        .toLowerCase();
+      return (
+        o.event.title.toLowerCase().includes(q) ||
+        (o.event.description ?? '').toLowerCase().includes(q) ||
+        o.event.event_type.toLowerCase().includes(q) ||
+        dateStr.includes(q)
+      );
+    });
+  }, [occurrences, search]);
 
   const occByDay = useMemo(() => {
     const m: Record<string, EventOccurrence[]> = {};
@@ -287,14 +310,33 @@ export function PublicScheduleSection() {
     day: 'numeric',
   })}`;
 
-  // Feed: events in the selected week, grouped by day
-  const feedDays = weekDays
-    .map((d) => ({ day: d, occs: occByDay[dateKey(d)] ?? [] }))
-    .filter((x) => x.occs.length > 0);
+  // Feed: search results when searching, otherwise the selected week.
+  const feedDays = (() => {
+    if (searchResults) {
+      const m: Record<string, EventOccurrence[]> = {};
+      searchResults.forEach((o) => {
+        (m[dateKey(o.start)] ??= []).push(o);
+      });
+      return Object.keys(m)
+        .sort()
+        .map((k) => ({ day: new Date(k + 'T00:00:00'), occs: m[k] }));
+    }
+    return weekDays
+      .map((d) => ({ day: d, occs: occByDay[dateKey(d)] ?? [] }))
+      .filter((x) => x.occs.length > 0);
+  })();
 
   return (
     <View style={styles.root}>
       {err ? <Text style={styles.err}>{err}</Text> : null}
+
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search classes, events, or a date…"
+        placeholderTextColor="#94a3b8"
+        style={styles.search}
+      />
 
       {/* Calendar grid */}
       <MonthCalendar
@@ -310,37 +352,46 @@ export function PublicScheduleSection() {
         accent={accent}
       />
 
-      {/* Week heading */}
-      <View style={styles.weekBar}>
-        <Text style={[styles.weekTitle, { color: primary }]}>Week of {weekRange}</Text>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <Pressable
-            onPress={() => setSelectedDay((d) => addDays(d, -7))}
-            style={styles.navBtnSmall}
-          >
-            <Text style={styles.navBtnText}>‹</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setSelectedDay(today);
-              setMonthAnchor(startOfMonth(today));
-            }}
-            style={styles.todayBtn}
-          >
-            <Text style={styles.todayBtnText}>Today</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setSelectedDay((d) => addDays(d, 7))}
-            style={styles.navBtnSmall}
-          >
-            <Text style={styles.navBtnText}>›</Text>
-          </Pressable>
+      {/* Week heading (replaced by a results count while searching) */}
+      {searchResults ? (
+        <Text style={[styles.weekTitle, { color: primary }]}>
+          {searchResults.length} result{searchResults.length === 1 ? '' : 's'} for
+          &ldquo;{search.trim()}&rdquo;
+        </Text>
+      ) : (
+        <View style={styles.weekBar}>
+          <Text style={[styles.weekTitle, { color: primary }]}>Week of {weekRange}</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <Pressable
+              onPress={() => setSelectedDay((d) => addDays(d, -7))}
+              style={styles.navBtnSmall}
+            >
+              <Text style={styles.navBtnText}>‹</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setSelectedDay(today);
+                setMonthAnchor(startOfMonth(today));
+              }}
+              style={styles.todayBtn}
+            >
+              <Text style={styles.todayBtnText}>Today</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSelectedDay((d) => addDays(d, 7))}
+              style={styles.navBtnSmall}
+            >
+              <Text style={styles.navBtnText}>›</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      )}
 
       {feedDays.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Nothing scheduled this week.</Text>
+          <Text style={styles.emptyText}>
+            {searchResults ? 'No events match your search.' : 'Nothing scheduled this week.'}
+          </Text>
         </View>
       ) : (
         feedDays.map(({ day, occs }) => (
@@ -407,6 +458,16 @@ function labelForType(t: string) {
 const styles = StyleSheet.create({
   root: { gap: 20, maxWidth: 920, width: '100%', alignSelf: 'stretch' },
   err: { color: '#DC2626', fontSize: 13 },
+  search: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    color: '#0F172A',
+  },
 
   modalBackdrop: {
     flex: 1,

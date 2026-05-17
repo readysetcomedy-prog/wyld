@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Slot, Redirect, usePathname, useRouter } from 'expo-router';
 import {
   View,
@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { supabase } from '@/lib/supabase';
+import { ScrollToTopContext } from '@/lib/scrollContext';
 
 type ModuleKey =
   | 'bookings_enabled'
@@ -53,6 +54,10 @@ export default function OwnerLayout() {
   const pathname = usePathname();
   const router = useRouter();
   const [modules, setModules] = useState<Record<string, boolean> | null>(null);
+  const contentScrollRef = useRef<ScrollView>(null);
+  const scrollToTop = useCallback(() => {
+    contentScrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
 
   useEffect(() => {
     if (!profile?.gym_id) {
@@ -145,8 +150,14 @@ export default function OwnerLayout() {
         ) : null}
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        <Slot />
+      <ScrollView
+        ref={contentScrollRef}
+        style={styles.content}
+        contentContainerStyle={styles.contentInner}
+      >
+        <ScrollToTopContext.Provider value={scrollToTop}>
+          <Slot />
+        </ScrollToTopContext.Provider>
         {!isWide ? (
           <Pressable
             onPress={async () => {
