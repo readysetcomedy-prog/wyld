@@ -116,9 +116,8 @@ export default function SiteLayout() {
         supabase.from('gym_site_settings').select('*').eq('gym_id', gym.id).maybeSingle(),
         supabase
           .from('gym_locations')
-          .select('id, label, slug, is_primary, address_line1, address_line2, city, state, zip, display_order')
+          .select('*')
           .eq('gym_id', gym.id)
-          .eq('is_paused', false)
           .order('display_order'),
       ]);
       if (cancelled) return;
@@ -128,7 +127,12 @@ export default function SiteLayout() {
         return;
       }
 
-      const locations: GymSiteLocation[] = (locationRows ?? []) as any;
+      // Paused locations are hidden from the public site. Filter in JS (not
+      // the query) so a database that hasn't run the is_paused migration yet
+      // — where the column is simply absent — still loads instead of erroring.
+      const locations: GymSiteLocation[] = ((locationRows ?? []) as any[]).filter(
+        (l) => !l.is_paused
+      );
       const multiLocationEnabled = !!(modules as any)?.multi_location_enabled;
 
       // Resolve the current location strictly from the URL. No auto-fallback
