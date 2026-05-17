@@ -56,7 +56,7 @@ export default function OwnerLayout() {
   const [modules, setModules] = useState<Record<string, boolean> | null>(null);
   const contentScrollRef = useRef<ScrollView>(null);
   const scrollToTop = useCallback(() => {
-    contentScrollRef.current?.scrollTo({ y: 0, animated: true });
+    contentScrollRef.current?.scrollTo({ y: 0, animated: false });
   }, []);
 
   useEffect(() => {

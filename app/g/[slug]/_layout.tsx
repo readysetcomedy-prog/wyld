@@ -118,6 +118,7 @@ export default function SiteLayout() {
           .from('gym_locations')
           .select('id, label, slug, is_primary, address_line1, address_line2, city, state, zip, display_order')
           .eq('gym_id', gym.id)
+          .eq('is_paused', false)
           .order('display_order'),
       ]);
       if (cancelled) return;

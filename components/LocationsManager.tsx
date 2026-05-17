@@ -27,6 +27,7 @@ export type GymLocation = {
   label: string | null;
   slug: string | null;
   is_primary: boolean;
+  is_paused: boolean;
   address_line1: string | null;
   address_line2: string | null;
   city: string | null;
@@ -106,6 +107,15 @@ export function LocationsManager({
     if (error) setError(error.message);
   }
 
+  async function togglePause(id: string, paused: boolean) {
+    setLocations(locations.map((l) => (l.id === id ? { ...l, is_paused: paused } : l)));
+    const { error } = await supabase
+      .from('gym_locations')
+      .update({ is_paused: paused })
+      .eq('id', id);
+    if (error) setError(error.message);
+  }
+
   async function deleteLocation(id: string) {
     if (typeof window !== 'undefined' && !window.confirm('Delete this location and all its contacts?')) {
       return;
@@ -168,22 +178,44 @@ export function LocationsManager({
         </Text>
       ) : null}
       {locations.map((loc) => (
-        <View key={loc.id} style={styles.locCard}>
+        <View key={loc.id} style={[styles.locCard, loc.is_paused && styles.locCardPaused]}>
           <View style={styles.locHeader}>
-            <TextInput
-              value={loc.label ?? ''}
-              onChangeText={(v) =>
-                setLocations(locations.map((l) => (l.id === loc.id ? { ...l, label: v } : l)))
-              }
-              onBlur={() => updateLocation(loc.id, { label: loc.label })}
-              placeholder="Location name (e.g. Downtown)"
-              placeholderTextColor="#94a3b8"
-              style={styles.locLabel}
-            />
-            <Pressable onPress={() => deleteLocation(loc.id)} style={styles.deleteBtn}>
-              <Text style={styles.deleteBtnText}>Delete</Text>
-            </Pressable>
+            <View style={styles.locNameWrap}>
+              <TextInput
+                value={loc.label ?? ''}
+                onChangeText={(v) =>
+                  setLocations(locations.map((l) => (l.id === loc.id ? { ...l, label: v } : l)))
+                }
+                onBlur={() => updateLocation(loc.id, { label: loc.label })}
+                placeholder="Location name (e.g. Downtown)"
+                placeholderTextColor="#94a3b8"
+                style={styles.locLabel}
+              />
+              {loc.is_paused ? (
+                <View style={styles.pausedBadge}>
+                  <Text style={styles.pausedBadgeText}>PAUSED</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.locActions}>
+              <Pressable
+                onPress={() => togglePause(loc.id, !loc.is_paused)}
+                style={[styles.pauseBtn, loc.is_paused && styles.pauseBtnActive]}
+              >
+                <Text style={[styles.pauseBtnText, loc.is_paused && styles.pauseBtnTextActive]}>
+                  {loc.is_paused ? 'Resume' : 'Pause'}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => deleteLocation(loc.id)} style={styles.deleteBtn}>
+                <Text style={styles.deleteBtnText}>Delete</Text>
+              </Pressable>
+            </View>
           </View>
+          {loc.is_paused ? (
+            <Text style={styles.pausedHint}>
+              Hidden from your public website. Still shown across your dashboard.
+            </Text>
+          ) : null}
 
           <View style={styles.row}>
             <Cell label="URL slug">
@@ -389,10 +421,46 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: '#fff',
   },
-  locHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  locCardPaused: { backgroundColor: '#f8fafc', borderColor: '#fcd34d' },
+  locHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  locNameWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 180,
+    minWidth: 140,
+  },
+  locActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  pauseBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  pauseBtnActive: { backgroundColor: '#fef3c7', borderColor: '#fcd34d' },
+  pauseBtnText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  pauseBtnTextActive: { color: '#92400e' },
+  pausedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#fef3c7',
+  },
+  pausedBadgeText: { fontSize: 10, fontWeight: '800', color: '#92400e', letterSpacing: 0.6 },
+  pausedHint: { fontSize: 12, color: theme.colors.textSecondary, fontStyle: 'italic' },
   locLabel: {
     flexGrow: 1,
+    flexShrink: 1,
     flexBasis: 0,
+    minWidth: 100,
     fontSize: 17,
     fontWeight: '700',
     color: theme.colors.charcoal,

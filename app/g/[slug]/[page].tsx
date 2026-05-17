@@ -6,6 +6,7 @@ import { FaqAccordion } from '@/components/FaqAccordion';
 import { PublicContactSection } from '@/components/PublicContactSection';
 import { PublicScheduleSection } from '@/components/PublicScheduleSection';
 import { PublicStoreSection } from '@/components/PublicStoreSection';
+import { PublicServicesSection } from '@/components/PublicServicesSection';
 import { StyledBlock, BlockStyle } from '@/components/StyledBlock';
 
 const VALID_PAGES = ['about', 'services', 'contact', 'news', 'faq', 'schedule', 'store'] as const;
@@ -112,14 +113,7 @@ export default function Page() {
         <Text style={styles.dim}>This page is being built. Check back soon.</Text>
       ) : null}
 
-      {key === 'services' ? (
-        <View style={styles.dataNote}>
-          <Text style={styles.dataNoteText}>
-            Memberships and pricing will appear here once {site.gym.name} sets them up in
-            their Offerings tab.
-          </Text>
-        </View>
-      ) : null}
+      {key === 'services' ? <PublicServicesSection /> : null}
 
       {key === 'schedule' ? <PublicScheduleSection /> : null}
       {key === 'store' ? <PublicStoreSection /> : null}

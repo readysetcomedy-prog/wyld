@@ -134,16 +134,18 @@ export default function OwnerCalendar() {
   const wantScroll = useRef(false);
 
   // Run the scroll after the render that mounts the form and closes the
-  // day popup, otherwise that layout shift snaps the scroll position back.
+  // day popup. Both the popup closing and the (tall) form mounting shift
+  // layout, so a single scroll can land short of the top — re-snap a few
+  // times as the layout settles.
   useEffect(() => {
-    if (form && !dayModal && wantScroll.current) {
-      wantScroll.current = false;
-      const t = setTimeout(() => {
-        scrollDashboardToTop();
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-      }, 220);
-      return () => clearTimeout(t);
-    }
+    if (!form || dayModal || !wantScroll.current) return;
+    wantScroll.current = false;
+    const snap = () => {
+      scrollDashboardToTop();
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    };
+    const timers = [0, 90, 220, 450].map((d) => setTimeout(snap, d));
+    return () => timers.forEach(clearTimeout);
   }, [form, dayModal, scrollDashboardToTop]);
 
   const load = useCallback(async () => {
