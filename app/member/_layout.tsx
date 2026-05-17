@@ -16,6 +16,7 @@ const TABS = [
   { label: 'My gyms', href: '/member' },
   { label: 'Find a gym', href: '/member/find' },
   { label: 'Messages', href: '/member/messages' },
+  { label: 'Waivers', href: '/member/waivers' },
 ];
 
 export default function MemberLayout() {

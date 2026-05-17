@@ -41,7 +41,7 @@ const TABS: Tab[] = [
   { label: 'Marketing', href: '/owner/marketing', gated: 'marketing_enabled' },
   { label: 'Analytics & Reporting', href: '/owner/analytics', gated: 'analytics_enabled' },
   { label: 'Door Management', href: '/owner/door', gated: 'door_enabled' },
-  { label: 'Offerings', href: '/owner/offerings', gated: 'offerings_enabled' },
+  { label: 'Offerings', href: '/owner/offerings' },
   { label: 'Settings', href: '/owner/settings' },
 ];
 
