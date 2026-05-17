@@ -55,6 +55,7 @@ export function PublicContactSection() {
           .from('gym_locations')
           .select('*')
           .eq('gym_id', site.gym.id)
+          .eq('is_paused', false)
           .order('display_order'),
         supabase.from('gym_location_contacts').select('*').order('display_order'),
       ]);
