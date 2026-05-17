@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Switch,
   ScrollView,
   Modal,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
@@ -123,6 +124,16 @@ export default function OwnerCalendar() {
   const [monthAnchor, setMonthAnchor] = useState<Date>(startOfMonth(today));
   const [selectedDay, setSelectedDay] = useState<Date>(today);
   const [dayModal, setDayModal] = useState<Date | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Bring the editor form into view — it renders near the top of the page,
+  // so opening it from the day popup would otherwise be off-screen.
+  function scrollToForm() {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
 
   const load = useCallback(async () => {
     if (!gymId) return;
@@ -297,7 +308,7 @@ export default function OwnerCalendar() {
     .filter((x) => x.occs.length > 0);
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.root}>
       <View>
         <Text style={styles.title}>Calendar</Text>
         <Text style={styles.sub}>
@@ -590,6 +601,7 @@ export default function OwnerCalendar() {
                             onPress={() => {
                               editEvent(o.event);
                               setDayModal(null);
+                              scrollToForm();
                             }}
                             style={styles.editBtn}
                           >
@@ -607,6 +619,7 @@ export default function OwnerCalendar() {
                       setForm(EMPTY_FORM(dayModal));
                       setSelectedDay(dayModal);
                       setDayModal(null);
+                      scrollToForm();
                     }}
                   >
                     <Text style={styles.btnText}>+ Add to this day</Text>

@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { pickAndUploadImages } from '@/components/ImageUpload';
+import { Select } from '@/components/Select';
 
 type Product = {
   id: string;
@@ -351,27 +352,18 @@ export default function OwnerStore() {
 
       {/* Location filter */}
       {multiLocation && locations.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locRow}>
-          <Pressable
-            onPress={() => setLocFilter(null)}
-            style={[styles.locChip, locFilter === null && styles.locChipActive]}
-          >
-            <Text style={[styles.locChipText, locFilter === null && styles.locChipTextActive]}>
-              All
-            </Text>
-          </Pressable>
-          {locations.map((l) => (
-            <Pressable
-              key={l.id}
-              onPress={() => setLocFilter(l.id)}
-              style={[styles.locChip, locFilter === l.id && styles.locChipActive]}
-            >
-              <Text style={[styles.locChipText, locFilter === l.id && styles.locChipTextActive]}>
-                {l.label || 'Location'}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <View style={styles.filterField}>
+          <Text style={styles.label}>Location</Text>
+          <Select
+            ariaLabel="Filter by location"
+            value={locFilter ?? 'all'}
+            onChange={(v) => setLocFilter(v === 'all' ? null : v)}
+            options={[
+              { value: 'all', label: 'All locations' },
+              ...locations.map((l) => ({ value: l.id, label: l.label || 'Location' })),
+            ]}
+          />
+        </View>
       ) : null}
 
       <TextInput
@@ -493,37 +485,21 @@ export default function OwnerStore() {
               {multiLocation && locations.length > 0 ? (
                 <>
                   <Text style={styles.label}>Sells at</Text>
-                  <View style={styles.pillRow}>
-                    <Pressable
-                      onPress={() => setForm({ ...form, location_id: null })}
-                      style={[styles.selPill, form.location_id === null && styles.selPillActive]}
-                    >
-                      <Text
-                        style={[
-                          styles.selPillText,
-                          form.location_id === null && styles.selPillTextActive,
-                        ]}
-                      >
-                        All locations (shared)
-                      </Text>
-                    </Pressable>
-                    {locations.map((l) => (
-                      <Pressable
-                        key={l.id}
-                        onPress={() => setForm({ ...form, location_id: l.id })}
-                        style={[styles.selPill, form.location_id === l.id && styles.selPillActive]}
-                      >
-                        <Text
-                          style={[
-                            styles.selPillText,
-                            form.location_id === l.id && styles.selPillTextActive,
-                          ]}
-                        >
-                          {l.label || 'Location'}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <Select
+                    ariaLabel="Sells at location"
+                    value={form.location_id ?? 'shared'}
+                    onChange={(v) =>
+                      setForm({ ...form, location_id: v === 'shared' ? null : v })
+                    }
+                    options={[
+                      { value: 'shared', label: 'All locations (shared)' },
+                      ...locations.map((l) => ({
+                        value: l.id,
+                        label: l.label || 'Location',
+                      })),
+                    ]}
+                    fullWidth
+                  />
                 </>
               ) : null}
 
@@ -742,6 +718,7 @@ const styles = StyleSheet.create({
   viewBtnText: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
   viewBtnTextActive: { color: '#fff' },
 
+  filterField: { gap: 4, alignSelf: 'flex-start' },
   locRow: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
   locChip: {
     paddingHorizontal: 12,

@@ -19,6 +19,7 @@ import { ColorPickerField } from '@/components/ColorPicker';
 import { DAY_KEYS, DAY_LABELS, type HoursMap } from '@/components/GymHours';
 import { LocationsManager } from '@/components/LocationsManager';
 import { PRESET_OPTIONS, PresetName } from '@/lib/stylePresets';
+import { Select } from '@/components/Select';
 
 type Theme = {
   gym_id: string;
@@ -423,43 +424,18 @@ export default function Website() {
             them — anything you leave alone still uses the default. Switching locations
             doesn&apos;t erase work you&apos;ve already done.
           </Text>
-          <View style={styles.locPickerRow}>
-            <Pressable
-              style={[
-                styles.locPickerPill,
-                activeLocationId === null && styles.locPickerPillActive,
-              ]}
-              onPress={() => setActiveLocationId(null)}
-            >
-              <Text
-                style={[
-                  styles.locPickerText,
-                  activeLocationId === null && styles.locPickerTextActive,
-                ]}
-              >
-                Default (all locations)
-              </Text>
-            </Pressable>
-            {locations.map((l) => (
-              <Pressable
-                key={l.id}
-                style={[
-                  styles.locPickerPill,
-                  activeLocationId === l.id && styles.locPickerPillActive,
-                ]}
-                onPress={() => setActiveLocationId(l.id)}
-              >
-                <Text
-                  style={[
-                    styles.locPickerText,
-                    activeLocationId === l.id && styles.locPickerTextActive,
-                  ]}
-                >
-                  {l.label || 'Untitled location'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <Select
+            ariaLabel="Editing location"
+            value={activeLocationId ?? 'default'}
+            onChange={(v) => setActiveLocationId(v === 'default' ? null : v)}
+            options={[
+              { value: 'default', label: 'Default — all locations' },
+              ...locations.map((l) => ({
+                value: l.id,
+                label: l.label || 'Untitled location',
+              })),
+            ]}
+          />
         </View>
       ) : null}
 
