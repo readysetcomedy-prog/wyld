@@ -23,6 +23,7 @@ type Offering = {
   featured: boolean;
   perks: string[] | null;
   term_options: TermOption[] | null;
+  location_id: string | null;
 };
 type Pkg = {
   id: string;
@@ -48,7 +49,7 @@ export function PublicServicesSection() {
         supabase
           .from('gym_offerings')
           .select(
-            'id, name, description, price_cents, billing_period, public_blurb, featured, perks, term_options'
+            'id, name, description, price_cents, billing_period, public_blurb, featured, perks, term_options, location_id'
           )
           .eq('gym_id', site.gym.id)
           .eq('published', true)
@@ -80,7 +81,15 @@ export function PublicServicesSection() {
   const accent = site.theme.accent_color;
 
   if (offerings === null) return <ActivityIndicator color={primary} />;
-  if (offerings.length === 0 && packages.length === 0) {
+
+  // Show shared offerings (location_id null) plus the current location's own.
+  const visibleOfferings = offerings.filter(
+    (o) =>
+      o.location_id == null ||
+      (site.currentLocation != null && o.location_id === site.currentLocation.id)
+  );
+
+  if (visibleOfferings.length === 0 && packages.length === 0) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyText}>
@@ -90,6 +99,7 @@ export function PublicServicesSection() {
     );
   }
 
+  // Full map (all locations) so packages can resolve every bundled offering.
   const offeringById: Record<string, Offering> = {};
   offerings.forEach((o) => {
     offeringById[o.id] = o;
@@ -157,13 +167,13 @@ export function PublicServicesSection() {
         </View>
       ) : null}
 
-      {offerings.length > 0 ? (
+      {visibleOfferings.length > 0 ? (
         <View style={styles.group}>
           {packages.length > 0 ? (
             <Text style={[styles.groupTitle, { color: primary }]}>Memberships &amp; passes</Text>
           ) : null}
           <View style={styles.grid}>
-            {offerings.map((o) => (
+            {visibleOfferings.map((o) => (
               <View
                 key={o.id}
                 style={[styles.card, o.featured && { borderColor: accent, borderWidth: 2 }]}
