@@ -7,18 +7,27 @@ import { supabase } from './supabase';
 
 export type Inclusion = 'paid' | 'included' | 'included_with';
 
+// A rule for 'included_with': the item is free when the gym has ANY of
+// `keys` (mode 'any') or ALL of them (mode 'all').
+export type IncludedWith = { mode: 'any' | 'all'; keys: string[] };
+
 export type ItemPricing = {
   price_cents: number;
   inclusion: Inclusion;
-  // When inclusion is 'included_with', the module key that makes this free.
-  included_with: string | null;
+  // When inclusion is 'included_with', the rule that makes this free.
+  included_with: IncludedWith | null;
   // When module `when` is on, this item gets `percent` off. Largest wins.
   discounts: { when: string; percent: number }[];
 };
 
-// A count-based pricing tier. A gym pays `per_unit_cents` × count, where the
-// rate is taken from the highest tier whose `from_count` is <= the count.
-export type Tier = { from_count: number; per_unit_cents: number };
+// A count-based pricing tier: an inclusive count range with a per-unit rate.
+// A gym pays `per_unit_cents` × count when its count falls in the range.
+// `to_count` null means the range has no upper limit.
+export type Tier = {
+  from_count: number;
+  to_count: number | null;
+  per_unit_cents: number;
+};
 
 export type PricingModel = {
   items: Record<string, ItemPricing>;
@@ -79,13 +88,15 @@ export async function fetchPricingModel(): Promise<PricingModel> {
   return normalizeModel(data?.model);
 }
 
-// The tier a count falls into: the one with the highest from_count <= count.
+// The tier whose inclusive count range contains the count. When ranges
+// overlap, the one with the lowest start wins.
 export function tierFor(tiers: Tier[], count: number): Tier | null {
-  let pick: Tier | null = null;
   for (const t of [...tiers].sort((a, b) => a.from_count - b.from_count)) {
-    if (count >= t.from_count) pick = t;
+    if (count >= t.from_count && (t.to_count == null || count <= t.to_count)) {
+      return t;
+    }
   }
-  return pick;
+  return null;
 }
 
 export type CostLine = {
@@ -120,20 +131,28 @@ export function computeCost(
       lines.push({ key: f.key, label: f.label, baseCents: 0, discountPct: 0, cents: 0, note: 'Included' });
       continue;
     }
-    if (
-      item.inclusion === 'included_with' &&
-      item.included_with &&
-      active.has(item.included_with)
-    ) {
-      lines.push({
-        key: f.key,
-        label: f.label,
-        baseCents: 0,
-        discountPct: 0,
-        cents: 0,
-        note: `Included with ${FEATURE_LABEL[item.included_with] ?? item.included_with}`,
-      });
-      continue;
+    if (item.inclusion === 'included_with') {
+      const iw = item.included_with;
+      const free =
+        !!iw &&
+        iw.keys.length > 0 &&
+        (iw.mode === 'all'
+          ? iw.keys.every((k) => active.has(k))
+          : iw.keys.some((k) => active.has(k)));
+      if (free && iw) {
+        const names = iw.keys
+          .map((k) => FEATURE_LABEL[k] ?? k)
+          .join(iw.mode === 'all' ? ' + ' : ' or ');
+        lines.push({
+          key: f.key,
+          label: f.label,
+          baseCents: 0,
+          discountPct: 0,
+          cents: 0,
+          note: `Included with ${names}`,
+        });
+        continue;
+      }
     }
 
     // Paid (or included_with whose condition isn't met). Apply the single
