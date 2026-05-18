@@ -1,31 +1,35 @@
-import { Link } from 'expo-router';
 import {
   View,
   Text,
-  Pressable,
   StyleSheet,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
-import { theme, SITE_LOGO_URL } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { Nav } from '@/components/Nav';
+import { QuoteButton } from '@/components/QuoteButton';
 
 export default function Portfolio() {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      <Nav logoUrl={SITE_LOGO_URL} accent={theme.colors.siteRed} />
+      <Nav />
 
-      <View style={styles.body}>
-        <Text style={styles.eyebrow}>WyLD Site</Text>
-        <Text style={styles.title}>Website Portfolio</Text>
+      <View style={[styles.body, isWide && styles.bodyWide]}>
+        <Text style={styles.eyebrow}>OUR WORK</Text>
+        <Text style={[styles.title, isWide && styles.titleWide]}>Portfolio</Text>
         <Text style={styles.bodyText}>
-          Coming soon — we're putting the
-          first set together now. 
+          We&apos;re putting together a showcase of gyms running on WyLD — their websites,
+          booking pages, and storefronts. Check back soon.
         </Text>
-        <Link href="/site" asChild>
-          <Pressable style={StyleSheet.flatten([styles.cta, styles.ctaPrimary])}>
-            <Text style={styles.ctaPrimaryText}>About WyLD Site</Text>
-          </Pressable>
-        </Link>
+        <Text style={styles.bodyText}>
+          Want yours to be one of them? Get a quote and we&apos;ll get you set up.
+        </Text>
+        <View style={styles.ctaRow}>
+          <QuoteButton label="Get a Quote" variant="solid" big />
+        </View>
       </View>
 
       <Text style={styles.footer}>© {new Date().getFullYear()} WyLD Inc</Text>
@@ -42,19 +46,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.md,
   },
+  bodyWide: {
+    maxWidth: 720,
+    width: '100%',
+    alignSelf: 'center',
+  },
   eyebrow: {
-    color: theme.colors.siteRed,
+    color: theme.colors.wyldPurple,
     fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+    fontSize: 12,
+    letterSpacing: 1.5,
   },
   title: {
     fontSize: 40,
-    fontWeight: '800',
+    fontWeight: '900',
     color: theme.colors.charcoal,
     textAlign: 'center',
   },
+  titleWide: { fontSize: 52 },
   bodyText: {
     fontSize: 16,
     color: theme.colors.textSecondary,
@@ -62,19 +71,7 @@ const styles = StyleSheet.create({
     maxWidth: 560,
     lineHeight: 24,
   },
-  cta: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginTop: theme.spacing.md,
-  },
-  ctaPrimary: {
-    backgroundColor: theme.colors.siteRed,
-    borderColor: theme.colors.siteRed,
-  },
-  ctaPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  ctaRow: { marginTop: theme.spacing.md, flexDirection: 'row' },
   footer: {
     textAlign: 'center',
     color: theme.colors.textSecondary,

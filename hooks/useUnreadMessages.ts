@@ -25,7 +25,7 @@ export function useUnreadMessages(mode: Mode, gymId?: string | null, userId?: st
         }
         q = q.eq('user_id', userId);
       } else {
-        q = q.eq('kind', 'admin_user');
+        q = q.or('kind.eq.admin_user,and(kind.eq.contact_form,gym_id.is.null)');
       }
       const { data } = await q;
       if (cancelled) return;

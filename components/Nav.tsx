@@ -9,29 +9,19 @@ import {
   Modal,
   useWindowDimensions,
 } from 'react-native';
-import { theme, LOGO_URL } from '@/lib/theme';
+import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
+import { QuoteButton } from '@/components/QuoteButton';
 
 type Item = { label: string; href: string };
 
 const MENU_ITEMS: Item[] = [
   { label: 'Home', href: '/' },
-  { label: 'About WyLD Inc', href: '/about' },
-  { label: 'WyLD Pass', href: '/pass' },
-  { label: 'WyLD Site', href: '/site' },
-  { label: 'Pricing', href: '/pricing' },
+  { label: 'About', href: '/about' },
   { label: 'Portfolio', href: '/portfolio' },
   { label: 'Sign in', href: '/sign-in' },
 ];
 
-export function Nav({
-  logoUrl = LOGO_URL,
-  secondaryLogoUrl,
-  accent = theme.colors.teal,
-}: {
-  logoUrl?: string;
-  secondaryLogoUrl?: string;
-  accent?: string;
-}) {
+export function Nav({ logoUrl = WYLD_INC_LOGO_URL }: { logoUrl?: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -51,39 +41,34 @@ export function Nav({
             style={isWide ? styles.logo : styles.logoMobile}
             resizeMode="contain"
           />
-          {secondaryLogoUrl ? (
-            <>
-              <Text style={isWide ? styles.brandPlus : styles.brandPlusMobile}>+</Text>
-              <Image
-                source={{ uri: secondaryLogoUrl }}
-                style={isWide ? styles.logo : styles.logoMobile}
-                resizeMode="contain"
-              />
-            </>
-          ) : null}
         </Pressable>
       </Link>
-      <View style={styles.right}>
-        <Link href="/sign-up" asChild>
+
+      {isWide ? (
+        <View style={styles.rightWide}>
+          {MENU_ITEMS.map((item) => (
+            <Link key={item.label} href={item.href as never} asChild>
+              <Pressable>
+                <Text style={styles.linkText}>{item.label}</Text>
+              </Pressable>
+            </Link>
+          ))}
+          <QuoteButton label="Get a Quote" variant="solid" />
+        </View>
+      ) : (
+        <View style={styles.right}>
+          <QuoteButton label="Get a Quote" variant="solid" />
           <Pressable
-            style={StyleSheet.flatten([
-              styles.cta,
-              { backgroundColor: accent, borderColor: accent },
-            ])}
+            style={styles.menuBtn}
+            onPress={() => setOpen(true)}
+            accessibilityLabel="Open menu"
           >
-            <Text style={styles.ctaText}>Get started</Text>
+            <View style={styles.menuLine} />
+            <View style={styles.menuLine} />
+            <View style={styles.menuLine} />
           </Pressable>
-        </Link>
-        <Pressable
-          style={styles.menuBtn}
-          onPress={() => setOpen(true)}
-          accessibilityLabel="Open menu"
-        >
-          <View style={styles.menuLine} />
-          <View style={styles.menuLine} />
-          <View style={styles.menuLine} />
-        </Pressable>
-      </View>
+        </View>
+      )}
 
       <Modal
         visible={open}
@@ -92,7 +77,7 @@ export function Nav({
         animationType="fade"
       >
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-        <View style={[styles.panel, isWide && styles.panelWide]}>
+        <View style={styles.panel}>
           <View style={styles.panelHeader}>
             <Image source={{ uri: logoUrl }} style={styles.panelLogo} resizeMode="contain" />
             <Pressable
@@ -104,20 +89,10 @@ export function Nav({
             </Pressable>
           </View>
           {MENU_ITEMS.map((item) => (
-            <Pressable
-              key={item.label}
-              style={styles.item}
-              onPress={() => go(item.href)}
-            >
+            <Pressable key={item.label} style={styles.item} onPress={() => go(item.href)}>
               <Text style={styles.itemText}>{item.label}</Text>
             </Pressable>
           ))}
-          <Pressable
-            style={[styles.item, { backgroundColor: accent, borderColor: accent }]}
-            onPress={() => go('/sign-up')}
-          >
-            <Text style={[styles.itemText, styles.itemCtaText]}>Get started</Text>
-          </Pressable>
         </View>
       </Modal>
     </View>
@@ -139,19 +114,12 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
-  logo: { width: 96, height: 96 },
-  logoMobile: { width: 56, height: 56 },
-  brandPlus: { fontSize: 24, fontWeight: '800', color: theme.colors.textSecondary },
-  brandPlusMobile: { fontSize: 16, fontWeight: '800', color: theme.colors.textSecondary },
+  brand: { flexDirection: 'row', alignItems: 'center' },
+  logo: { width: 132, height: 56 },
+  logoMobile: { width: 96, height: 44 },
   right: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
-  cta: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-  },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  rightWide: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg },
+  linkText: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
   menuBtn: {
     width: 40,
     height: 40,
@@ -191,23 +159,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: -4, height: 0 },
     shadowRadius: 16,
   },
-  panelWide: { width: 360 },
   panelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: theme.spacing.md,
   },
-  panelLogo: { width: 64, height: 64 },
+  panelLogo: { width: 110, height: 48 },
   closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   closeIcon: { fontSize: 28, color: theme.colors.charcoal, lineHeight: 28 },
   item: {
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
     borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
   itemText: { fontSize: 16, fontWeight: '700', color: theme.colors.charcoal },
-  itemCtaText: { color: '#fff' },
 });
