@@ -12,8 +12,8 @@ export function AnimatedPressable({
   children,
   style,
   onPress,
-  hoverScale = 1.04,
-  pressScale = 0.96,
+  hoverScale = 1.08,
+  pressScale = 0.95,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
