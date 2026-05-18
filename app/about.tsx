@@ -67,7 +67,7 @@ export default function About() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.offWhite },
   container: { paddingBottom: theme.spacing.xxl },
 
   hero: {
