@@ -15,6 +15,7 @@ import { CostBreakdownView } from '@/components/CostBreakdown';
 import {
   FEATURES,
   Inclusion,
+  IncludedWith,
   ItemPricing,
   PricingModel,
   Tier,
@@ -26,10 +27,10 @@ import {
 type ItemForm = {
   price: string;
   inclusion: Inclusion;
-  included_with: string | null;
+  included_with: IncludedWith;
   discounts: { when: string; percent: string }[];
 };
-type TierForm = { from_count: string; per_unit: string };
+type TierForm = { from_count: string; to_count: string; per_unit: string };
 type Form = {
   items: Record<string, ItemForm>;
   location_tiers: TierForm[];
@@ -51,7 +52,22 @@ const cleanNum = (s: string) => s.replace(/[^0-9.]/g, '');
 const cleanInt = (s: string) => s.replace(/[^0-9]/g, '');
 
 function emptyItemForm(): ItemForm {
-  return { price: '', inclusion: 'included', included_with: null, discounts: [] };
+  return {
+    price: '',
+    inclusion: 'included',
+    included_with: { mode: 'any', keys: [] },
+    discounts: [],
+  };
+}
+
+// Tolerate older saved shapes (a bare string, or a missing rule).
+function normIncludedWith(raw: any): IncludedWith {
+  if (!raw) return { mode: 'any', keys: [] };
+  if (typeof raw === 'string') return { mode: 'any', keys: [raw] };
+  return {
+    mode: raw.mode === 'all' ? 'all' : 'any',
+    keys: Array.isArray(raw.keys) ? raw.keys : [],
+  };
 }
 
 function formFromModel(m: PricingModel): Form {
@@ -62,7 +78,7 @@ function formFromModel(m: PricingModel): Form {
       ? {
           price: centsToStr(it.price_cents ?? 0),
           inclusion: it.inclusion ?? 'included',
-          included_with: it.included_with ?? null,
+          included_with: normIncludedWith(it.included_with),
           discounts: (it.discounts ?? []).map((d) => ({
             when: d.when,
             percent: String(d.percent),
@@ -72,6 +88,7 @@ function formFromModel(m: PricingModel): Form {
   }
   const tierForm = (t: Tier): TierForm => ({
     from_count: String(t.from_count),
+    to_count: t.to_count != null ? String(t.to_count) : '',
     per_unit: centsToStr(t.per_unit_cents ?? 0),
   });
   return {
@@ -88,16 +105,23 @@ function modelFromForm(form: Form): PricingModel {
     items[f.key] = {
       price_cents: dollarsToCents(it.price),
       inclusion: it.inclusion,
-      included_with: it.inclusion === 'included_with' ? it.included_with : null,
+      included_with:
+        it.inclusion === 'included_with'
+          ? { mode: it.included_with.mode, keys: it.included_with.keys.filter(Boolean) }
+          : null,
       discounts: it.discounts
         .filter((d) => d.when && Number(d.percent) > 0)
         .map((d) => ({ when: d.when, percent: Math.min(100, Number(d.percent)) })),
     };
   }
-  const toTier = (t: TierForm): Tier => ({
-    from_count: Math.max(1, parseInt(t.from_count || '1', 10) || 1),
-    per_unit_cents: dollarsToCents(t.per_unit),
-  });
+  const toTier = (t: TierForm): Tier => {
+    const to = parseInt(t.to_count, 10);
+    return {
+      from_count: Math.max(1, parseInt(t.from_count || '1', 10) || 1),
+      to_count: Number.isFinite(to) && to > 0 ? to : null,
+      per_unit_cents: dollarsToCents(t.per_unit),
+    };
+  };
   return {
     items,
     location_tiers: form.location_tiers.map(toTier),
@@ -219,9 +243,9 @@ export default function AdminPricing() {
 
           <Text style={styles.sectionHeading}>Location tiers</Text>
           <Text style={styles.sectionHint}>
-            Per-location price by count. A gym pays the rate of the highest tier whose
-            &ldquo;from&rdquo; count it reaches, times its location count. Only billed
-            when Multiple locations is on.
+            Set count ranges (from–to) with a per-location price for each. A gym pays
+            that rate times its location count. Leave &ldquo;to&rdquo; blank for no
+            upper limit. Only billed when Multiple locations is on.
           </Text>
           <TierEditor
             tiers={form.location_tiers}
@@ -231,7 +255,8 @@ export default function AdminPricing() {
 
           <Text style={styles.sectionHeading}>Member tiers</Text>
           <Text style={styles.sectionHint}>
-            Per-member price by count, billed for every gym.
+            Set count ranges (from–to) with a per-member price for each, billed for
+            every gym.
           </Text>
           <TierEditor
             tiers={form.member_tiers}
@@ -331,15 +356,72 @@ function ItemCard({
       </View>
 
       {value.inclusion === 'included_with' ? (
-        <View style={styles.fieldRow}>
+        <View style={styles.discountBlock}>
           <Text style={styles.fieldLabel}>Free when the gym has</Text>
-          <Select
-            ariaLabel="Included with module"
-            value={value.included_with ?? ''}
-            placeholder="Pick a module…"
-            onChange={(v) => onChange({ included_with: v })}
-            options={otherOptions}
-          />
+          <View style={styles.pillRow}>
+            {(['any', 'all'] as const).map((m) => (
+              <Pressable
+                key={m}
+                onPress={() =>
+                  onChange({ included_with: { ...value.included_with, mode: m } })
+                }
+                style={[styles.pill, value.included_with.mode === m && styles.pillActive]}
+              >
+                <Text
+                  style={[
+                    styles.pillText,
+                    value.included_with.mode === m && styles.pillTextActive,
+                  ]}
+                >
+                  {m === 'any' ? 'Any of these' : 'All of these'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {value.included_with.keys.map((k, i) => (
+            <View key={i} style={styles.discountRow}>
+              <Select
+                ariaLabel="Included with module"
+                value={k}
+                placeholder="Pick a module…"
+                onChange={(v) =>
+                  onChange({
+                    included_with: {
+                      ...value.included_with,
+                      keys: value.included_with.keys.map((x, j) => (j === i ? v : x)),
+                    },
+                  })
+                }
+                options={otherOptions}
+              />
+              <Pressable
+                onPress={() =>
+                  onChange({
+                    included_with: {
+                      ...value.included_with,
+                      keys: value.included_with.keys.filter((_, j) => j !== i),
+                    },
+                  })
+                }
+                style={styles.iconBtn}
+              >
+                <Text style={styles.iconBtnText}>×</Text>
+              </Pressable>
+            </View>
+          ))}
+          <Pressable
+            style={styles.btnSmall}
+            onPress={() =>
+              onChange({
+                included_with: {
+                  ...value.included_with,
+                  keys: [...value.included_with.keys, ''],
+                },
+              })
+            }
+          >
+            <Text style={styles.btnSmallText}>+ Add module</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -448,7 +530,22 @@ function TierEditor({
               keyboardType="number-pad"
               style={styles.pctInput}
             />
-            <Text style={styles.discountWord}>{unit}s:  $</Text>
+            <Text style={styles.discountWord}>to</Text>
+            <TextInput
+              value={t.to_count}
+              onChangeText={(v) =>
+                onChange(
+                  tiers.map((x, j) =>
+                    j === i ? { ...x, to_count: v.replace(/[^0-9]/g, '') } : x
+                  )
+                )
+              }
+              placeholder="∞"
+              placeholderTextColor="#94a3b8"
+              keyboardType="number-pad"
+              style={styles.pctInput}
+            />
+            <Text style={styles.discountWord}>{unit}s — $</Text>
             <TextInput
               value={t.per_unit}
               onChangeText={(v) =>
@@ -475,7 +572,9 @@ function TierEditor({
       )}
       <Pressable
         style={styles.btnSmall}
-        onPress={() => onChange([...tiers, { from_count: '', per_unit: '' }])}
+        onPress={() =>
+          onChange([...tiers, { from_count: '', to_count: '', per_unit: '' }])
+        }
       >
         <Text style={styles.btnSmallText}>+ Add tier</Text>
       </Pressable>
