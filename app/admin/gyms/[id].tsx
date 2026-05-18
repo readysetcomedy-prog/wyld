@@ -46,7 +46,6 @@ type Modules = {
   faq_enabled: boolean;
   marketing_enabled: boolean;
   multi_location_enabled: boolean;
-  max_locations: number;
 };
 
 type Owner = { id: string; full_name: string | null; email: string };
