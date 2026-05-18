@@ -44,7 +44,6 @@ type Modules = {
   faq_visible: boolean;
   store_visible: boolean;
   multi_location_enabled: boolean;
-  max_locations: number;
 };
 
 type Settings = {
@@ -173,7 +172,7 @@ export default function Website() {
         supabase
           .from('gym_modules')
           .select(
-            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled, max_locations'
+            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled'
           )
           .eq('gym_id', gymId)
           .maybeSingle(),
@@ -849,7 +848,6 @@ export default function Website() {
         <LocationsManager
           gymId={gymId}
           multiLocationEnabled={modules.multi_location_enabled}
-          maxLocations={modules.max_locations}
         />
       </View>
     </View>

@@ -40,11 +40,9 @@ export type GymLocation = {
 export function LocationsManager({
   gymId,
   multiLocationEnabled,
-  maxLocations,
 }: {
   gymId: string;
   multiLocationEnabled: boolean;
-  maxLocations: number;
 }) {
   const router = useRouter();
   const [locations, setLocations] = useState<GymLocation[]>([]);
@@ -364,38 +362,18 @@ export function LocationsManager({
         </View>
       ))}
 
-      {(() => {
-        const effectiveMax = multiLocationEnabled ? Math.max(2, maxLocations) : 1;
-        const count = locations.length;
-        const canAdd = count < effectiveMax;
-        if (canAdd) {
-          return (
-            <Pressable style={styles.btn} onPress={addLocation}>
-              <Text style={styles.btnText}>+ Add location</Text>
-            </Pressable>
-          );
-        }
-        if (!multiLocationEnabled) {
-          return (
-            <Pressable
-              style={styles.upgradeBtn}
-              onPress={() => router.push('/owner/billing' as never)}
-            >
-              <Text style={styles.upgradeBtnText}>Upgrade to add more locations</Text>
-            </Pressable>
-          );
-        }
-        return (
-          <Pressable
-            style={styles.upgradeBtn}
-            onPress={() => router.push('/owner/billing' as never)}
-          >
-            <Text style={styles.upgradeBtnText}>
-              Upgrade to add more locations, or edit/change a current location
-            </Text>
-          </Pressable>
-        );
-      })()}
+      {multiLocationEnabled || locations.length === 0 ? (
+        <Pressable style={styles.btn} onPress={addLocation}>
+          <Text style={styles.btnText}>+ Add location</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={styles.upgradeBtn}
+          onPress={() => router.push('/owner/billing' as never)}
+        >
+          <Text style={styles.upgradeBtnText}>Upgrade to add more locations</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
