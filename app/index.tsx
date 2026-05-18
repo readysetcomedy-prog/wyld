@@ -217,6 +217,7 @@ export default function Home() {
       ref={scrollRef}
       style={styles.root}
       contentContainerStyle={styles.container}
+      stickyHeaderIndices={[0]}
       scrollEventThrottle={16}
       onScroll={Animated.event(
         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
