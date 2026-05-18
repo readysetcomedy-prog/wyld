@@ -1,0 +1,642 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Switch,
+  ActivityIndicator,
+} from 'react-native';
+import { supabase } from '@/lib/supabase';
+import { theme } from '@/lib/theme';
+import { Select } from '@/components/Select';
+import { CostBreakdownView } from '@/components/CostBreakdown';
+import {
+  FEATURES,
+  Inclusion,
+  ItemPricing,
+  PricingModel,
+  Tier,
+  computeCost,
+  fetchPricingModel,
+} from '@/lib/pricingModel';
+
+// Editable (string-backed) mirror of the persisted model.
+type ItemForm = {
+  price: string;
+  inclusion: Inclusion;
+  included_with: string | null;
+  discounts: { when: string; percent: string }[];
+};
+type TierForm = { from_count: string; per_unit: string };
+type Form = {
+  items: Record<string, ItemForm>;
+  location_tiers: TierForm[];
+  member_tiers: TierForm[];
+};
+
+const INCLUSIONS: { value: Inclusion; label: string }[] = [
+  { value: 'paid', label: 'Paid' },
+  { value: 'included', label: 'Included' },
+  { value: 'included_with', label: 'Included with…' },
+];
+
+const centsToStr = (c: number) => (c ? (c / 100).toFixed(2) : '');
+const dollarsToCents = (s: string): number => {
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+};
+const cleanNum = (s: string) => s.replace(/[^0-9.]/g, '');
+const cleanInt = (s: string) => s.replace(/[^0-9]/g, '');
+
+function emptyItemForm(): ItemForm {
+  return { price: '', inclusion: 'included', included_with: null, discounts: [] };
+}
+
+function formFromModel(m: PricingModel): Form {
+  const items: Record<string, ItemForm> = {};
+  for (const f of FEATURES) {
+    const it = m.items[f.key];
+    items[f.key] = it
+      ? {
+          price: centsToStr(it.price_cents ?? 0),
+          inclusion: it.inclusion ?? 'included',
+          included_with: it.included_with ?? null,
+          discounts: (it.discounts ?? []).map((d) => ({
+            when: d.when,
+            percent: String(d.percent),
+          })),
+        }
+      : emptyItemForm();
+  }
+  const tierForm = (t: Tier): TierForm => ({
+    from_count: String(t.from_count),
+    per_unit: centsToStr(t.per_unit_cents ?? 0),
+  });
+  return {
+    items,
+    location_tiers: m.location_tiers.map(tierForm),
+    member_tiers: m.member_tiers.map(tierForm),
+  };
+}
+
+function modelFromForm(form: Form): PricingModel {
+  const items: Record<string, ItemPricing> = {};
+  for (const f of FEATURES) {
+    const it = form.items[f.key] ?? emptyItemForm();
+    items[f.key] = {
+      price_cents: dollarsToCents(it.price),
+      inclusion: it.inclusion,
+      included_with: it.inclusion === 'included_with' ? it.included_with : null,
+      discounts: it.discounts
+        .filter((d) => d.when && Number(d.percent) > 0)
+        .map((d) => ({ when: d.when, percent: Math.min(100, Number(d.percent)) })),
+    };
+  }
+  const toTier = (t: TierForm): Tier => ({
+    from_count: Math.max(1, parseInt(t.from_count || '1', 10) || 1),
+    per_unit_cents: dollarsToCents(t.per_unit),
+  });
+  return {
+    items,
+    location_tiers: form.location_tiers.map(toTier),
+    member_tiers: form.member_tiers.map(toTier),
+  };
+}
+
+export default function AdminPricing() {
+  const [form, setForm] = useState<Form | null>(null);
+  const [view, setView] = useState<'model' | 'calculator'>('model');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Calculator sandbox inputs.
+  const [active, setActive] = useState<Record<string, boolean>>({});
+  const [calcLocations, setCalcLocations] = useState('1');
+  const [calcMembers, setCalcMembers] = useState('0');
+
+  useEffect(() => {
+    (async () => {
+      const m = await fetchPricingModel();
+      setForm(formFromModel(m));
+    })();
+  }, []);
+
+  async function save() {
+    if (!form) return;
+    setSaving(true);
+    setErr(null);
+    setSaved(false);
+    const { error } = await supabase
+      .from('pricing_model')
+      .update({ model: modelFromForm(form) })
+      .eq('id', 1);
+    setSaving(false);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setSaved(true);
+  }
+
+  const breakdown = useMemo(() => {
+    if (!form) return null;
+    const activeSet = new Set(
+      FEATURES.filter((f) => f.key !== 'base' && active[f.key]).map((f) => f.key)
+    );
+    return computeCost(
+      modelFromForm(form),
+      activeSet,
+      parseInt(calcLocations || '0', 10) || 0,
+      parseInt(calcMembers || '0', 10) || 0
+    );
+  }, [form, active, calcLocations, calcMembers]);
+
+  if (!form) return <ActivityIndicator color={theme.colors.wyldPurple} />;
+
+  function setItem(key: string, patch: Partial<ItemForm>) {
+    setForm((f) =>
+      f ? { ...f, items: { ...f.items, [key]: { ...f.items[key], ...patch } } } : f
+    );
+    setSaved(false);
+  }
+  function setTiers(which: 'location_tiers' | 'member_tiers', tiers: TierForm[]) {
+    setForm((f) => (f ? { ...f, [which]: tiers } : f));
+    setSaved(false);
+  }
+
+  return (
+    <View style={styles.container}>
+      <View>
+        <Text style={styles.title}>Pricing Model</Text>
+        <Text style={styles.sub}>
+          Set what every feature costs, then use the calculator to test combinations.
+          Each gym&apos;s monthly cost is computed from this model.
+        </Text>
+      </View>
+
+      {err ? <Text style={styles.err}>{err}</Text> : null}
+
+      <View style={styles.viewToggle}>
+        {(['model', 'calculator'] as const).map((v) => (
+          <Pressable
+            key={v}
+            onPress={() => setView(v)}
+            style={[styles.viewBtn, view === v && styles.viewBtnActive]}
+          >
+            <Text style={[styles.viewBtnText, view === v && styles.viewBtnTextActive]}>
+              {v === 'model' ? 'Model' : 'Calculator'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {view === 'model' ? (
+        <>
+          <View style={styles.saveBar}>
+            <Pressable
+              style={[styles.btn, saving && styles.btnDisabled]}
+              onPress={save}
+              disabled={saving}
+            >
+              <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save model'}</Text>
+            </Pressable>
+            {saved ? <Text style={styles.savedText}>Saved.</Text> : null}
+          </View>
+
+          <Text style={styles.sectionHeading}>Feature pricing</Text>
+          {FEATURES.map((f) => (
+            <ItemCard
+              key={f.key}
+              featureKey={f.key}
+              label={f.label}
+              value={form.items[f.key]}
+              onChange={(patch) => setItem(f.key, patch)}
+            />
+          ))}
+
+          <Text style={styles.sectionHeading}>Location tiers</Text>
+          <Text style={styles.sectionHint}>
+            Per-location price by count. A gym pays the rate of the highest tier whose
+            &ldquo;from&rdquo; count it reaches, times its location count. Only billed
+            when Multiple locations is on.
+          </Text>
+          <TierEditor
+            tiers={form.location_tiers}
+            unit="location"
+            onChange={(t) => setTiers('location_tiers', t)}
+          />
+
+          <Text style={styles.sectionHeading}>Member tiers</Text>
+          <Text style={styles.sectionHint}>
+            Per-member price by count, billed for every gym.
+          </Text>
+          <TierEditor
+            tiers={form.member_tiers}
+            unit="member"
+            onChange={(t) => setTiers('member_tiers', t)}
+          />
+        </>
+      ) : (
+        <View style={styles.calcWrap}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>What the gym has</Text>
+            <Text style={styles.sectionHint}>
+              Base platform is always counted. Toggle the rest and set counts.
+            </Text>
+            {FEATURES.filter((f) => f.key !== 'base').map((f) => (
+              <View key={f.key} style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>{f.label}</Text>
+                <Switch
+                  value={!!active[f.key]}
+                  onValueChange={(v) => setActive((a) => ({ ...a, [f.key]: v }))}
+                  trackColor={{ false: '#cbd5e1', true: theme.colors.wyldPurple }}
+                  thumbColor="#fff"
+                />
+              </View>
+            ))}
+            <View style={styles.countRow}>
+              <Text style={styles.toggleLabel}>Locations</Text>
+              <TextInput
+                value={calcLocations}
+                onChangeText={(v) => setCalcLocations(cleanInt(v))}
+                keyboardType="number-pad"
+                style={styles.numInput}
+              />
+            </View>
+            <View style={styles.countRow}>
+              <Text style={styles.toggleLabel}>Members</Text>
+              <TextInput
+                value={calcMembers}
+                onChangeText={(v) => setCalcMembers(cleanInt(v))}
+                keyboardType="number-pad"
+                style={styles.numInput}
+              />
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Estimated monthly cost</Text>
+            {breakdown ? <CostBreakdownView breakdown={breakdown} /> : null}
+            <Text style={styles.sectionHint}>
+              Reflects unsaved edits in the Model tab — save when the numbers look right.
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ItemCard({
+  featureKey,
+  label,
+  value,
+  onChange,
+}: {
+  featureKey: string;
+  label: string;
+  value: ItemForm;
+  onChange: (patch: Partial<ItemForm>) => void;
+}) {
+  // Other features can be referenced as conditions / "included with" targets.
+  const otherOptions = FEATURES.filter((f) => f.key !== featureKey).map((f) => ({
+    value: f.key,
+    label: f.label,
+  }));
+
+  return (
+    <View style={styles.itemCard}>
+      <Text style={styles.itemName}>{label}</Text>
+
+      <View style={styles.pillRow}>
+        {INCLUSIONS.map((inc) => (
+          <Pressable
+            key={inc.value}
+            onPress={() => onChange({ inclusion: inc.value })}
+            style={[styles.pill, value.inclusion === inc.value && styles.pillActive]}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                value.inclusion === inc.value && styles.pillTextActive,
+              ]}
+            >
+              {inc.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {value.inclusion === 'included_with' ? (
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Free when the gym has</Text>
+          <Select
+            ariaLabel="Included with module"
+            value={value.included_with ?? ''}
+            placeholder="Pick a module…"
+            onChange={(v) => onChange({ included_with: v })}
+            options={otherOptions}
+          />
+        </View>
+      ) : null}
+
+      {value.inclusion !== 'included' ? (
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>
+            Price (USD){value.inclusion === 'included_with' ? ', if not free' : ''}
+          </Text>
+          <TextInput
+            value={value.price}
+            onChangeText={(v) => onChange({ price: cleanNum(v) })}
+            placeholder="0.00"
+            placeholderTextColor="#94a3b8"
+            keyboardType="decimal-pad"
+            style={styles.priceInput}
+          />
+        </View>
+      ) : null}
+
+      {value.inclusion !== 'included' ? (
+        <View style={styles.discountBlock}>
+          <Text style={styles.fieldLabel}>Conditional discounts</Text>
+          {value.discounts.map((d, i) => (
+            <View key={i} style={styles.discountRow}>
+              <Text style={styles.discountWord}>If has</Text>
+              <Select
+                ariaLabel="Discount condition"
+                value={d.when}
+                placeholder="module…"
+                onChange={(v) =>
+                  onChange({
+                    discounts: value.discounts.map((x, j) =>
+                      j === i ? { ...x, when: v } : x
+                    ),
+                  })
+                }
+                options={otherOptions}
+              />
+              <TextInput
+                value={d.percent}
+                onChangeText={(v) =>
+                  onChange({
+                    discounts: value.discounts.map((x, j) =>
+                      j === i ? { ...x, percent: cleanInt(v) } : x
+                    ),
+                  })
+                }
+                placeholder="%"
+                placeholderTextColor="#94a3b8"
+                keyboardType="number-pad"
+                style={styles.pctInput}
+              />
+              <Text style={styles.discountWord}>% off</Text>
+              <Pressable
+                onPress={() =>
+                  onChange({ discounts: value.discounts.filter((_, j) => j !== i) })
+                }
+                style={styles.iconBtn}
+              >
+                <Text style={styles.iconBtnText}>×</Text>
+              </Pressable>
+            </View>
+          ))}
+          <Pressable
+            style={styles.btnSmall}
+            onPress={() =>
+              onChange({ discounts: [...value.discounts, { when: '', percent: '' }] })
+            }
+          >
+            <Text style={styles.btnSmallText}>+ Add discount</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function TierEditor({
+  tiers,
+  unit,
+  onChange,
+}: {
+  tiers: TierForm[];
+  unit: string;
+  onChange: (tiers: TierForm[]) => void;
+}) {
+  return (
+    <View style={styles.itemCard}>
+      {tiers.length === 0 ? (
+        <Text style={styles.dim}>No tiers — this {unit} count is free.</Text>
+      ) : (
+        tiers.map((t, i) => (
+          <View key={i} style={styles.tierRow}>
+            <Text style={styles.discountWord}>From</Text>
+            <TextInput
+              value={t.from_count}
+              onChangeText={(v) =>
+                onChange(
+                  tiers.map((x, j) =>
+                    j === i ? { ...x, from_count: v.replace(/[^0-9]/g, '') } : x
+                  )
+                )
+              }
+              placeholder="1"
+              placeholderTextColor="#94a3b8"
+              keyboardType="number-pad"
+              style={styles.pctInput}
+            />
+            <Text style={styles.discountWord}>{unit}s:  $</Text>
+            <TextInput
+              value={t.per_unit}
+              onChangeText={(v) =>
+                onChange(
+                  tiers.map((x, j) =>
+                    j === i ? { ...x, per_unit: v.replace(/[^0-9.]/g, '') } : x
+                  )
+                )
+              }
+              placeholder="0.00"
+              placeholderTextColor="#94a3b8"
+              keyboardType="decimal-pad"
+              style={styles.priceInput}
+            />
+            <Text style={styles.discountWord}>each</Text>
+            <Pressable
+              onPress={() => onChange(tiers.filter((_, j) => j !== i))}
+              style={styles.iconBtn}
+            >
+              <Text style={styles.iconBtnText}>×</Text>
+            </Pressable>
+          </View>
+        ))
+      )}
+      <Pressable
+        style={styles.btnSmall}
+        onPress={() => onChange([...tiers, { from_count: '', per_unit: '' }])}
+      >
+        <Text style={styles.btnSmallText}>+ Add tier</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: 14, maxWidth: 760 },
+  title: { fontSize: 32, fontWeight: '800', color: theme.colors.charcoal },
+  sub: { fontSize: 14, color: theme.colors.textSecondary, marginTop: 4 },
+  err: { color: theme.colors.danger, fontSize: 13 },
+  dim: { fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' },
+
+  viewToggle: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
+    alignSelf: 'flex-start',
+  },
+  viewBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: '#fff' },
+  viewBtnActive: { backgroundColor: theme.colors.wyldPurple },
+  viewBtnText: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  viewBtnTextActive: { color: '#fff' },
+
+  saveBar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  btn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: theme.colors.wyldPurple,
+    alignSelf: 'flex-start',
+  },
+  btnDisabled: { opacity: 0.6 },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  savedText: { color: theme.colors.tealDark, fontWeight: '700', fontSize: 14 },
+
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme.colors.textSecondary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: 10,
+  },
+  sectionHint: { fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17 },
+
+  itemCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 10,
+  },
+  itemName: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
+
+  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  pillActive: { backgroundColor: theme.colors.wyldPurple, borderColor: theme.colors.wyldPurple },
+  pillText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  pillTextActive: { color: '#fff' },
+
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  priceInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    color: theme.colors.charcoal,
+    minWidth: 100,
+  },
+  pctInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    color: theme.colors.charcoal,
+    width: 64,
+    textAlign: 'center',
+  },
+
+  discountBlock: { gap: 8 },
+  discountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  discountWord: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
+  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnText: { fontSize: 18, color: theme.colors.charcoal, fontWeight: '700' },
+  btnSmall: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  btnSmallText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+
+  calcWrap: { gap: 14 },
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.charcoal },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    gap: 12,
+  },
+  toggleLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.charcoal },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    gap: 12,
+  },
+  numInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    backgroundColor: '#fff',
+    color: theme.colors.charcoal,
+    width: 90,
+    textAlign: 'center',
+  },
+});

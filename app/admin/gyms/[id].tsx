@@ -12,6 +12,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
 import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
+import {
+  fetchPricingModel,
+  FEATURES,
+  computeCost,
+  CostBreakdown,
+} from '@/lib/pricingModel';
+import { CostBreakdownView } from '@/components/CostBreakdown';
 
 type Gym = {
   id: string;
@@ -81,6 +88,7 @@ export default function GymDetail() {
   const [owner, setOwner] = useState<Owner | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cost, setCost] = useState<CostBreakdown | null>(null);
 
   const [slug, setSlug] = useState('');
   const [customDomain, setCustomDomain] = useState('');
@@ -108,6 +116,26 @@ export default function GymDetail() {
       setSlug(g.slug ?? '');
       setCustomDomain(g.custom_domain ?? '');
       setModules(m as Modules | null);
+
+      // Estimated monthly cost from the global pricing model.
+      const [pricing, { count: locCount }, { count: memCount }] = await Promise.all([
+        fetchPricingModel(),
+        supabase
+          .from('gym_locations')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId),
+        supabase
+          .from('gym_memberships')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .eq('status', 'active'),
+      ]);
+      const mods = m as Modules | null;
+      const activeSet = new Set(
+        FEATURES.filter((f) => f.flag && mods && (mods as any)[f.flag]).map((f) => f.key)
+      );
+      setCost(computeCost(pricing, activeSet, locCount ?? 0, memCount ?? 0));
+
       if (g.owner_id) {
         const { data: o } = await supabase
           .from('profiles')
@@ -265,67 +293,17 @@ export default function GymDetail() {
               <View style={styles.toggleText}>
                 <Text style={styles.toggleLabel}>Multiple locations</Text>
                 <Text style={styles.toggleHint}>
-                  Lets the owner add more than one location. When off, the gym always has
-                  one site. Set the maximum allowed below.
+                  Lets the owner add as many locations as they want. When off, the gym
+                  has a single site. Locations are billed per the pricing model.
                 </Text>
               </View>
               <Switch
                 value={modules.multi_location_enabled}
-                onValueChange={async (v) => {
-                  if (!modules) return;
-                  const prevEnabled = modules.multi_location_enabled;
-                  const prevMax = modules.max_locations;
-                  const nextMax = v ? Math.max(2, modules.max_locations) : 1;
-                  setModules({
-                    ...modules,
-                    multi_location_enabled: v,
-                    max_locations: nextMax,
-                  });
-                  const { error } = await supabase
-                    .from('gym_modules')
-                    .update({ multi_location_enabled: v, max_locations: nextMax })
-                    .eq('gym_id', modules.gym_id);
-                  if (error) {
-                    setModules({
-                      ...modules,
-                      multi_location_enabled: prevEnabled,
-                      max_locations: prevMax,
-                    });
-                    setError(error.message);
-                  }
-                }}
+                onValueChange={(v) => toggleModule('multi_location_enabled', v)}
                 trackColor={{ false: '#cbd5e1', true: theme.colors.wyldPurple }}
                 thumbColor="#fff"
               />
             </View>
-            {modules.multi_location_enabled ? (
-              <View style={styles.toggleRow}>
-                <View style={styles.toggleText}>
-                  <Text style={styles.toggleLabel}>Max locations</Text>
-                  <Text style={styles.toggleHint}>
-                    Owner is allowed up to this many locations (minimum 2). Past that,
-                    the owner sees an upgrade prompt.
-                  </Text>
-                </View>
-                <TextInput
-                  value={String(modules.max_locations)}
-                  onChangeText={(v) => {
-                    const n = Math.max(2, parseInt(v.replace(/[^0-9]/g, '') || '2', 10));
-                    setModules({ ...modules, max_locations: n });
-                  }}
-                  onBlur={async () => {
-                    if (!modules) return;
-                    const n = Math.max(2, modules.max_locations);
-                    await supabase
-                      .from('gym_modules')
-                      .update({ max_locations: n })
-                      .eq('gym_id', modules.gym_id);
-                  }}
-                  keyboardType="number-pad"
-                  style={styles.numInput}
-                />
-              </View>
-            ) : null}
           </View>
 
           {MODULE_GROUPS.map((group) => (
@@ -351,6 +329,17 @@ export default function GymDetail() {
       ) : (
         <Text style={styles.dim}>No module row found.</Text>
       )}
+
+      {cost ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Estimated monthly cost</Text>
+          <Text style={styles.cardSub}>
+            This gym&apos;s modules and current location/member counts, priced against
+            the global pricing model.
+          </Text>
+          <CostBreakdownView breakdown={cost} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -436,17 +425,4 @@ const styles = StyleSheet.create({
   toggleText: { flex: 1, gap: 2 },
   toggleLabel: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
   toggleHint: { fontSize: 12, color: theme.colors.textSecondary },
-  numInput: {
-    width: 70,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    color: theme.colors.charcoal,
-    backgroundColor: '#fff',
-  },
 });
