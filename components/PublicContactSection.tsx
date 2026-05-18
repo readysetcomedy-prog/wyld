@@ -55,7 +55,6 @@ export function PublicContactSection() {
           .from('gym_locations')
           .select('*')
           .eq('gym_id', site.gym.id)
-          .eq('is_paused', false)
           .order('display_order'),
         supabase.from('gym_location_contacts').select('*').order('display_order'),
       ]);
@@ -64,8 +63,11 @@ export function PublicContactSection() {
       (contacts ?? []).forEach((c: any) => {
         (byLoc[c.location_id] ??= []).push(c);
       });
+      // Paused locations are hidden from the public site.
       setLocations(
-        (locs ?? []).map((l: any) => ({ ...l, contacts: byLoc[l.id] ?? [] }))
+        (locs ?? [])
+          .filter((l: any) => !l.is_paused)
+          .map((l: any) => ({ ...l, contacts: byLoc[l.id] ?? [] }))
       );
     })();
     return () => {
