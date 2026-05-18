@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 type Variant = 'solid' | 'light' | 'outline';
 
@@ -65,7 +66,7 @@ export function QuoteButton({
 
   return (
     <>
-      <Pressable
+      <AnimatedPressable
         onPress={() => setOpen(true)}
         style={[
           big ? styles.btnBig : styles.btn,
@@ -82,7 +83,7 @@ export function QuoteButton({
         >
           {label}
         </Text>
-      </Pressable>
+      </AnimatedPressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
         <Pressable style={styles.backdrop} onPress={close}>

@@ -38,7 +38,7 @@ export default function Portfolio() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.offWhite },
   container: { paddingBottom: theme.spacing.xxl, minHeight: '100%' },
   body: {
     paddingHorizontal: theme.spacing.lg,

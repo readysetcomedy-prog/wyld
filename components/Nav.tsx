@@ -49,7 +49,16 @@ export function Nav({ logoUrl = WYLD_INC_LOGO_URL }: { logoUrl?: string }) {
           {MENU_ITEMS.map((item) => (
             <Link key={item.label} href={item.href as never} asChild>
               <Pressable>
-                <Text style={styles.linkText}>{item.label}</Text>
+                {(state) => (
+                  <Text
+                    style={[
+                      styles.linkText,
+                      (state as { hovered?: boolean }).hovered && styles.linkTextHover,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                )}
               </Pressable>
             </Link>
           ))}
@@ -120,6 +129,7 @@ const styles = StyleSheet.create({
   right: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   rightWide: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg },
   linkText: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
+  linkTextHover: { color: theme.colors.wyldPurple },
   menuBtn: {
     width: 40,
     height: 40,

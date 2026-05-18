@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link, Redirect } from 'expo-router';
 import {
   View,
@@ -6,14 +7,18 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  Animated,
   useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { Nav } from '@/components/Nav';
 import { QuoteButton } from '@/components/QuoteButton';
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 
-const FEATURES: { icon: string; tint: string; title: string; body: string }[] = [
+type Feature = { icon: string; tint: string; title: string; body: string };
+
+const FEATURES: Feature[] = [
   {
     icon: '🌐',
     tint: '#7C3AED',
@@ -70,10 +75,65 @@ const FEATURES: { icon: string; tint: string; title: string; body: string }[] = 
   },
 ];
 
+// Feature card that springs up and lights its border on hover.
+function FeatureCard({ f, wide }: { f: Feature; wide: boolean }) {
+  const h = useRef(new Animated.Value(0)).current;
+  const to = (v: number) =>
+    Animated.spring(h, {
+      toValue: v,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 80,
+    }).start();
+
+  return (
+    <Animated.View
+      style={[
+        styles.card,
+        wide && styles.cardWide,
+        {
+          borderColor: h.interpolate({
+            inputRange: [0, 1],
+            outputRange: [theme.colors.border, f.tint],
+          }),
+          shadowOpacity: h.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.18] }),
+          shadowRadius: h.interpolate({ inputRange: [0, 1], outputRange: [8, 24] }),
+          transform: [
+            { translateY: h.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
+            { scale: h.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) },
+          ],
+        },
+      ]}
+    >
+      <Pressable
+        onHoverIn={() => to(1)}
+        onHoverOut={() => to(0)}
+        style={styles.cardInner}
+      >
+        <View style={[styles.iconChip, { backgroundColor: f.tint }]}>
+          <Text style={styles.iconText}>{f.icon}</Text>
+        </View>
+        <Text style={styles.cardTitle}>{f.title}</Text>
+        <Text style={styles.cardBody}>{f.body}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function Home() {
   const { session, loading } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+
+  // Hero entrance animation.
+  const intro = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(intro, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
+  }, [intro]);
 
   if (loading) return null;
   if (session) return <Redirect href="/dashboard" />;
@@ -83,7 +143,18 @@ export default function Home() {
       <Nav />
 
       {/* Hero */}
-      <View style={[styles.hero, isWide && styles.heroWide]}>
+      <Animated.View
+        style={[
+          styles.hero,
+          isWide && styles.heroWide,
+          {
+            opacity: intro,
+            transform: [
+              { translateY: intro.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+            ],
+          },
+        ]}
+      >
         <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.heroLogo} resizeMode="contain" />
         <Text style={styles.eyebrow}>ONE COMPLETE PLATFORM FOR YOUR GYM</Text>
         <Text style={[styles.heroTitle, isWide && styles.heroTitleWide]}>
@@ -97,12 +168,12 @@ export default function Home() {
         <View style={styles.heroCtas}>
           <QuoteButton label="Get a Quote" variant="solid" big />
           <Link href="/portfolio" asChild>
-            <Pressable style={styles.secondaryBtn}>
+            <AnimatedPressable style={styles.secondaryBtn}>
               <Text style={styles.secondaryBtnText}>See our work</Text>
-            </Pressable>
+            </AnimatedPressable>
           </Link>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Highlights strip */}
       <View style={[styles.strip, isWide && styles.stripWide]}>
@@ -130,13 +201,7 @@ export default function Home() {
           </Text>
           <View style={[styles.grid, isWide && styles.gridWide]}>
             {FEATURES.map((f) => (
-              <View key={f.title} style={[styles.card, isWide && styles.cardWide]}>
-                <View style={[styles.iconChip, { backgroundColor: f.tint }]}>
-                  <Text style={styles.iconText}>{f.icon}</Text>
-                </View>
-                <Text style={styles.cardTitle}>{f.title}</Text>
-                <Text style={styles.cardBody}>{f.body}</Text>
-              </View>
+              <FeatureCard key={f.title} f={f} wide={isWide} />
             ))}
           </View>
         </View>
@@ -162,7 +227,7 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.offWhite },
   container: { paddingBottom: 0 },
 
   hero: {
@@ -217,6 +282,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    backgroundColor: '#fff',
   },
   secondaryBtnText: { fontSize: 17, fontWeight: '800', color: theme.colors.charcoal },
 
@@ -244,7 +310,7 @@ const styles = StyleSheet.create({
   stripVal: { fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
 
   featureBand: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.offWhite,
     paddingVertical: theme.spacing.xxl,
     paddingHorizontal: theme.spacing.lg,
   },
@@ -283,8 +349,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.sm,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
   },
   cardWide: {
     flexBasis: '31%',
@@ -293,6 +359,7 @@ const styles = StyleSheet.create({
     marginHorizontal: '1%',
     marginBottom: theme.spacing.md,
   },
+  cardInner: { padding: theme.spacing.lg, gap: theme.spacing.sm },
   iconChip: {
     width: 48,
     height: 48,

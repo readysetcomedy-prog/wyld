@@ -8,6 +8,7 @@ export const theme = {
     wyldPurpleDark: '#5B21B6',
     charcoal: '#0F172A',
     background: '#FFFFFF',
+    offWhite: '#F8F8F8',
     surface: '#F8FAFC',
     border: '#E2E8F0',
     textPrimary: '#0F172A',
