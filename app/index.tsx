@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -193,6 +193,7 @@ export default function Home() {
   const { session, loading } = useAuth();
   const { width, height } = useWindowDimensions();
   const isWide = width >= 768;
+  const router = useRouter();
 
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -251,11 +252,12 @@ export default function Home() {
           <AnimatedPressable onPress={scrollToQuote} style={styles.primaryBtn}>
             <Text style={styles.primaryBtnText}>Get a Quote</Text>
           </AnimatedPressable>
-          <Link href="/portfolio" asChild>
-            <AnimatedPressable style={styles.secondaryBtn}>
-              <Text style={styles.secondaryBtnText}>See our work</Text>
-            </AnimatedPressable>
-          </Link>
+          <AnimatedPressable
+            onPress={() => router.push('/portfolio')}
+            style={styles.secondaryBtn}
+          >
+            <Text style={styles.secondaryBtnText}>See our work</Text>
+          </AnimatedPressable>
         </View>
       </Animated.View>
 
