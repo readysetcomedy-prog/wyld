@@ -19,6 +19,7 @@ import {
   ItemPricing,
   PricingModel,
   Tier,
+  TierMode,
   computeCost,
   fetchPricingModel,
 } from '@/lib/pricingModel';
@@ -30,11 +31,13 @@ type ItemForm = {
   included_with: IncludedWith;
   discounts: { when: string; percent: string }[];
 };
-type TierForm = { from_count: string; to_count: string; per_unit: string };
+type TierForm = { from_count: string; to_count: string; price: string };
 type Form = {
   items: Record<string, ItemForm>;
   location_tiers: TierForm[];
+  location_tier_mode: TierMode;
   member_tiers: TierForm[];
+  member_tier_mode: TierMode;
 };
 
 const INCLUSIONS: { value: Inclusion; label: string }[] = [
@@ -89,12 +92,14 @@ function formFromModel(m: PricingModel): Form {
   const tierForm = (t: Tier): TierForm => ({
     from_count: String(t.from_count),
     to_count: t.to_count != null ? String(t.to_count) : '',
-    per_unit: centsToStr(t.per_unit_cents ?? 0),
+    price: centsToStr(t.price_cents ?? 0),
   });
   return {
     items,
     location_tiers: m.location_tiers.map(tierForm),
+    location_tier_mode: m.location_tier_mode,
     member_tiers: m.member_tiers.map(tierForm),
+    member_tier_mode: m.member_tier_mode,
   };
 }
 
@@ -119,13 +124,15 @@ function modelFromForm(form: Form): PricingModel {
     return {
       from_count: Math.max(1, parseInt(t.from_count || '1', 10) || 1),
       to_count: Number.isFinite(to) && to > 0 ? to : null,
-      per_unit_cents: dollarsToCents(t.per_unit),
+      price_cents: dollarsToCents(t.price),
     };
   };
   return {
     items,
     location_tiers: form.location_tiers.map(toTier),
+    location_tier_mode: form.location_tier_mode,
     member_tiers: form.member_tiers.map(toTier),
+    member_tier_mode: form.member_tier_mode,
   };
 }
 
@@ -190,6 +197,10 @@ export default function AdminPricing() {
     setForm((f) => (f ? { ...f, [which]: tiers } : f));
     setSaved(false);
   }
+  function setMode(which: 'location_tier_mode' | 'member_tier_mode', m: TierMode) {
+    setForm((f) => (f ? { ...f, [which]: m } : f));
+    setSaved(false);
+  }
 
   return (
     <View style={styles.container}>
@@ -243,25 +254,31 @@ export default function AdminPricing() {
 
           <Text style={styles.sectionHeading}>Location tiers</Text>
           <Text style={styles.sectionHint}>
-            Set count ranges (from–to) with a per-location price for each. A gym pays
-            that rate times its location count. Leave &ldquo;to&rdquo; blank for no
-            upper limit. Only billed when Multiple locations is on.
+            Set count ranges (from–to). &ldquo;Per location&rdquo; charges the range&apos;s
+            price times the count; &ldquo;Flat per range&rdquo; charges it once for the
+            whole range. Leave &ldquo;to&rdquo; blank for no upper limit. Only billed
+            when Multiple locations is on.
           </Text>
           <TierEditor
             tiers={form.location_tiers}
             unit="location"
+            mode={form.location_tier_mode}
             onChange={(t) => setTiers('location_tiers', t)}
+            onModeChange={(m) => setMode('location_tier_mode', m)}
           />
 
           <Text style={styles.sectionHeading}>Member tiers</Text>
           <Text style={styles.sectionHint}>
-            Set count ranges (from–to) with a per-member price for each, billed for
-            every gym.
+            Set count ranges (from–to). &ldquo;Flat per range&rdquo; charges one price for
+            the range the count lands in — e.g. 50–100 members = $12 flat. &ldquo;Per
+            member&rdquo; charges the price times the count. Billed for every gym.
           </Text>
           <TierEditor
             tiers={form.member_tiers}
             unit="member"
+            mode={form.member_tier_mode}
             onChange={(t) => setTiers('member_tiers', t)}
+            onModeChange={(m) => setMode('member_tier_mode', m)}
           />
         </>
       ) : (
@@ -502,14 +519,31 @@ function ItemCard({
 function TierEditor({
   tiers,
   unit,
+  mode,
   onChange,
+  onModeChange,
 }: {
   tiers: TierForm[];
   unit: string;
+  mode: TierMode;
   onChange: (tiers: TierForm[]) => void;
+  onModeChange: (mode: TierMode) => void;
 }) {
   return (
     <View style={styles.itemCard}>
+      <View style={styles.pillRow}>
+        {(['per_unit', 'flat'] as const).map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => onModeChange(m)}
+            style={[styles.pill, mode === m && styles.pillActive]}
+          >
+            <Text style={[styles.pillText, mode === m && styles.pillTextActive]}>
+              {m === 'per_unit' ? `Per ${unit}` : 'Flat per range'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       {tiers.length === 0 ? (
         <Text style={styles.dim}>No tiers — this {unit} count is free.</Text>
       ) : (
@@ -547,11 +581,11 @@ function TierEditor({
             />
             <Text style={styles.discountWord}>{unit}s — $</Text>
             <TextInput
-              value={t.per_unit}
+              value={t.price}
               onChangeText={(v) =>
                 onChange(
                   tiers.map((x, j) =>
-                    j === i ? { ...x, per_unit: v.replace(/[^0-9.]/g, '') } : x
+                    j === i ? { ...x, price: v.replace(/[^0-9.]/g, '') } : x
                   )
                 )
               }
@@ -560,7 +594,7 @@ function TierEditor({
               keyboardType="decimal-pad"
               style={styles.priceInput}
             />
-            <Text style={styles.discountWord}>each</Text>
+            <Text style={styles.discountWord}>{mode === 'flat' ? 'flat' : 'each'}</Text>
             <Pressable
               onPress={() => onChange(tiers.filter((_, j) => j !== i))}
               style={styles.iconBtn}
@@ -573,7 +607,7 @@ function TierEditor({
       <Pressable
         style={styles.btnSmall}
         onPress={() =>
-          onChange([...tiers, { from_count: '', to_count: '', per_unit: '' }])
+          onChange([...tiers, { from_count: '', to_count: '', price: '' }])
         }
       >
         <Text style={styles.btnSmallText}>+ Add tier</Text>
