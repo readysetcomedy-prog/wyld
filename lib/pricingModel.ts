@@ -20,19 +20,25 @@ export type ItemPricing = {
   discounts: { when: string; percent: number }[];
 };
 
-// A count-based pricing tier: an inclusive count range with a per-unit rate.
-// A gym pays `per_unit_cents` × count when its count falls in the range.
+// How a tier group is priced. 'per_unit' charges the matched tier's price
+// times the count; 'flat' charges that tier's price as a single flat fee
+// for the whole range (tiers are never stacked).
+export type TierMode = 'per_unit' | 'flat';
+
+// A count-based pricing tier: an inclusive count range with a price.
 // `to_count` null means the range has no upper limit.
 export type Tier = {
   from_count: number;
   to_count: number | null;
-  per_unit_cents: number;
+  price_cents: number;
 };
 
 export type PricingModel = {
   items: Record<string, ItemPricing>;
   location_tiers: Tier[];
+  location_tier_mode: TierMode;
   member_tiers: Tier[];
+  member_tier_mode: TierMode;
 };
 
 export type Feature = { key: string; label: string; flag: string | null };
@@ -67,15 +73,21 @@ export function defaultItem(): ItemPricing {
 export const EMPTY_MODEL: PricingModel = {
   items: {},
   location_tiers: [],
+  location_tier_mode: 'per_unit',
   member_tiers: [],
+  member_tier_mode: 'flat',
 };
 
 export function normalizeModel(raw: any): PricingModel {
   const m = raw && typeof raw === 'object' ? raw : {};
+  const mode = (v: any, d: TierMode): TierMode =>
+    v === 'flat' || v === 'per_unit' ? v : d;
   return {
     items: m.items && typeof m.items === 'object' ? m.items : {},
     location_tiers: Array.isArray(m.location_tiers) ? m.location_tiers : [],
+    location_tier_mode: mode(m.location_tier_mode, 'per_unit'),
     member_tiers: Array.isArray(m.member_tiers) ? m.member_tiers : [],
+    member_tier_mode: mode(m.member_tier_mode, 'flat'),
   };
 }
 
@@ -176,37 +188,52 @@ export function computeCost(
     });
   }
 
-  // Locations — billed per-unit by tier, only when multi-location is on.
+  // Locations — billed by tier, only when multi-location is on.
   if (active.has('multi_location_enabled') && locationCount > 0) {
-    const t = tierFor(model.location_tiers, locationCount);
-    if (t && t.per_unit_cents > 0) {
-      const cents = t.per_unit_cents * locationCount;
-      lines.push({
-        key: '__locations',
-        label: `Locations (×${locationCount})`,
-        baseCents: cents,
-        discountPct: 0,
-        cents,
-        note: `${fmt(t.per_unit_cents)} each`,
-      });
-    }
+    const line = tierLine(
+      '__locations',
+      'Locations',
+      model.location_tiers,
+      model.location_tier_mode,
+      locationCount
+    );
+    if (line) lines.push(line);
   }
 
-  // Members — billed per-unit by tier (every gym has members).
+  // Members — billed by tier (every gym has members).
   if (memberCount > 0) {
-    const t = tierFor(model.member_tiers, memberCount);
-    if (t && t.per_unit_cents > 0) {
-      const cents = t.per_unit_cents * memberCount;
-      lines.push({
-        key: '__members',
-        label: `Members (×${memberCount})`,
-        baseCents: cents,
-        discountPct: 0,
-        cents,
-        note: `${fmt(t.per_unit_cents)} each`,
-      });
-    }
+    const line = tierLine(
+      '__members',
+      'Members',
+      model.member_tiers,
+      model.member_tier_mode,
+      memberCount
+    );
+    if (line) lines.push(line);
   }
 
   return { lines, totalCents: lines.reduce((s, l) => s + l.cents, 0) };
+}
+
+// Cost line for a count-based group. In 'flat' mode the matched tier's price
+// is the whole charge; in 'per_unit' mode it's that price times the count.
+function tierLine(
+  key: string,
+  label: string,
+  tiers: Tier[],
+  mode: TierMode,
+  count: number
+): CostLine | null {
+  const t = tierFor(tiers, count);
+  if (!t || t.price_cents <= 0) return null;
+  const cents = mode === 'flat' ? t.price_cents : t.price_cents * count;
+  const range = `${t.from_count}–${t.to_count ?? '∞'}`;
+  return {
+    key,
+    label: `${label} (×${count})`,
+    baseCents: cents,
+    discountPct: 0,
+    cents,
+    note: mode === 'flat' ? `Flat rate for ${range}` : `${fmt(t.price_cents)} each`,
+  };
 }

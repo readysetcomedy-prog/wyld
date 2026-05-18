@@ -41,6 +41,7 @@ type Offering = {
   public_blurb: string | null;
   perks: string[] | null;
   term_options: TermOption[] | null;
+  location_id: string | null;
   display_order: number;
 };
 
@@ -71,6 +72,7 @@ type OfferingForm = {
   public_blurb: string;
   perks: string[];
   terms: TermRow[];
+  location_id: string | null;
 };
 
 type PkgForm = {
@@ -105,14 +107,29 @@ export default function OwnerOfferings() {
   const [pForm, setPForm] = useState<PkgForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
+  const [multiLocation, setMultiLocation] = useState(false);
 
   const load = useCallback(async () => {
     if (!gymId) return;
-    const [{ data: o }, { data: p }, { data: links }] = await Promise.all([
-      supabase.from('gym_offerings').select('*').eq('gym_id', gymId).order('display_order'),
-      supabase.from('gym_packages').select('*').eq('gym_id', gymId).order('display_order'),
-      supabase.from('gym_package_offerings').select('package_id, offering_id'),
-    ]);
+    const [{ data: o }, { data: p }, { data: links }, { data: mod }, { data: locs }] =
+      await Promise.all([
+        supabase.from('gym_offerings').select('*').eq('gym_id', gymId).order('display_order'),
+        supabase.from('gym_packages').select('*').eq('gym_id', gymId).order('display_order'),
+        supabase.from('gym_package_offerings').select('package_id, offering_id'),
+        supabase
+          .from('gym_modules')
+          .select('multi_location_enabled')
+          .eq('gym_id', gymId)
+          .maybeSingle(),
+        supabase
+          .from('gym_locations')
+          .select('id, label')
+          .eq('gym_id', gymId)
+          .order('display_order'),
+      ]);
+    setMultiLocation(!!(mod as any)?.multi_location_enabled);
+    setLocations((locs as any) ?? []);
     setOfferings((o as Offering[]) ?? []);
     const byPkg: Record<string, string[]> = {};
     (links ?? []).forEach((l: any) => {
@@ -161,6 +178,7 @@ export default function OwnerOfferings() {
       public_blurb: oForm.public_blurb.trim() || null,
       perks: perks.length > 0 ? perks : null,
       term_options: terms.length > 0 ? terms : null,
+      location_id: oForm.location_id,
     };
     setSaving(true);
     const res = oForm.id
@@ -315,6 +333,7 @@ export default function OwnerOfferings() {
                 public_blurb: '',
                 perks: [],
                 terms: [],
+                location_id: null,
               })
             }
           >
@@ -355,6 +374,26 @@ export default function OwnerOfferings() {
           <Field label="Base price (USD)" value={oForm.price} keyboard="decimal-pad"
             onChange={(v) => setOForm({ ...oForm, price: v.replace(/[^0-9.]/g, '') })}
             placeholder="49.00" />
+
+          {multiLocation && locations.length > 0 ? (
+            <View style={{ gap: 4 }}>
+              <Text style={styles.label}>Location</Text>
+              <Select
+                ariaLabel="Offering location"
+                value={oForm.location_id ?? 'all'}
+                onChange={(v) =>
+                  setOForm({ ...oForm, location_id: v === 'all' ? null : v })
+                }
+                options={[
+                  { value: 'all', label: 'All locations' },
+                  ...locations.map((l) => ({ value: l.id, label: l.label || 'Location' })),
+                ]}
+              />
+              <Text style={styles.dim}>
+                Price this offering for one location, or keep it on all of them.
+              </Text>
+            </View>
+          ) : null}
 
           <PerksEditor
             perks={oForm.perks}
@@ -552,6 +591,13 @@ export default function OwnerOfferings() {
                     {!o.published ? '  (hidden)' : ''}
                   </Text>
                   {o.description ? <Text style={styles.cardDesc}>{o.description}</Text> : null}
+                  {multiLocation ? (
+                    <Text style={styles.cardMeta}>
+                      {o.location_id
+                        ? locations.find((l) => l.id === o.location_id)?.label || 'Location'
+                        : 'All locations'}
+                    </Text>
+                  ) : null}
                   {o.term_options && o.term_options.length > 0 ? (
                     <Text style={styles.cardMeta}>
                       {o.term_options.length} prepay option
@@ -584,6 +630,7 @@ export default function OwnerOfferings() {
                         count: t.count ?? 2,
                         price: (t.price_cents / 100).toFixed(2),
                       })),
+                      location_id: o.location_id ?? null,
                     })
                   }
                   style={styles.editBtn}
