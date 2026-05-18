@@ -1,16 +1,21 @@
-// Waiver content is stored as an array of blocks — cross-platform
-// (renders with <Text>, edits with <TextInput>). No HTML.
+// Waiver content is a list of blocks, each block a list of formatted text
+// runs. Stored as JSON. The viewer renders it cross-platform with <Text>;
+// the editor (web only) reads/writes it via a contentEditable.
 
-export type WaiverBlock = {
-  id: string;
-  type: 'h2' | 'h3' | 'p' | 'bullet';
+export type WaiverRun = {
   text: string;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
-  align?: 'left' | 'center' | 'right';
   color?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+};
+
+export type WaiverBlock = {
+  id: string;
+  type: 'h2' | 'h3' | 'p' | 'bullet';
+  align?: 'left' | 'center' | 'right';
+  runs: WaiverRun[];
 };
 
 export type WaiverBlockSeed = Omit<WaiverBlock, 'id'>;
@@ -25,20 +30,65 @@ export function withIds(seeds: WaiverBlockSeed[]): WaiverBlock[] {
   return seeds.map((s) => ({ ...s, id: newBlockId() }));
 }
 
+const SIZES = ['sm', 'md', 'lg', 'xl'];
+
+// Normalize one stored block — accepts the current runs shape and the older
+// shape where formatting lived on the block with a single `text` string.
+function normalizeBlock(b: any): WaiverBlock | null {
+  if (!b || typeof b !== 'object') return null;
+  const type: WaiverBlock['type'] = ['h2', 'h3', 'p', 'bullet'].includes(b.type)
+    ? b.type
+    : 'p';
+  const align =
+    b.align === 'center' || b.align === 'right' || b.align === 'left'
+      ? b.align
+      : undefined;
+  let runs: WaiverRun[];
+  if (Array.isArray(b.runs)) {
+    runs = b.runs
+      .filter((r: any) => r && typeof r.text === 'string')
+      .map((r: any) => ({
+        text: r.text,
+        bold: !!r.bold,
+        italic: !!r.italic,
+        underline: !!r.underline,
+        color: typeof r.color === 'string' ? r.color : undefined,
+        size: SIZES.includes(r.size) ? r.size : undefined,
+      }));
+  } else if (typeof b.text === 'string') {
+    runs = [
+      {
+        text: b.text,
+        bold: !!b.bold,
+        italic: !!b.italic,
+        underline: !!b.underline,
+        color: typeof b.color === 'string' ? b.color : undefined,
+        size: SIZES.includes(b.size) ? b.size : undefined,
+      },
+    ];
+  } else {
+    runs = [];
+  }
+  if (runs.length === 0) runs = [{ text: '' }];
+  return { id: b.id || newBlockId(), type, align, runs };
+}
+
 // Parse stored content into blocks. Handles legacy/empty content gracefully.
 export function parseBlocks(content: string | null | undefined): WaiverBlock[] {
   if (!content) return [];
   try {
     const parsed = JSON.parse(content);
     if (Array.isArray(parsed)) {
-      return parsed
-        .filter((b) => b && typeof b.text === 'string')
-        .map((b) => ({ ...b, id: b.id || newBlockId() }));
+      return parsed.map(normalizeBlock).filter((b): b is WaiverBlock => b != null);
     }
   } catch {
     // Not JSON — treat the whole thing as one paragraph (strip any tags).
     return [
-      { id: newBlockId(), type: 'p', text: String(content).replace(/<[^>]+>/g, ' ').trim() },
+      {
+        id: newBlockId(),
+        type: 'p',
+        runs: [{ text: String(content).replace(/<[^>]+>/g, ' ').trim() }],
+      },
     ];
   }
   return [];
@@ -47,10 +97,14 @@ export function parseBlocks(content: string | null | undefined): WaiverBlock[] {
 export const PREMADE_WAIVER_TITLE =
   'Gym Membership Waiver, Release of Liability, and Access Agreement';
 
-const h2 = (text: string): WaiverBlockSeed => ({ type: 'h2', text, align: 'center' });
-const h3 = (text: string): WaiverBlockSeed => ({ type: 'h3', text });
-const p = (text: string): WaiverBlockSeed => ({ type: 'p', text });
-const li = (text: string): WaiverBlockSeed => ({ type: 'bullet', text });
+const h2 = (text: string): WaiverBlockSeed => ({
+  type: 'h2',
+  align: 'center',
+  runs: [{ text }],
+});
+const h3 = (text: string): WaiverBlockSeed => ({ type: 'h3', runs: [{ text }] });
+const p = (text: string): WaiverBlockSeed => ({ type: 'p', runs: [{ text }] });
+const li = (text: string): WaiverBlockSeed => ({ type: 'bullet', runs: [{ text }] });
 
 const SEED: WaiverBlockSeed[] = [
   h2('Gym Membership Waiver, Release of Liability, and Access Agreement'),
