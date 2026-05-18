@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { QuoteButton } from '@/components/QuoteButton';
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 type Item = { label: string; href: string };
 
@@ -21,7 +22,15 @@ const MENU_ITEMS: Item[] = [
   { label: 'Sign in', href: '/sign-in' },
 ];
 
-export function Nav({ logoUrl = WYLD_INC_LOGO_URL }: { logoUrl?: string }) {
+// When onQuotePress is given (the landing page), the CTA scrolls to the
+// inline quote section instead of opening the modal.
+export function Nav({
+  logoUrl = WYLD_INC_LOGO_URL,
+  onQuotePress,
+}: {
+  logoUrl?: string;
+  onQuotePress?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -31,6 +40,14 @@ export function Nav({ logoUrl = WYLD_INC_LOGO_URL }: { logoUrl?: string }) {
     setOpen(false);
     router.push(href as never);
   };
+
+  const quoteCta = onQuotePress ? (
+    <AnimatedPressable onPress={onQuotePress} style={styles.quoteBtn}>
+      <Text style={styles.quoteBtnText}>Get a Quote</Text>
+    </AnimatedPressable>
+  ) : (
+    <QuoteButton label="Get a Quote" variant="solid" />
+  );
 
   return (
     <View style={[styles.nav, isWide && styles.navWide]}>
@@ -62,11 +79,11 @@ export function Nav({ logoUrl = WYLD_INC_LOGO_URL }: { logoUrl?: string }) {
               </Pressable>
             </Link>
           ))}
-          <QuoteButton label="Get a Quote" variant="solid" />
+          {quoteCta}
         </View>
       ) : (
         <View style={styles.right}>
-          <QuoteButton label="Get a Quote" variant="solid" />
+          {quoteCta}
           <Pressable
             style={styles.menuBtn}
             onPress={() => setOpen(true)}
@@ -130,6 +147,13 @@ const styles = StyleSheet.create({
   rightWide: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg },
   linkText: { fontSize: 15, fontWeight: '700', color: theme.colors.charcoal },
   linkTextHover: { color: theme.colors.wyldPurple },
+  quoteBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: theme.colors.wyldPurple,
+  },
+  quoteBtnText: { fontSize: 14, fontWeight: '800', color: '#fff' },
   menuBtn: {
     width: 40,
     height: 40,
