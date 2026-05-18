@@ -95,8 +95,9 @@ export function MessagesView({
       // Member sees threads where they're the user_id (member_gym + admin_user)
       q = q.eq('user_id', myId);
     } else {
-      // admin: see admin_user threads (where this admin is participating) — for simplicity, ALL admin_user
-      q = q.in('kind', ['admin_user']);
+      // admin: support threads, plus gym-less contact_form threads — which is
+      // where "Get a Quote" requests from the public site land.
+      q = q.or('kind.eq.admin_user,and(kind.eq.contact_form,gym_id.is.null)');
     }
     const { data, error } = await q.order('last_message_at', { ascending: false });
     if (error) {
