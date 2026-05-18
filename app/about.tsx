@@ -21,7 +21,11 @@ export default function About() {
   if (session) return <Redirect href="/dashboard" />;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.container}
+      stickyHeaderIndices={[0]}
+    >
       <Nav />
 
       <View style={[styles.hero, isWide && styles.heroWide]}>

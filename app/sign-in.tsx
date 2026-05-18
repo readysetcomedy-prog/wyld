@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: theme.spacing.lg,
     alignItems: 'center',
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.offWhite,
   },
   logo: { width: 72, height: 72, marginTop: theme.spacing.xl },
   title: {

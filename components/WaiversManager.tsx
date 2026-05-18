@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
-import { BlockEditor } from '@/components/BlockEditor';
+import { WaiverRichEditor } from '@/components/WaiverRichEditor';
 import {
   WaiverBlock,
   parseBlocks,
@@ -197,7 +197,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
           />
 
           <Text style={styles.label}>Waiver text</Text>
-          <BlockEditor
+          <WaiverRichEditor
             key={editorKey}
             blocks={editing.blocks}
             onChange={(blocks) => setEditing((e) => (e ? { ...e, blocks } : e))}

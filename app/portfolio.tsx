@@ -14,7 +14,11 @@ export default function Portfolio() {
   const isWide = width >= 768;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.container}
+      stickyHeaderIndices={[0]}
+    >
       <Nav />
 
       <View style={[styles.body, isWide && styles.bodyWide]}>

@@ -22,6 +22,8 @@ const MENU_ITEMS: Item[] = [
   { label: 'Sign in', href: '/sign-in' },
 ];
 
+// Rendered as the first child of a page ScrollView with
+// stickyHeaderIndices={[0]} so the bar stays pinned while the page scrolls.
 // When onQuotePress is given (the landing page), the CTA scrolls to the
 // inline quote section instead of opening the modal.
 export function Nav({
@@ -50,51 +52,53 @@ export function Nav({
   );
 
   return (
-    <View style={[styles.nav, isWide && styles.navWide]}>
-      <Link href="/" asChild>
-        <Pressable style={styles.brand} accessibilityLabel="Home">
-          <Image
-            source={{ uri: logoUrl }}
-            style={isWide ? styles.logo : styles.logoMobile}
-            resizeMode="contain"
-          />
-        </Pressable>
-      </Link>
-
-      {isWide ? (
-        <View style={styles.rightWide}>
-          {MENU_ITEMS.map((item) => (
-            <Link key={item.label} href={item.href as never} asChild>
-              <Pressable>
-                {(state) => (
-                  <Text
-                    style={[
-                      styles.linkText,
-                      (state as { hovered?: boolean }).hovered && styles.linkTextHover,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                )}
-              </Pressable>
-            </Link>
-          ))}
-          {quoteCta}
-        </View>
-      ) : (
-        <View style={styles.right}>
-          {quoteCta}
-          <Pressable
-            style={styles.menuBtn}
-            onPress={() => setOpen(true)}
-            accessibilityLabel="Open menu"
-          >
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
+    <View style={styles.navBar}>
+      <View style={[styles.nav, isWide && styles.navWide]}>
+        <Link href="/" asChild>
+          <Pressable style={styles.brand} accessibilityLabel="Home">
+            <Image
+              source={{ uri: logoUrl }}
+              style={isWide ? styles.logo : styles.logoMobile}
+              resizeMode="contain"
+            />
           </Pressable>
-        </View>
-      )}
+        </Link>
+
+        {isWide ? (
+          <View style={styles.rightWide}>
+            {MENU_ITEMS.map((item) => (
+              <Link key={item.label} href={item.href as never} asChild>
+                <Pressable>
+                  {(state) => (
+                    <Text
+                      style={[
+                        styles.linkText,
+                        (state as { hovered?: boolean }).hovered && styles.linkTextHover,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  )}
+                </Pressable>
+              </Link>
+            ))}
+            {quoteCta}
+          </View>
+        ) : (
+          <View style={styles.right}>
+            {quoteCta}
+            <Pressable
+              style={styles.menuBtn}
+              onPress={() => setOpen(true)}
+              accessibilityLabel="Open menu"
+            >
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       <Modal
         visible={open}
@@ -126,16 +130,25 @@ export function Nav({
 }
 
 const styles = StyleSheet.create({
+  // Full-width pinned bar; gives the sticky header a solid background so
+  // page content scrolls cleanly underneath it.
+  navBar: {
+    width: '100%',
+    backgroundColor: theme.colors.offWhite,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    zIndex: 10,
+  },
   nav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   navWide: {
     paddingHorizontal: theme.spacing.xxl,
-    paddingVertical: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     maxWidth: 1240,
     width: '100%',
     alignSelf: 'center',
@@ -185,7 +198,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '85%',
     maxWidth: 360,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.offWhite,
     padding: theme.spacing.lg,
     gap: theme.spacing.xs,
     shadowColor: '#000',
