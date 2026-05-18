@@ -2,16 +2,26 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useGymSite } from '@/components/GymSiteContext';
+import {
+  BillingPeriod,
+  periodUnitLabel,
+  termLabel,
+  termDiscount,
+  money,
+} from '@/lib/pricing';
 
-type TermOption = { label: string; price_cents: number };
+// New prepay options carry { count, price_cents }. Legacy rows may instead
+// have a free-text { label, price_cents } — still rendered as a plain row.
+type TermOption = { count?: number; price_cents: number; label?: string };
 type Offering = {
   id: string;
   name: string;
   description: string | null;
   price_cents: number | null;
-  unit_label: string | null;
+  billing_period: BillingPeriod;
   public_blurb: string | null;
   featured: boolean;
+  perks: string[] | null;
   term_options: TermOption[] | null;
 };
 type Pkg = {
@@ -19,14 +29,12 @@ type Pkg = {
   name: string;
   description: string | null;
   price_cents: number | null;
-  unit_label: string | null;
+  billing_period: BillingPeriod;
   public_blurb: string | null;
   featured: boolean;
+  perks: string[] | null;
   offeringIds: string[];
 };
-
-const money = (c: number | null | undefined) =>
-  c != null ? `$${(c / 100).toFixed(2)}` : '';
 
 export function PublicServicesSection() {
   const site = useGymSite();
@@ -39,13 +47,17 @@ export function PublicServicesSection() {
       const [{ data: o }, { data: p }, { data: links }] = await Promise.all([
         supabase
           .from('gym_offerings')
-          .select('id, name, description, price_cents, unit_label, public_blurb, featured, term_options')
+          .select(
+            'id, name, description, price_cents, billing_period, public_blurb, featured, perks, term_options'
+          )
           .eq('gym_id', site.gym.id)
           .eq('published', true)
           .order('display_order'),
         supabase
           .from('gym_packages')
-          .select('id, name, description, price_cents, unit_label, public_blurb, featured')
+          .select(
+            'id, name, description, price_cents, billing_period, public_blurb, featured, perks'
+          )
           .eq('gym_id', site.gym.id)
           .eq('published', true)
           .order('display_order'),
@@ -114,7 +126,7 @@ export function PublicServicesSection() {
                   ) : null}
                   <View style={styles.priceRow}>
                     <Text style={[styles.price, { color: primary }]}>{money(p.price_cents)}</Text>
-                    {p.unit_label ? <Text style={styles.unit}>{p.unit_label}</Text> : null}
+                    <Text style={styles.unit}>{periodUnitLabel(p.billing_period)}</Text>
                   </View>
                   {saving > 0 ? (
                     <Text style={styles.saving}>
@@ -122,7 +134,7 @@ export function PublicServicesSection() {
                     </Text>
                   ) : null}
                   {p.description ? <Text style={styles.desc}>{p.description}</Text> : null}
-                  {p.offeringIds.length > 0 ? (
+                  {p.offeringIds.length > 0 || (p.perks && p.perks.length > 0) ? (
                     <View style={styles.includes}>
                       {p.offeringIds.map((id) =>
                         offeringById[id] ? (
@@ -131,6 +143,11 @@ export function PublicServicesSection() {
                           </Text>
                         ) : null
                       )}
+                      {(p.perks ?? []).map((perk, i) => (
+                        <Text key={`perk-${i}`} style={styles.includeLine}>
+                          ✓ {perk}
+                        </Text>
+                      ))}
                     </View>
                   ) : null}
                 </View>
@@ -162,17 +179,54 @@ export function PublicServicesSection() {
                 ) : null}
                 <View style={styles.priceRow}>
                   <Text style={[styles.price, { color: primary }]}>{money(o.price_cents)}</Text>
-                  {o.unit_label ? <Text style={styles.unit}>{o.unit_label}</Text> : null}
+                  <Text style={styles.unit}>{periodUnitLabel(o.billing_period)}</Text>
                 </View>
                 {o.description ? <Text style={styles.desc}>{o.description}</Text> : null}
+                {o.perks && o.perks.length > 0 ? (
+                  <View style={styles.includes}>
+                    {o.perks.map((perk, i) => (
+                      <Text key={i} style={styles.includeLine}>
+                        ✓ {perk}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
                 {o.term_options && o.term_options.length > 0 ? (
                   <View style={styles.terms}>
-                    {o.term_options.map((t, i) => (
-                      <View key={i} style={styles.termRow}>
-                        <Text style={styles.termLabel}>{t.label}</Text>
-                        <Text style={styles.termPrice}>{money(t.price_cents)}</Text>
-                      </View>
-                    ))}
+                    {o.term_options.map((t, i) => {
+                      // Legacy free-text option — render as a plain row.
+                      if (t.count == null) {
+                        return (
+                          <View key={i} style={styles.legacyTermRow}>
+                            <Text style={styles.termLabel}>{t.label ?? 'Prepay'}</Text>
+                            <Text style={styles.termTotal}>{money(t.price_cents)}</Text>
+                          </View>
+                        );
+                      }
+                      const d = termDiscount(o.price_cents, t.count, t.price_cents);
+                      return (
+                        <View key={i} style={styles.term}>
+                          <Text style={styles.termLabel}>
+                            {termLabel(o.billing_period, t.count)}
+                          </Text>
+                          <View style={styles.termPriceLine}>
+                            {d.pct != null ? (
+                              <Text style={styles.termStrike}>{money(d.regularCents)}</Text>
+                            ) : null}
+                            <Text style={styles.termTotal}>{money(t.price_cents)}</Text>
+                            {d.pctText != null ? (
+                              <View style={styles.savingTag}>
+                                <Text style={styles.savingTagText}>{d.pctText}% off</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={styles.termPer}>
+                            {money(d.perPeriodCents)}
+                            {periodUnitLabel(o.billing_period)}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 ) : null}
               </View>
@@ -216,15 +270,30 @@ const styles = StyleSheet.create({
   includes: { gap: 3, marginTop: 6 },
   includeLine: { fontSize: 13, color: '#0F172A' },
   terms: {
-    gap: 4,
+    gap: 10,
     marginTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     paddingTop: 8,
   },
-  termRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  termLabel: { fontSize: 13, color: '#475569', flex: 1 },
-  termPrice: { fontSize: 13, fontWeight: '800', color: '#0F172A' },
+  term: { gap: 2 },
+  termLabel: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  termPriceLine: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  termStrike: {
+    fontSize: 13,
+    color: '#94a3b8',
+    textDecorationLine: 'line-through',
+  },
+  termTotal: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  savingTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#dcfce7',
+  },
+  savingTagText: { fontSize: 11, fontWeight: '800', color: '#16a34a' },
+  termPer: { fontSize: 12, color: '#64748b' },
+  legacyTermRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   empty: {
     padding: 16,
     borderRadius: 12,

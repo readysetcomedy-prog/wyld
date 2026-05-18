@@ -12,8 +12,23 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { Select } from '@/components/Select';
+import {
+  BillingPeriod,
+  BILLING_PERIODS,
+  isRecurring,
+  periodNoun,
+  periodUnitLabel,
+  countOptions,
+  countLabel,
+  termLabel,
+  termDiscount,
+  money,
+} from '@/lib/pricing';
 
-type TermOption = { label: string; price_cents: number };
+// New prepay options are { count, price_cents }. Legacy rows may instead
+// carry a free-text { label, price_cents } — kept readable but not editable.
+type TermOption = { count?: number; price_cents: number; label?: string };
 
 type Offering = {
   id: string;
@@ -22,8 +37,9 @@ type Offering = {
   price_cents: number | null;
   published: boolean;
   featured: boolean;
-  unit_label: string | null;
+  billing_period: BillingPeriod;
   public_blurb: string | null;
+  perks: string[] | null;
   term_options: TermOption[] | null;
   display_order: number;
 };
@@ -35,13 +51,14 @@ type Pkg = {
   price_cents: number | null;
   published: boolean;
   featured: boolean;
-  unit_label: string | null;
+  billing_period: BillingPeriod;
   public_blurb: string | null;
+  perks: string[] | null;
   display_order: number;
   offeringIds: string[];
 };
 
-type TermRow = { label: string; price: string };
+type TermRow = { count: number; price: string };
 
 type OfferingForm = {
   id?: string;
@@ -50,8 +67,9 @@ type OfferingForm = {
   price: string;
   published: boolean;
   featured: boolean;
-  unit_label: string;
+  billing_period: BillingPeriod;
   public_blurb: string;
+  perks: string[];
   terms: TermRow[];
 };
 
@@ -62,8 +80,9 @@ type PkgForm = {
   price: string;
   published: boolean;
   featured: boolean;
-  unit_label: string;
+  billing_period: BillingPeriod;
   public_blurb: string;
+  perks: string[];
   offeringIds: string[];
 };
 
@@ -120,15 +139,17 @@ export default function OwnerOfferings() {
       return;
     }
     const terms: TermOption[] = [];
-    for (const t of oForm.terms) {
-      if (!t.label.trim() && !t.price.trim()) continue;
-      const c = toCents(t.price);
-      if (!t.label.trim() || c == null || Number.isNaN(c)) {
-        setErr('Each pricing option needs a label and a valid price.');
-        return;
+    if (isRecurring(oForm.billing_period)) {
+      for (const t of oForm.terms) {
+        const c = toCents(t.price);
+        if (c == null || Number.isNaN(c)) {
+          setErr('Each prepay option needs a total price.');
+          return;
+        }
+        terms.push({ count: t.count, price_cents: c });
       }
-      terms.push({ label: t.label.trim(), price_cents: c });
     }
+    const perks = oForm.perks.map((p) => p.trim()).filter(Boolean);
     const payload: any = {
       gym_id: gymId,
       name: oForm.name.trim(),
@@ -136,8 +157,9 @@ export default function OwnerOfferings() {
       price_cents: price,
       published: oForm.published,
       featured: oForm.featured,
-      unit_label: oForm.unit_label.trim() || null,
+      billing_period: oForm.billing_period,
       public_blurb: oForm.public_blurb.trim() || null,
+      perks: perks.length > 0 ? perks : null,
       term_options: terms.length > 0 ? terms : null,
     };
     setSaving(true);
@@ -179,6 +201,7 @@ export default function OwnerOfferings() {
       setErr('Price must be a positive number, or blank.');
       return;
     }
+    const perks = pForm.perks.map((p) => p.trim()).filter(Boolean);
     const payload: any = {
       gym_id: gymId,
       name: pForm.name.trim(),
@@ -186,8 +209,9 @@ export default function OwnerOfferings() {
       price_cents: price,
       published: pForm.published,
       featured: pForm.featured,
-      unit_label: pForm.unit_label.trim() || null,
+      billing_period: pForm.billing_period,
       public_blurb: pForm.public_blurb.trim() || null,
+      perks: perks.length > 0 ? perks : null,
     };
     setSaving(true);
     let pkgId = pForm.id;
@@ -287,8 +311,9 @@ export default function OwnerOfferings() {
                 price: '',
                 published: true,
                 featured: false,
-                unit_label: '/month',
+                billing_period: 'month',
                 public_blurb: '',
+                perks: [],
                 terms: [],
               })
             }
@@ -306,8 +331,9 @@ export default function OwnerOfferings() {
                 price: '',
                 published: true,
                 featured: false,
-                unit_label: '/month',
+                billing_period: 'month',
                 public_blurb: '',
+                perks: [],
                 offeringIds: [],
               })
             }
@@ -330,72 +356,93 @@ export default function OwnerOfferings() {
             onChange={(v) => setOForm({ ...oForm, price: v.replace(/[^0-9.]/g, '') })}
             placeholder="49.00" />
 
+          <PerksEditor
+            perks={oForm.perks}
+            onChange={(perks) => setOForm({ ...oForm, perks })}
+          />
+
           <SiteSection
             published={oForm.published}
             featured={oForm.featured}
-            unitLabel={oForm.unit_label}
+            billingPeriod={oForm.billing_period}
             blurb={oForm.public_blurb}
             onPublished={(b) => setOForm({ ...oForm, published: b })}
             onFeatured={(b) => setOForm({ ...oForm, featured: b })}
-            onUnit={(v) => setOForm({ ...oForm, unit_label: v })}
+            onPeriod={(v) => setOForm({ ...oForm, billing_period: v })}
             onBlurb={(v) => setOForm({ ...oForm, public_blurb: v })}
           />
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Prepay &amp; discount options</Text>
-            <Text style={styles.sectionHint}>
-              Add cheaper rates for paying longer — e.g. &ldquo;Pay 3 months&rdquo; or
-              &ldquo;Annual&rdquo;. Day passes work too: add an option like &ldquo;5-day
-              pass&rdquo;. Your site shows the savings automatically.
-            </Text>
-            {oForm.terms.map((t, i) => (
-              <View key={i} style={styles.termRow}>
-                <TextInput
-                  value={t.label}
-                  onChangeText={(v) =>
-                    setOForm({
-                      ...oForm,
-                      terms: oForm.terms.map((x, j) => (j === i ? { ...x, label: v } : x)),
-                    })
-                  }
-                  placeholder="Pay 3 months upfront"
-                  placeholderTextColor="#94a3b8"
-                  style={[styles.input, { flex: 2, minWidth: 150 }]}
-                />
-                <TextInput
-                  value={t.price}
-                  onChangeText={(v) =>
-                    setOForm({
-                      ...oForm,
-                      terms: oForm.terms.map((x, j) =>
-                        j === i ? { ...x, price: v.replace(/[^0-9.]/g, '') } : x
-                      ),
-                    })
-                  }
-                  placeholder="Total $"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="decimal-pad"
-                  style={[styles.input, { flex: 1, minWidth: 90 }]}
-                />
-                <Pressable
-                  onPress={() =>
-                    setOForm({ ...oForm, terms: oForm.terms.filter((_, j) => j !== i) })
-                  }
-                  style={styles.iconBtn}
-                >
-                  <Text style={styles.iconBtnText}>×</Text>
-                </Pressable>
-              </View>
-            ))}
-            <Pressable
-              style={styles.btnSmall}
-              onPress={() =>
-                setOForm({ ...oForm, terms: [...oForm.terms, { label: '', price: '' }] })
-              }
-            >
-              <Text style={styles.btnSmallText}>+ Add pricing option</Text>
-            </Pressable>
-          </View>
+          {isRecurring(oForm.billing_period) ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Prepay &amp; discount options</Text>
+              <Text style={styles.sectionHint}>
+                Add cheaper rates for paying several {periodNoun(oForm.billing_period)}s
+                upfront. Pick how many {periodNoun(oForm.billing_period)}s and the total
+                price — your site shows the % saved and the per-
+                {periodNoun(oForm.billing_period)} rate automatically.
+              </Text>
+              {oForm.terms.map((t, i) => (
+                <View key={i} style={styles.termBlock}>
+                  <View style={styles.termRow}>
+                    <Select
+                      ariaLabel="Number of periods"
+                      value={String(t.count)}
+                      onChange={(v) =>
+                        setOForm({
+                          ...oForm,
+                          terms: oForm.terms.map((x, j) =>
+                            j === i ? { ...x, count: Number(v) } : x
+                          ),
+                        })
+                      }
+                      options={countOptions(oForm.billing_period).map((n) => ({
+                        value: String(n),
+                        label: countLabel(oForm.billing_period, n),
+                      }))}
+                    />
+                    <TextInput
+                      value={t.price}
+                      onChangeText={(v) =>
+                        setOForm({
+                          ...oForm,
+                          terms: oForm.terms.map((x, j) =>
+                            j === i ? { ...x, price: v.replace(/[^0-9.]/g, '') } : x
+                          ),
+                        })
+                      }
+                      placeholder="Total $"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="decimal-pad"
+                      style={[styles.input, { flex: 1, minWidth: 90 }]}
+                    />
+                    <Pressable
+                      onPress={() =>
+                        setOForm({ ...oForm, terms: oForm.terms.filter((_, j) => j !== i) })
+                      }
+                      style={styles.iconBtn}
+                    >
+                      <Text style={styles.iconBtnText}>×</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.termPreview}>{termPreview(oForm, t)}</Text>
+                </View>
+              ))}
+              <Pressable
+                style={styles.btnSmall}
+                onPress={() =>
+                  setOForm({
+                    ...oForm,
+                    terms: [
+                      ...oForm.terms,
+                      { count: countOptions(oForm.billing_period)[0], price: '' },
+                    ],
+                  })
+                }
+              >
+                <Text style={styles.btnSmallText}>+ Add prepay option</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <FormButtons
             saving={saving}
@@ -465,14 +512,19 @@ export default function OwnerOfferings() {
             onChange={(v) => setPForm({ ...pForm, price: v.replace(/[^0-9.]/g, '') })}
             placeholder="79.00" />
 
+          <PerksEditor
+            perks={pForm.perks}
+            onChange={(perks) => setPForm({ ...pForm, perks })}
+          />
+
           <SiteSection
             published={pForm.published}
             featured={pForm.featured}
-            unitLabel={pForm.unit_label}
+            billingPeriod={pForm.billing_period}
             blurb={pForm.public_blurb}
             onPublished={(b) => setPForm({ ...pForm, published: b })}
             onFeatured={(b) => setPForm({ ...pForm, featured: b })}
-            onUnit={(v) => setPForm({ ...pForm, unit_label: v })}
+            onPeriod={(v) => setPForm({ ...pForm, billing_period: v })}
             onBlurb={(v) => setPForm({ ...pForm, public_blurb: v })}
           />
 
@@ -506,10 +558,15 @@ export default function OwnerOfferings() {
                       {o.term_options.length === 1 ? '' : 's'}
                     </Text>
                   ) : null}
+                  {o.perks && o.perks.length > 0 ? (
+                    <Text style={styles.cardMeta}>
+                      {o.perks.length} included item{o.perks.length === 1 ? '' : 's'}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={styles.cardPrice}>
                   {dollars(o.price_cents)}
-                  {o.unit_label ? <Text style={styles.cardUnit}>{o.unit_label}</Text> : null}
+                  <Text style={styles.cardUnit}>{periodUnitLabel(o.billing_period)}</Text>
                 </Text>
                 <Pressable
                   onPress={() =>
@@ -520,10 +577,11 @@ export default function OwnerOfferings() {
                       price: o.price_cents != null ? (o.price_cents / 100).toFixed(2) : '',
                       published: o.published,
                       featured: o.featured,
-                      unit_label: o.unit_label ?? '',
+                      billing_period: o.billing_period ?? 'month',
                       public_blurb: o.public_blurb ?? '',
+                      perks: o.perks ?? [],
                       terms: (o.term_options ?? []).map((t) => ({
-                        label: t.label,
+                        count: t.count ?? 2,
                         price: (t.price_cents / 100).toFixed(2),
                       })),
                     })
@@ -560,7 +618,7 @@ export default function OwnerOfferings() {
                 </View>
                 <Text style={styles.cardPrice}>
                   {dollars(p.price_cents)}
-                  {p.unit_label ? <Text style={styles.cardUnit}>{p.unit_label}</Text> : null}
+                  <Text style={styles.cardUnit}>{periodUnitLabel(p.billing_period)}</Text>
                 </Text>
                 <Pressable
                   onPress={() =>
@@ -571,8 +629,9 @@ export default function OwnerOfferings() {
                       price: p.price_cents != null ? (p.price_cents / 100).toFixed(2) : '',
                       published: p.published,
                       featured: p.featured,
-                      unit_label: p.unit_label ?? '',
+                      billing_period: p.billing_period ?? 'month',
                       public_blurb: p.public_blurb ?? '',
+                      perks: p.perks ?? [],
                       offeringIds: p.offeringIds,
                     })
                   }
@@ -587,6 +646,25 @@ export default function OwnerOfferings() {
       ) : null}
     </ScrollView>
   );
+}
+
+// Live preview shown under a prepay option in the editor.
+function termPreview(form: OfferingForm, t: TermRow): string {
+  const label = termLabel(form.billing_period, t.count);
+  const total = toCents(t.price);
+  if (total == null || Number.isNaN(total)) return `${label} — enter a total price.`;
+  const base = toCents(form.price);
+  if (base == null) {
+    return `${label}: ${money(total)} — add a base price above to show a discount.`;
+  }
+  if (Number.isNaN(base)) return `${label}: ${money(total)}.`;
+  const d = termDiscount(base, t.count, total);
+  if (d.pct == null) {
+    return `${label}: ${money(total)} — no saving vs ${money(d.regularCents)} regular.`;
+  }
+  return `${label}: ${money(d.regularCents)} → ${money(total)}  ·  ${d.pctText}% off  ·  ${money(
+    d.perPeriodCents
+  )}${periodUnitLabel(form.billing_period)}`;
 }
 
 function Field({
@@ -620,23 +698,61 @@ function Field({
   );
 }
 
+function PerksEditor({
+  perks,
+  onChange,
+}: {
+  perks: string[];
+  onChange: (perks: string[]) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>What&apos;s included</Text>
+      <Text style={styles.sectionHint}>
+        Each line shows as a ✓ checkmark on your public site. Add as many as you like.
+      </Text>
+      {perks.map((p, i) => (
+        <View key={i} style={styles.termRow}>
+          <Text style={styles.perkCheck}>✓</Text>
+          <TextInput
+            value={p}
+            onChangeText={(v) => onChange(perks.map((x, j) => (j === i ? v : x)))}
+            placeholder="e.g. Unlimited group classes"
+            placeholderTextColor="#94a3b8"
+            style={[styles.input, { flex: 1, minWidth: 150 }]}
+          />
+          <Pressable
+            onPress={() => onChange(perks.filter((_, j) => j !== i))}
+            style={styles.iconBtn}
+          >
+            <Text style={styles.iconBtnText}>×</Text>
+          </Pressable>
+        </View>
+      ))}
+      <Pressable style={styles.btnSmall} onPress={() => onChange([...perks, ''])}>
+        <Text style={styles.btnSmallText}>+ Add item</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function SiteSection({
   published,
   featured,
-  unitLabel,
+  billingPeriod,
   blurb,
   onPublished,
   onFeatured,
-  onUnit,
+  onPeriod,
   onBlurb,
 }: {
   published: boolean;
   featured: boolean;
-  unitLabel: string;
+  billingPeriod: BillingPeriod;
   blurb: string;
   onPublished: (b: boolean) => void;
   onFeatured: (b: boolean) => void;
-  onUnit: (v: string) => void;
+  onPeriod: (v: BillingPeriod) => void;
   onBlurb: (v: string) => void;
 }) {
   return (
@@ -654,12 +770,27 @@ function SiteSection({
         <Switch value={featured} onValueChange={onFeatured} />
         <Text style={styles.label}>Featured (highlighted on the site)</Text>
       </View>
-      <Field
-        label="Price unit / billing label"
-        value={unitLabel}
-        onChange={onUnit}
-        placeholder="/month, per day pass, one-time…"
-      />
+      <View style={{ gap: 6 }}>
+        <Text style={styles.label}>Billing period</Text>
+        <View style={styles.pillRow}>
+          {BILLING_PERIODS.map((p) => (
+            <Pressable
+              key={p.value}
+              onPress={() => onPeriod(p.value)}
+              style={[styles.periodPill, billingPeriod === p.value && styles.periodPillActive]}
+            >
+              <Text
+                style={[
+                  styles.periodPillText,
+                  billingPeriod === p.value && styles.periodPillTextActive,
+                ]}
+              >
+                {p.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       <Field
         label="Marketing line (optional)"
         value={blurb}
@@ -790,7 +921,25 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.charcoal },
   sectionHint: { fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pillRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  periodPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  periodPillActive: {
+    backgroundColor: theme.colors.wyldPurple,
+    borderColor: theme.colors.wyldPurple,
+  },
+  periodPillText: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  periodPillTextActive: { color: '#fff' },
+  termBlock: { gap: 4 },
   termRow: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
+  termPreview: { fontSize: 12, color: theme.colors.wyldPurple, fontWeight: '600' },
+  perkCheck: { fontSize: 15, fontWeight: '900', color: '#16a34a' },
   iconBtn: {
     width: 34,
     height: 34,
