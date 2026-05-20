@@ -23,7 +23,9 @@ type ModuleKey =
   | 'door_enabled'
   | 'offerings_enabled'
   | 'billing_enabled'
-  | 'marketing_enabled';
+  | 'marketing_enabled'
+  | 'revenue_expenses_enabled'
+  | 'applications_enabled';
 
 type Tab = { label: string; href: string; gated?: ModuleKey };
 
@@ -38,9 +40,11 @@ const TABS: Tab[] = [
   { label: 'Bookings', href: '/owner/bookings', gated: 'bookings_enabled' },
   { label: 'Members', href: '/owner/members' },
   { label: 'Employees', href: '/owner/employees', gated: 'employees_enabled' },
+  { label: 'Applications', href: '/owner/applications', gated: 'applications_enabled' },
   { label: 'Store', href: '/owner/store', gated: 'store_enabled' },
   { label: 'Marketing', href: '/owner/marketing', gated: 'marketing_enabled' },
   { label: 'Analytics & Reporting', href: '/owner/analytics', gated: 'analytics_enabled' },
+  { label: 'Revenue & Expenses', href: '/owner/revenue-expenses', gated: 'revenue_expenses_enabled' },
   { label: 'Door Management', href: '/owner/door', gated: 'door_enabled' },
   { label: 'Offerings', href: '/owner/offerings' },
   { label: 'Settings', href: '/owner/settings' },
@@ -69,7 +73,7 @@ export default function OwnerLayout() {
       const { data } = await supabase
         .from('gym_modules')
         .select(
-          'bookings_enabled, store_enabled, employees_enabled, analytics_enabled, door_enabled, offerings_enabled, billing_enabled, marketing_enabled'
+          'bookings_enabled, store_enabled, employees_enabled, analytics_enabled, door_enabled, offerings_enabled, billing_enabled, marketing_enabled, revenue_expenses_enabled, applications_enabled'
         )
         .eq('gym_id', profile.gym_id)
         .maybeSingle();

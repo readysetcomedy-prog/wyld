@@ -33,9 +33,11 @@ type Permissions = {
   perm_bookings: boolean;
   perm_members: boolean;
   perm_employees: boolean;
+  perm_applications: boolean;
   perm_store: boolean;
   perm_marketing: boolean;
   perm_analytics: boolean;
+  perm_revenue_expenses: boolean;
   perm_door: boolean;
   perm_offerings: boolean;
   perm_settings: boolean;
@@ -49,9 +51,11 @@ const PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
   { key: 'perm_bookings', label: 'Bookings' },
   { key: 'perm_members', label: 'Members' },
   { key: 'perm_employees', label: 'Employees' },
+  { key: 'perm_applications', label: 'Applications' },
   { key: 'perm_store', label: 'Store' },
   { key: 'perm_marketing', label: 'Marketing' },
   { key: 'perm_analytics', label: 'Analytics & Reporting' },
+  { key: 'perm_revenue_expenses', label: 'Revenue & Expenses' },
   { key: 'perm_door', label: 'Door Management' },
   { key: 'perm_offerings', label: 'Offerings' },
   { key: 'perm_settings', label: 'Settings' },
@@ -65,9 +69,11 @@ const EMPTY_PERMS: Permissions = {
   perm_bookings: false,
   perm_members: false,
   perm_employees: false,
+  perm_applications: false,
   perm_store: false,
   perm_marketing: false,
   perm_analytics: false,
+  perm_revenue_expenses: false,
   perm_door: false,
   perm_offerings: false,
   perm_settings: false,
@@ -280,9 +286,11 @@ function Roster() {
         perm_bookings: e.perm_bookings,
         perm_members: e.perm_members,
         perm_employees: e.perm_employees,
+        perm_applications: e.perm_applications,
         perm_store: e.perm_store,
         perm_marketing: e.perm_marketing,
         perm_analytics: e.perm_analytics,
+        perm_revenue_expenses: e.perm_revenue_expenses,
         perm_door: e.perm_door,
         perm_offerings: e.perm_offerings,
         perm_settings: e.perm_settings,

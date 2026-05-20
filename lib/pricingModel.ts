@@ -58,9 +58,11 @@ export const FEATURES: Feature[] = [
   { key: 'bookings_enabled', label: 'Bookings', flag: 'bookings_enabled' },
   { key: 'offerings_enabled', label: 'Offerings', flag: 'offerings_enabled' },
   { key: 'employees_enabled', label: 'Employees', flag: 'employees_enabled' },
+  { key: 'applications_enabled', label: 'Applications', flag: 'applications_enabled' },
   { key: 'time_cards_enabled', label: 'Time Cards', flag: 'time_cards_enabled' },
   { key: 'door_enabled', label: 'Door Management', flag: 'door_enabled' },
   { key: 'analytics_enabled', label: 'Analytics & Reporting', flag: 'analytics_enabled' },
+  { key: 'revenue_expenses_enabled', label: 'Revenue & Expenses', flag: 'revenue_expenses_enabled' },
   { key: 'billing_enabled', label: 'Billing tab', flag: 'billing_enabled' },
   { key: 'marketing_enabled', label: 'Marketing Materials', flag: 'marketing_enabled' },
 ];

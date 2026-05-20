@@ -45,6 +45,8 @@ type Modules = {
   news_enabled: boolean;
   faq_enabled: boolean;
   marketing_enabled: boolean;
+  revenue_expenses_enabled: boolean;
+  applications_enabled: boolean;
   multi_location_enabled: boolean;
 };
 
@@ -74,6 +76,8 @@ const MODULE_GROUPS: {
       { key: 'analytics_enabled', label: 'Analytics & Reporting', hint: 'Revenue, attendance, tax exports.' },
       { key: 'billing_enabled', label: 'Billing', hint: 'Owner-side billing tab.' },
       { key: 'marketing_enabled', label: 'Marketing Materials', hint: 'Owner-only asset library (flyers, social posts, signage).' },
+      { key: 'revenue_expenses_enabled', label: 'Revenue & Expenses', hint: 'Owner tab to track revenue and expenses.' },
+      { key: 'applications_enabled', label: 'Applications', hint: 'Job postings on the owner side; also adds a Careers page to the public site.' },
     ],
   },
 ];

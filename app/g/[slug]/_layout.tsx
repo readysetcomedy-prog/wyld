@@ -35,6 +35,7 @@ const DEFAULT_MODULES = {
   news_visible: true,
   faq_visible: true,
   store_visible: true,
+  applications_enabled: false,
 };
 const DEFAULT_THEME = {
   primary_color: '#0F172A',
@@ -318,6 +319,9 @@ export default function SiteLayout() {
           : []),
         ...(showNews ? [{ label: 'News', path: `/g/${slug}/news${locQuery}` }] : []),
         ...(showFaq ? [{ label: 'FAQ', path: `/g/${slug}/faq${locQuery}` }] : []),
+        ...(m.applications_enabled
+          ? [{ label: 'Careers', path: `/g/${slug}/careers${locQuery}` }]
+          : []),
         ...(m.contact_enabled
           ? [{ label: 'Contact', path: `/g/${slug}/contact${locQuery}` }]
           : []),
