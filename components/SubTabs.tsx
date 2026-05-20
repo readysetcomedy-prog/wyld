@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { theme } from '@/lib/theme';
 import { TabPlaceholder } from '@/components/TabPlaceholder';
 
+// A subtab's body is either a placeholder blurb (string) or a real component
+// to render. Strings get wrapped in TabPlaceholder + a card; components are
+// rendered bare so they control their own layout.
 export type SubTab = {
   key: string;
   label: string;
-  body: string;
+  body: ReactNode;
 };
 
 export function SubTabsPage({
@@ -20,6 +23,7 @@ export function SubTabsPage({
 }) {
   const [active, setActive] = useState(tabs[0].key);
   const activeTab = tabs.find((t) => t.key === active) ?? tabs[0];
+  const isPlaceholder = typeof activeTab.body === 'string';
 
   return (
     <View style={styles.root}>
@@ -49,9 +53,13 @@ export function SubTabsPage({
         })}
       </ScrollView>
 
-      <View style={styles.body}>
-        <TabPlaceholder title={activeTab.label} body={activeTab.body} />
-      </View>
+      {isPlaceholder ? (
+        <View style={styles.body}>
+          <TabPlaceholder title={activeTab.label} body={activeTab.body as string} />
+        </View>
+      ) : (
+        activeTab.body
+      )}
     </View>
   );
 }

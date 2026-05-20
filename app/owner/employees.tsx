@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
   Switch,
   Image,
 } from 'react-native';
@@ -15,6 +14,7 @@ import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { Select } from '@/components/Select';
 import { DateTimeField } from '@/components/DateTimeField';
+import { SubTabsPage } from '@/components/SubTabs';
 
 const WORK_TYPES: { value: string; label: string }[] = [
   { value: '', label: 'Not set' },
@@ -170,6 +170,38 @@ function parseIsoDate(s: string | null): Date | null {
 }
 
 export default function OwnerEmployees() {
+  return (
+    <SubTabsPage
+      title="Employees"
+      blurb="Roles, schedules, payroll, and HR for your team — all in one place."
+      tabs={[
+        { key: 'roster', label: 'Roster', body: <Roster /> },
+        {
+          key: 'time-cards',
+          label: 'Time Cards',
+          body: 'Clock-ins and clock-outs, total hours per pay period, and exports for payroll.',
+        },
+        {
+          key: 'scheduling',
+          label: 'Scheduling',
+          body: 'Build shifts, publish a schedule, and let your team request changes.',
+        },
+        {
+          key: 'hr',
+          label: 'HR',
+          body: 'Onboarding, employment documents, certifications, and time-off tracking.',
+        },
+        {
+          key: 'payroll',
+          label: 'Payroll',
+          body: 'Run payroll from time cards, manage rates and deductions, and export tax forms.',
+        },
+      ]}
+    />
+  );
+}
+
+function Roster() {
   const { profile } = useAuth();
   const gymId = profile?.gym_id ?? null;
 
@@ -387,7 +419,6 @@ export default function OwnerEmployees() {
   if (!gymId) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.title}>Employees</Text>
         <Text style={styles.dim}>Your account isn&apos;t linked to a gym yet.</Text>
       </View>
     );
@@ -395,14 +426,11 @@ export default function OwnerEmployees() {
   if (employees === null) return <ActivityIndicator color={theme.colors.charcoal} />;
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <View>
-        <Text style={styles.title}>Employees</Text>
-        <Text style={styles.sub}>
-          Add and manage your team. Once an employee signs up with the email you enter
-          here, their account links to this record automatically.
-        </Text>
-      </View>
+    <View style={styles.root}>
+      <Text style={styles.sub}>
+        Add and manage your team. Once an employee signs up with the email you enter
+        here, their account links to this record automatically.
+      </Text>
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
@@ -791,7 +819,7 @@ export default function OwnerEmployees() {
           </View>
         )
       ) : null}
-    </ScrollView>
+    </View>
   );
 }
 
