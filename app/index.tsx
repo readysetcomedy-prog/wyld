@@ -310,48 +310,39 @@ export default function Home() {
     scrollRef.current?.scrollTo({ y: Math.max(0, quoteY.current - 12), animated: true });
   }, []);
 
-  // Hero entrance choreography — on desktop the logo bounces in first, then
-  // the headline slides up, then the CTAs spring in. On mobile it's a single
-  // gentler fade-in for everything.
+  // Hero entrance choreography: logo bounces in first, then the headline
+  // slides up, then the CTAs spring in.
   const heroLogo = useRef(new Animated.Value(0)).current;
   const heroText = useRef(new Animated.Value(0)).current;
   const heroCtas = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (isWide) {
-      Animated.sequence([
-        Animated.spring(heroLogo, {
+    Animated.sequence([
+      Animated.spring(heroLogo, {
+        toValue: 1,
+        useNativeDriver: false,
+        friction: 5,
+        tension: 60,
+      }),
+      Animated.parallel([
+        Animated.spring(heroText, {
           toValue: 1,
           useNativeDriver: false,
-          friction: 5,
-          tension: 60,
+          friction: 7,
+          tension: 70,
         }),
-        Animated.parallel([
-          Animated.spring(heroText, {
+        Animated.sequence([
+          Animated.delay(220),
+          Animated.spring(heroCtas, {
             toValue: 1,
             useNativeDriver: false,
-            friction: 7,
-            tension: 70,
+            friction: 5,
+            tension: 80,
           }),
-          Animated.sequence([
-            Animated.delay(220),
-            Animated.spring(heroCtas, {
-              toValue: 1,
-              useNativeDriver: false,
-              friction: 5,
-              tension: 80,
-            }),
-          ]),
         ]),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(heroLogo, { toValue: 1, duration: 600, useNativeDriver: false }),
-        Animated.timing(heroText, { toValue: 1, duration: 600, useNativeDriver: false }),
-        Animated.timing(heroCtas, { toValue: 1, duration: 600, useNativeDriver: false }),
-      ]).start();
-    }
-  }, [isWide, heroLogo, heroText, heroCtas]);
+      ]),
+    ]).start();
+  }, [heroLogo, heroText, heroCtas]);
 
   if (loading) return null;
   if (session) return <Redirect href="/dashboard" />;
@@ -442,7 +433,7 @@ export default function Home() {
               delay={i * 140}
               direction="up"
               distance={36}
-              enabled={isWide}
+              enabled={true}
               style={[styles.stripItem, isWide && styles.stripItemWide]}
             >
               <Text style={styles.stripKey}>{s.k}</Text>
@@ -472,7 +463,7 @@ export default function Home() {
                   delay={i * 80}
                   direction="up"
                   distance={60}
-                  enabled={isWide}
+                  enabled={true}
                   style={isWide ? styles.cardWide : undefined}
                 >
                   <FeatureCard f={f} />
@@ -500,7 +491,7 @@ export default function Home() {
                   delay={i * 90}
                   direction="left"
                   distance={50}
-                  enabled={isWide}
+                  enabled={true}
                 >
                   <FaqItem q={f.q} a={f.a} />
                 </RevealItem>
