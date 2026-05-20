@@ -45,10 +45,11 @@ export type PricingModel = {
 
 export type Feature = { key: string; label: string; flag: string | null };
 
-// 'base' is always-on (every gym pays it). The rest map to a gym_modules
-// boolean column.
+// Features with flag === null are always-on (every gym pays for them). The
+// rest map to a gym_modules boolean column.
 export const FEATURES: Feature[] = [
   { key: 'base', label: 'Base platform', flag: null },
+  { key: 'website', label: 'Website', flag: null },
   { key: 'multi_location_enabled', label: 'Multiple locations', flag: 'multi_location_enabled' },
   { key: 'calendar_enabled', label: 'Calendar / Schedule page', flag: 'calendar_enabled' },
   { key: 'store_enabled', label: 'Store', flag: 'store_enabled' },
@@ -142,7 +143,7 @@ export function computeCost(
   const lines: CostLine[] = [];
 
   for (const f of FEATURES) {
-    const on = f.key === 'base' || active.has(f.key);
+    const on = f.flag === null || active.has(f.key);
     if (!on) continue;
     const item = model.items[f.key] ?? defaultItem();
 

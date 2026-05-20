@@ -182,7 +182,7 @@ export default function AdminPricing() {
   const breakdown = useMemo(() => {
     if (!form) return null;
     const activeSet = new Set(
-      FEATURES.filter((f) => f.key !== 'base' && active[f.key]).map((f) => f.key)
+      FEATURES.filter((f) => f.flag !== null && active[f.key]).map((f) => f.key)
     );
     return computeCost(
       modelFromForm(form),
@@ -315,9 +315,10 @@ export default function AdminPricing() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>What the gym has</Text>
             <Text style={styles.sectionHint}>
-              Base platform is always counted. Toggle the rest and set counts.
+              Always-on items (Base platform, Website) are always counted. Toggle the
+              rest and set counts.
             </Text>
-            {FEATURES.filter((f) => f.key !== 'base').map((f) => (
+            {FEATURES.filter((f) => f.flag !== null).map((f) => (
               <View key={f.key} style={styles.toggleRow}>
                 <Text style={styles.toggleLabel}>{f.label}</Text>
                 <Switch
