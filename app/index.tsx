@@ -31,33 +31,16 @@ const FEATURES: Feature[] = [
 ];
 
 const FAQS: { q: string; a: string }[] = [
-  {
-    q: 'How much does WyLD cost?',
-    a: 'Pricing is built around your gym — your locations, your member count, and the features you actually turn on. Request a quote and we’ll send specifics.',
-  },
-  {
-    q: 'Do I have to use every feature?',
-    a: 'No. Turn on only what you need and add more as your gym grows — you’re never paying for things you don’t use.',
-  },
-  {
-    q: 'Can I run more than one location?',
-    a: 'Yes. Each location gets its own public site and its own pricing, all managed from a single dashboard.',
-  },
-  {
-    q: 'Can members book classes online?',
-    a: 'Yes — members can browse your site, book classes and events, and manage their membership online.',
-  },
-  {
-    q: 'How does smart-lock entry work?',
-    a: 'Members let themselves in through self-serve access that checks their membership and waiver first — wherever your gym has door hardware.',
-  },
-  {
-    q: 'How do I get started?',
-    a: 'Request a quote below. We’ll put together pricing and get your gym set up alongside you.',
-  },
+  { q: 'How much does WyLD cost?', a: 'Pricing is built around your gym — your locations, your member count, and the features you actually turn on. Request a quote and we’ll send specifics.' },
+  { q: 'Do I have to use every feature?', a: 'No. Turn on only what you need and add more as your gym grows — you’re never paying for things you don’t use.' },
+  { q: 'Can I run more than one location?', a: 'Yes. Each location gets its own public site and its own pricing, all managed from a single dashboard.' },
+  { q: 'Can members book classes online?', a: 'Yes — members can browse your site, book classes and events, and manage their membership online.' },
+  { q: 'How does smart-lock entry work?', a: 'Members let themselves in through self-serve access that checks their membership and waiver first — wherever your gym has door hardware.' },
+  { q: 'How do I get started?', a: 'Request a quote below. We’ll put together pricing and get your gym set up alongside you.' },
 ];
 
-// Fades and lifts a section in once it scrolls into view.
+// Fades and lifts an entire section once it scrolls into view, with a
+// safety fallback so nothing stays hidden.
 function Reveal({
   children,
   scrollY,
@@ -76,14 +59,18 @@ function Reveal({
   const reveal = useCallback(() => {
     if (shown.current) return;
     shown.current = true;
-    Animated.timing(anim, { toValue: 1, duration: 500, useNativeDriver: false }).start();
+    Animated.spring(anim, {
+      toValue: 1,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 60,
+    }).start();
   }, [anim]);
 
   useEffect(() => {
     const id = scrollY.addListener(({ value }) => {
       if (top.current != null && value + viewportH > top.current + 40) reveal();
     });
-    // Safety net: never leave a section permanently hidden.
     const t = setTimeout(reveal, 2500);
     return () => {
       scrollY.removeListener(id);
@@ -102,7 +89,7 @@ function Reveal({
       style={{
         opacity: anim,
         transform: [
-          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) },
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) },
         ],
       }}
     >
@@ -111,8 +98,83 @@ function Reveal({
   );
 }
 
+// Per-item entrance — flies in with a stagger delay and springs to a stop.
+// Disabled (renders plain) on narrow viewports.
+function RevealItem({
+  children,
+  scrollY,
+  viewportH,
+  delay = 0,
+  direction = 'up',
+  distance = 40,
+  enabled = true,
+  style,
+}: {
+  children: React.ReactNode;
+  scrollY: Animated.Value;
+  viewportH: number;
+  delay?: number;
+  direction?: 'up' | 'down' | 'left' | 'right';
+  distance?: number;
+  enabled?: boolean;
+  style?: any;
+}) {
+  const anim = useRef(new Animated.Value(enabled ? 0 : 1)).current;
+  const top = useRef<number | null>(null);
+  const shown = useRef(false);
+
+  const reveal = useCallback(() => {
+    if (shown.current) return;
+    shown.current = true;
+    setTimeout(() => {
+      Animated.spring(anim, {
+        toValue: 1,
+        useNativeDriver: false,
+        friction: 6,
+        tension: 70,
+      }).start();
+    }, delay);
+  }, [anim, delay]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const id = scrollY.addListener(({ value }) => {
+      if (top.current != null && value + viewportH > top.current + 40) reveal();
+    });
+    const t = setTimeout(reveal, 3000);
+    return () => {
+      scrollY.removeListener(id);
+      clearTimeout(t);
+    };
+  }, [scrollY, viewportH, reveal, enabled]);
+
+  if (!enabled) return <View style={style}>{children}</View>;
+
+  const axis =
+    direction === 'up'
+      ? [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] }) }]
+      : direction === 'down'
+      ? [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-distance, 0] }) }]
+      : direction === 'left'
+      ? [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-distance, 0] }) }]
+      : [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] }) }];
+
+  return (
+    <Animated.View
+      onLayout={(e) => {
+        const y = e.nativeEvent.layout.y;
+        top.current = y;
+        if (y < viewportH) reveal();
+      }}
+      style={[style, { opacity: anim, transform: axis }]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 // Feature card that springs up and lights its border on hover.
-function FeatureCard({ f, wide }: { f: Feature; wide: boolean }) {
+function FeatureCard({ f }: { f: Feature }) {
   const h = useRef(new Animated.Value(0)).current;
   const to = (v: number) =>
     Animated.spring(h, { toValue: v, useNativeDriver: false, friction: 7, tension: 80 }).start();
@@ -121,7 +183,6 @@ function FeatureCard({ f, wide }: { f: Feature; wide: boolean }) {
     <Animated.View
       style={[
         styles.card,
-        wide && styles.cardWide,
         {
           borderColor: h.interpolate({
             inputRange: [0, 1],
@@ -203,11 +264,48 @@ export default function Home() {
     scrollRef.current?.scrollTo({ y: Math.max(0, quoteY.current - 12), animated: true });
   }, []);
 
-  // Hero entrance animation.
-  const intro = useRef(new Animated.Value(0)).current;
+  // Hero entrance choreography — on desktop the logo bounces in first, then
+  // the headline slides up, then the CTAs spring in. On mobile it's a single
+  // gentler fade-in for everything.
+  const heroLogo = useRef(new Animated.Value(0)).current;
+  const heroText = useRef(new Animated.Value(0)).current;
+  const heroCtas = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    Animated.timing(intro, { toValue: 1, duration: 600, useNativeDriver: false }).start();
-  }, [intro]);
+    if (isWide) {
+      Animated.sequence([
+        Animated.spring(heroLogo, {
+          toValue: 1,
+          useNativeDriver: false,
+          friction: 5,
+          tension: 60,
+        }),
+        Animated.parallel([
+          Animated.spring(heroText, {
+            toValue: 1,
+            useNativeDriver: false,
+            friction: 7,
+            tension: 70,
+          }),
+          Animated.sequence([
+            Animated.delay(220),
+            Animated.spring(heroCtas, {
+              toValue: 1,
+              useNativeDriver: false,
+              friction: 5,
+              tension: 80,
+            }),
+          ]),
+        ]),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(heroLogo, { toValue: 1, duration: 600, useNativeDriver: false }),
+        Animated.timing(heroText, { toValue: 1, duration: 600, useNativeDriver: false }),
+        Animated.timing(heroCtas, { toValue: 1, duration: 600, useNativeDriver: false }),
+      ]).start();
+    }
+  }, [isWide, heroLogo, heroText, heroCtas]);
 
   if (loading) return null;
   if (session) return <Redirect href="/dashboard" />;
@@ -227,40 +325,61 @@ export default function Home() {
       <Nav onQuotePress={scrollToQuote} />
 
       {/* Hero */}
-      <Animated.View
-        style={[
-          styles.hero,
-          isWide && styles.heroWide,
-          {
-            opacity: intro,
+      <View style={[styles.hero, isWide && styles.heroWide]}>
+        <Animated.View
+          style={{
+            opacity: heroLogo,
             transform: [
-              { translateY: intro.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+              { scale: heroLogo.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
             ],
-          },
-        ]}
-      >
-        <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.heroLogo} resizeMode="contain" />
-        <Text style={styles.eyebrow}>ONE COMPLETE PLATFORM FOR YOUR GYM</Text>
-        <Text style={[styles.heroTitle, isWide && styles.heroTitleWide]}>
-          Everything your gym needs.{' '}
-          <Text style={styles.heroTitleAccent}>One platform.</Text>
-        </Text>
-        <Text style={styles.heroSub}>
-          Website, scheduling, memberships, smart-lock entry, retail, staff, and reporting —
-          connected and built to run your whole gym, from one place.
-        </Text>
-        <View style={styles.heroCtas}>
-          <AnimatedPressable onPress={scrollToQuote} style={styles.primaryBtn}>
-            <Text style={styles.primaryBtnText}>Get a Quote</Text>
-          </AnimatedPressable>
-          <AnimatedPressable
-            onPress={() => router.push('/portfolio')}
-            style={styles.secondaryBtn}
-          >
-            <Text style={styles.secondaryBtnText}>See our work</Text>
-          </AnimatedPressable>
-        </View>
-      </Animated.View>
+          }}
+        >
+          <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.heroLogo} resizeMode="contain" />
+        </Animated.View>
+
+        <Animated.View
+          style={{
+            opacity: heroText,
+            transform: [
+              { translateY: heroText.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) },
+            ],
+            alignItems: 'center',
+            gap: theme.spacing.md,
+            width: '100%',
+          }}
+        >
+          <Text style={styles.eyebrow}>ONE COMPLETE PLATFORM FOR YOUR GYM</Text>
+          <Text style={[styles.heroTitle, isWide && styles.heroTitleWide]}>
+            Everything your gym needs.{' '}
+            <Text style={styles.heroTitleAccent}>One platform.</Text>
+          </Text>
+          <Text style={styles.heroSub}>
+            Website, scheduling, memberships, smart-lock entry, retail, staff, and reporting —
+            connected and built to run your whole gym, from one place.
+          </Text>
+        </Animated.View>
+
+        <Animated.View
+          style={{
+            opacity: heroCtas,
+            transform: [
+              { translateY: heroCtas.interpolate({ inputRange: [0, 1], outputRange: [36, 0] }) },
+            ],
+          }}
+        >
+          <View style={styles.heroCtas}>
+            <AnimatedPressable onPress={scrollToQuote} style={styles.primaryBtn}>
+              <Text style={styles.primaryBtnText}>Get a Quote</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              onPress={() => router.push('/portfolio')}
+              style={styles.secondaryBtn}
+            >
+              <Text style={styles.secondaryBtnText}>See our work</Text>
+            </AnimatedPressable>
+          </View>
+        </Animated.View>
+      </View>
 
       {/* Highlights strip */}
       <Reveal scrollY={scrollY} viewportH={height}>
@@ -269,11 +388,20 @@ export default function Home() {
             { k: 'One login', v: 'Run the whole gym from a single dashboard.' },
             { k: 'Only what you need', v: 'Turn features on as your gym grows.' },
             { k: 'One team to call', v: 'Real support from the people who built it.' },
-          ].map((s) => (
-            <View key={s.k} style={[styles.stripItem, isWide && styles.stripItemWide]}>
+          ].map((s, i) => (
+            <RevealItem
+              key={s.k}
+              scrollY={scrollY}
+              viewportH={height}
+              delay={i * 140}
+              direction="up"
+              distance={36}
+              enabled={isWide}
+              style={[styles.stripItem, isWide && styles.stripItemWide]}
+            >
               <Text style={styles.stripKey}>{s.k}</Text>
               <Text style={styles.stripVal}>{s.v}</Text>
-            </View>
+            </RevealItem>
           ))}
         </View>
       </Reveal>
@@ -290,8 +418,19 @@ export default function Home() {
               No more stitching six different tools together. It&apos;s all one product.
             </Text>
             <View style={[styles.grid, isWide && styles.gridWide]}>
-              {FEATURES.map((f) => (
-                <FeatureCard key={f.title} f={f} wide={isWide} />
+              {FEATURES.map((f, i) => (
+                <RevealItem
+                  key={f.title}
+                  scrollY={scrollY}
+                  viewportH={height}
+                  delay={i * 80}
+                  direction="up"
+                  distance={60}
+                  enabled={isWide}
+                  style={isWide ? styles.cardWide : undefined}
+                >
+                  <FeatureCard f={f} />
+                </RevealItem>
               ))}
             </View>
           </View>
@@ -307,8 +446,18 @@ export default function Home() {
               Frequently asked.
             </Text>
             <View style={styles.faqList}>
-              {FAQS.map((f) => (
-                <FaqItem key={f.q} q={f.q} a={f.a} />
+              {FAQS.map((f, i) => (
+                <RevealItem
+                  key={f.q}
+                  scrollY={scrollY}
+                  viewportH={height}
+                  delay={i * 90}
+                  direction="left"
+                  distance={50}
+                  enabled={isWide}
+                >
+                  <FaqItem q={f.q} a={f.a} />
+                </RevealItem>
               ))}
             </View>
           </View>
