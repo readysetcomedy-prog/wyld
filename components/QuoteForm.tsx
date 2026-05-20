@@ -21,6 +21,7 @@ const FEATURE_OPTIONS = [
 export function QuoteForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [gym, setGym] = useState('');
   const [locations, setLocations] = useState('');
   const [members, setMembers] = useState('');
@@ -37,6 +38,7 @@ export function QuoteForm() {
   function reset() {
     setName('');
     setEmail('');
+    setPhone('');
     setGym('');
     setLocations('');
     setMembers('');
@@ -53,6 +55,7 @@ export function QuoteForm() {
       return;
     }
     const body = [
+      phone.trim() ? `Phone: ${phone.trim()}` : null,
       `Gym: ${gym.trim()}`,
       `Locations: ${locations.trim() || 'not specified'}`,
       `Members: ${members.trim() || 'not specified'}`,
@@ -102,6 +105,13 @@ export function QuoteForm() {
           email
         />
       </View>
+      <Field
+        label="Phone (optional)"
+        value={phone}
+        onChange={setPhone}
+        placeholder="(555) 555-5555"
+        tel
+      />
       <Field
         label="Gym / business name"
         value={gym}
@@ -172,6 +182,7 @@ function Field({
   placeholder,
   numeric,
   email,
+  tel,
   multiline,
 }: {
   label: string;
@@ -180,6 +191,7 @@ function Field({
   placeholder?: string;
   numeric?: boolean;
   email?: boolean;
+  tel?: boolean;
   multiline?: boolean;
 }) {
   return (
@@ -190,7 +202,9 @@ function Field({
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor="#94a3b8"
-        keyboardType={numeric ? 'number-pad' : email ? 'email-address' : 'default'}
+        keyboardType={
+          numeric ? 'number-pad' : tel ? 'phone-pad' : email ? 'email-address' : 'default'
+        }
         autoCapitalize={email ? 'none' : 'sentences'}
         multiline={multiline}
         style={[styles.input, multiline && styles.inputMultiline]}
