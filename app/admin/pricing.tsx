@@ -38,6 +38,8 @@ type Form = {
   location_tier_mode: TierMode;
   member_tiers: TierForm[];
   member_tier_mode: TierMode;
+  employee_tiers: TierForm[];
+  employee_tier_mode: TierMode;
 };
 
 const INCLUSIONS: { value: Inclusion; label: string }[] = [
@@ -100,6 +102,8 @@ function formFromModel(m: PricingModel): Form {
     location_tier_mode: m.location_tier_mode,
     member_tiers: m.member_tiers.map(tierForm),
     member_tier_mode: m.member_tier_mode,
+    employee_tiers: m.employee_tiers.map(tierForm),
+    employee_tier_mode: m.employee_tier_mode,
   };
 }
 
@@ -133,6 +137,8 @@ function modelFromForm(form: Form): PricingModel {
     location_tier_mode: form.location_tier_mode,
     member_tiers: form.member_tiers.map(toTier),
     member_tier_mode: form.member_tier_mode,
+    employee_tiers: form.employee_tiers.map(toTier),
+    employee_tier_mode: form.employee_tier_mode,
   };
 }
 
@@ -147,6 +153,7 @@ export default function AdminPricing() {
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [calcLocations, setCalcLocations] = useState('1');
   const [calcMembers, setCalcMembers] = useState('0');
+  const [calcEmployees, setCalcEmployees] = useState('0');
 
   useEffect(() => {
     (async () => {
@@ -181,9 +188,10 @@ export default function AdminPricing() {
       modelFromForm(form),
       activeSet,
       parseInt(calcLocations || '0', 10) || 0,
-      parseInt(calcMembers || '0', 10) || 0
+      parseInt(calcMembers || '0', 10) || 0,
+      parseInt(calcEmployees || '0', 10) || 0
     );
-  }, [form, active, calcLocations, calcMembers]);
+  }, [form, active, calcLocations, calcMembers, calcEmployees]);
 
   if (!form) return <ActivityIndicator color={theme.colors.wyldPurple} />;
 
@@ -193,11 +201,17 @@ export default function AdminPricing() {
     );
     setSaved(false);
   }
-  function setTiers(which: 'location_tiers' | 'member_tiers', tiers: TierForm[]) {
+  function setTiers(
+    which: 'location_tiers' | 'member_tiers' | 'employee_tiers',
+    tiers: TierForm[]
+  ) {
     setForm((f) => (f ? { ...f, [which]: tiers } : f));
     setSaved(false);
   }
-  function setMode(which: 'location_tier_mode' | 'member_tier_mode', m: TierMode) {
+  function setMode(
+    which: 'location_tier_mode' | 'member_tier_mode' | 'employee_tier_mode',
+    m: TierMode
+  ) {
     setForm((f) => (f ? { ...f, [which]: m } : f));
     setSaved(false);
   }
@@ -280,6 +294,21 @@ export default function AdminPricing() {
             onChange={(t) => setTiers('member_tiers', t)}
             onModeChange={(m) => setMode('member_tier_mode', m)}
           />
+
+          <Text style={styles.sectionHeading}>Employee tiers</Text>
+          <Text style={styles.sectionHint}>
+            Set count ranges (from–to). &ldquo;Flat per range&rdquo; charges one price for
+            the range the count lands in — e.g. 5–10 employees = $20 flat. &ldquo;Per
+            employee&rdquo; charges the price times the count. Active (non-terminated)
+            employees are counted.
+          </Text>
+          <TierEditor
+            tiers={form.employee_tiers}
+            unit="employee"
+            mode={form.employee_tier_mode}
+            onChange={(t) => setTiers('employee_tiers', t)}
+            onModeChange={(m) => setMode('employee_tier_mode', m)}
+          />
         </>
       ) : (
         <View style={styles.calcWrap}>
@@ -313,6 +342,15 @@ export default function AdminPricing() {
               <TextInput
                 value={calcMembers}
                 onChangeText={(v) => setCalcMembers(cleanInt(v))}
+                keyboardType="number-pad"
+                style={styles.numInput}
+              />
+            </View>
+            <View style={styles.countRow}>
+              <Text style={styles.toggleLabel}>Employees</Text>
+              <TextInput
+                value={calcEmployees}
+                onChangeText={(v) => setCalcEmployees(cleanInt(v))}
                 keyboardType="number-pad"
                 style={styles.numInput}
               />

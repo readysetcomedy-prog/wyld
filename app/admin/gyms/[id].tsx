@@ -117,7 +117,12 @@ export default function GymDetail() {
       setModules(m as Modules | null);
 
       // Estimated monthly cost from the global pricing model.
-      const [pricing, { count: locCount }, { count: memCount }] = await Promise.all([
+      const [
+        pricing,
+        { count: locCount },
+        { count: memCount },
+        { count: empCount },
+      ] = await Promise.all([
         fetchPricingModel(),
         supabase
           .from('gym_locations')
@@ -128,12 +133,19 @@ export default function GymDetail() {
           .select('id', { count: 'exact', head: true })
           .eq('gym_id', gymId)
           .eq('status', 'active'),
+        supabase
+          .from('gym_employees')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .is('terminate_date', null),
       ]);
       const mods = m as Modules | null;
       const activeSet = new Set(
         FEATURES.filter((f) => f.flag && mods && (mods as any)[f.flag]).map((f) => f.key)
       );
-      setCost(computeCost(pricing, activeSet, locCount ?? 0, memCount ?? 0));
+      setCost(
+        computeCost(pricing, activeSet, locCount ?? 0, memCount ?? 0, empCount ?? 0)
+      );
 
       if (g.owner_id) {
         const { data: o } = await supabase

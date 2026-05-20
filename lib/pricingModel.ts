@@ -39,6 +39,8 @@ export type PricingModel = {
   location_tier_mode: TierMode;
   member_tiers: Tier[];
   member_tier_mode: TierMode;
+  employee_tiers: Tier[];
+  employee_tier_mode: TierMode;
 };
 
 export type Feature = { key: string; label: string; flag: string | null };
@@ -76,6 +78,8 @@ export const EMPTY_MODEL: PricingModel = {
   location_tier_mode: 'per_unit',
   member_tiers: [],
   member_tier_mode: 'flat',
+  employee_tiers: [],
+  employee_tier_mode: 'flat',
 };
 
 export function normalizeModel(raw: any): PricingModel {
@@ -88,6 +92,8 @@ export function normalizeModel(raw: any): PricingModel {
     location_tier_mode: mode(m.location_tier_mode, 'per_unit'),
     member_tiers: Array.isArray(m.member_tiers) ? m.member_tiers : [],
     member_tier_mode: mode(m.member_tier_mode, 'flat'),
+    employee_tiers: Array.isArray(m.employee_tiers) ? m.employee_tiers : [],
+    employee_tier_mode: mode(m.employee_tier_mode, 'flat'),
   };
 }
 
@@ -130,7 +136,8 @@ export function computeCost(
   model: PricingModel,
   active: Set<string>,
   locationCount: number,
-  memberCount: number
+  memberCount: number,
+  employeeCount: number
 ): CostBreakdown {
   const lines: CostLine[] = [];
 
@@ -208,6 +215,18 @@ export function computeCost(
       model.member_tiers,
       model.member_tier_mode,
       memberCount
+    );
+    if (line) lines.push(line);
+  }
+
+  // Employees — billed by tier.
+  if (employeeCount > 0) {
+    const line = tierLine(
+      '__employees',
+      'Employees',
+      model.employee_tiers,
+      model.employee_tier_mode,
+      employeeCount
     );
     if (line) lines.push(line);
   }
