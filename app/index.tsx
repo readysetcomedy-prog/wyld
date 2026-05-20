@@ -39,8 +39,8 @@ const FAQS: { q: string; a: string }[] = [
   { q: 'How do I get started?', a: 'Request a quote below. We’ll put together pricing and get your gym set up alongside you.' },
 ];
 
-// Fades and lifts an entire section once it scrolls into view, with a
-// safety fallback so nothing stays hidden.
+// Fades, lifts, and pops a section in every time it scrolls into view —
+// not just the first time.
 function Reveal({
   children,
   scrollY,
@@ -54,42 +54,63 @@ function Reveal({
 }) {
   const anim = useRef(new Animated.Value(0)).current;
   const top = useRef<number | null>(null);
-  const shown = useRef(false);
+  const height = useRef(0);
+  const inView = useRef(false);
 
-  const reveal = useCallback(() => {
-    if (shown.current) return;
-    shown.current = true;
+  const playIn = useCallback(() => {
+    anim.setValue(0);
     Animated.spring(anim, {
       toValue: 1,
       useNativeDriver: false,
-      friction: 8,
-      tension: 60,
+      friction: 5,
+      tension: 80,
     }).start();
   }, [anim]);
 
   useEffect(() => {
     const id = scrollY.addListener(({ value }) => {
-      if (top.current != null && value + viewportH > top.current + 40) reveal();
+      if (top.current == null) return;
+      const overlap =
+        top.current + height.current > value + 60 &&
+        top.current < value + viewportH - 60;
+      if (overlap && !inView.current) {
+        inView.current = true;
+        playIn();
+      } else if (!overlap && inView.current) {
+        inView.current = false;
+      }
     });
-    const t = setTimeout(reveal, 2500);
+    // Safety net: never let content stay hidden if scroll never fires.
+    const t = setTimeout(() => {
+      if (!inView.current) {
+        inView.current = true;
+        playIn();
+      }
+    }, 2500);
     return () => {
       scrollY.removeListener(id);
       clearTimeout(t);
     };
-  }, [scrollY, viewportH, reveal]);
+  }, [scrollY, viewportH, playIn]);
 
   return (
     <Animated.View
       onLayout={(e) => {
         const y = e.nativeEvent.layout.y;
+        const h = e.nativeEvent.layout.height;
         top.current = y;
+        height.current = h;
         onMeasure?.(y);
-        if (y < viewportH) reveal();
+        if (!inView.current && y < viewportH - 40) {
+          inView.current = true;
+          playIn();
+        }
       }}
       style={{
         opacity: anim,
         transform: [
-          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) },
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) },
+          { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
         ],
       }}
     >
@@ -98,8 +119,9 @@ function Reveal({
   );
 }
 
-// Per-item entrance — flies in with a stagger delay and springs to a stop.
-// Disabled (renders plain) on narrow viewports.
+// Per-item entrance — re-plays every time the item scrolls back into view,
+// with a stagger delay and a bouncy spring. Disabled (renders plain) on
+// narrow viewports.
 function RevealItem({
   children,
   scrollY,
@@ -121,17 +143,16 @@ function RevealItem({
 }) {
   const anim = useRef(new Animated.Value(enabled ? 0 : 1)).current;
   const top = useRef<number | null>(null);
-  const shown = useRef(false);
+  const inView = useRef(false);
 
-  const reveal = useCallback(() => {
-    if (shown.current) return;
-    shown.current = true;
+  const playIn = useCallback(() => {
+    anim.setValue(0);
     setTimeout(() => {
       Animated.spring(anim, {
         toValue: 1,
         useNativeDriver: false,
-        friction: 6,
-        tension: 70,
+        friction: 4,
+        tension: 75,
       }).start();
     }, delay);
   }, [anim, delay]);
@@ -139,14 +160,27 @@ function RevealItem({
   useEffect(() => {
     if (!enabled) return;
     const id = scrollY.addListener(({ value }) => {
-      if (top.current != null && value + viewportH > top.current + 40) reveal();
+      if (top.current == null) return;
+      const overlap =
+        top.current < value + viewportH - 40 && top.current > value - 80;
+      if (overlap && !inView.current) {
+        inView.current = true;
+        playIn();
+      } else if (!overlap && inView.current) {
+        inView.current = false;
+      }
     });
-    const t = setTimeout(reveal, 3000);
+    const t = setTimeout(() => {
+      if (!inView.current) {
+        inView.current = true;
+        playIn();
+      }
+    }, 3000);
     return () => {
       scrollY.removeListener(id);
       clearTimeout(t);
     };
-  }, [scrollY, viewportH, reveal, enabled]);
+  }, [scrollY, viewportH, enabled, playIn]);
 
   if (!enabled) return <View style={style}>{children}</View>;
 
@@ -164,9 +198,21 @@ function RevealItem({
       onLayout={(e) => {
         const y = e.nativeEvent.layout.y;
         top.current = y;
-        if (y < viewportH) reveal();
+        if (!inView.current && y < viewportH - 40) {
+          inView.current = true;
+          playIn();
+        }
       }}
-      style={[style, { opacity: anim, transform: axis }]}
+      style={[
+        style,
+        {
+          opacity: anim,
+          transform: [
+            ...axis,
+            { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) },
+          ],
+        },
+      ]}
     >
       {children}
     </Animated.View>
