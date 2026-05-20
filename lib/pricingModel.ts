@@ -39,14 +39,17 @@ export type PricingModel = {
   location_tier_mode: TierMode;
   member_tiers: Tier[];
   member_tier_mode: TierMode;
+  employee_tiers: Tier[];
+  employee_tier_mode: TierMode;
 };
 
 export type Feature = { key: string; label: string; flag: string | null };
 
-// 'base' is always-on (every gym pays it). The rest map to a gym_modules
-// boolean column.
+// Features with flag === null are always-on (every gym pays for them). The
+// rest map to a gym_modules boolean column.
 export const FEATURES: Feature[] = [
   { key: 'base', label: 'Base platform', flag: null },
+  { key: 'website', label: 'Website', flag: null },
   { key: 'multi_location_enabled', label: 'Multiple locations', flag: 'multi_location_enabled' },
   { key: 'calendar_enabled', label: 'Calendar / Schedule page', flag: 'calendar_enabled' },
   { key: 'store_enabled', label: 'Store', flag: 'store_enabled' },
@@ -55,9 +58,11 @@ export const FEATURES: Feature[] = [
   { key: 'bookings_enabled', label: 'Bookings', flag: 'bookings_enabled' },
   { key: 'offerings_enabled', label: 'Offerings', flag: 'offerings_enabled' },
   { key: 'employees_enabled', label: 'Employees', flag: 'employees_enabled' },
+  { key: 'applications_enabled', label: 'Applications', flag: 'applications_enabled' },
   { key: 'time_cards_enabled', label: 'Time Cards', flag: 'time_cards_enabled' },
   { key: 'door_enabled', label: 'Door Management', flag: 'door_enabled' },
   { key: 'analytics_enabled', label: 'Analytics & Reporting', flag: 'analytics_enabled' },
+  { key: 'revenue_expenses_enabled', label: 'Revenue & Expenses', flag: 'revenue_expenses_enabled' },
   { key: 'billing_enabled', label: 'Billing tab', flag: 'billing_enabled' },
   { key: 'marketing_enabled', label: 'Marketing Materials', flag: 'marketing_enabled' },
 ];
@@ -76,6 +81,8 @@ export const EMPTY_MODEL: PricingModel = {
   location_tier_mode: 'per_unit',
   member_tiers: [],
   member_tier_mode: 'flat',
+  employee_tiers: [],
+  employee_tier_mode: 'flat',
 };
 
 export function normalizeModel(raw: any): PricingModel {
@@ -88,6 +95,8 @@ export function normalizeModel(raw: any): PricingModel {
     location_tier_mode: mode(m.location_tier_mode, 'per_unit'),
     member_tiers: Array.isArray(m.member_tiers) ? m.member_tiers : [],
     member_tier_mode: mode(m.member_tier_mode, 'flat'),
+    employee_tiers: Array.isArray(m.employee_tiers) ? m.employee_tiers : [],
+    employee_tier_mode: mode(m.employee_tier_mode, 'flat'),
   };
 }
 
@@ -130,12 +139,13 @@ export function computeCost(
   model: PricingModel,
   active: Set<string>,
   locationCount: number,
-  memberCount: number
+  memberCount: number,
+  employeeCount: number
 ): CostBreakdown {
   const lines: CostLine[] = [];
 
   for (const f of FEATURES) {
-    const on = f.key === 'base' || active.has(f.key);
+    const on = f.flag === null || active.has(f.key);
     if (!on) continue;
     const item = model.items[f.key] ?? defaultItem();
 
@@ -208,6 +218,18 @@ export function computeCost(
       model.member_tiers,
       model.member_tier_mode,
       memberCount
+    );
+    if (line) lines.push(line);
+  }
+
+  // Employees — billed by tier.
+  if (employeeCount > 0) {
+    const line = tierLine(
+      '__employees',
+      'Employees',
+      model.employee_tiers,
+      model.employee_tier_mode,
+      employeeCount
     );
     if (line) lines.push(line);
   }

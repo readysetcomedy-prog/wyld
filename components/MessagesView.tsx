@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -57,6 +58,8 @@ export function MessagesView({
 }) {
   const { profile } = useAuth();
   const myId = profile?.id ?? null;
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
   const [threads, setThreads] = useState<ThreadWithMeta[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -242,8 +245,9 @@ export function MessagesView({
       : threads;
 
   return (
-    <View style={styles.root}>
-      <View style={styles.sidebar}>
+    <View style={[styles.root, !isWide && styles.rootNarrow]}>
+      {isWide || !activeId ? (
+      <View style={[styles.sidebar, !isWide && styles.sidebarNarrow]}>
         <Text style={styles.sidebarTitle}>Conversations</Text>
         {mode === 'owner' && locations.length > 0 ? (
           <Select
@@ -297,8 +301,15 @@ export function MessagesView({
           </ScrollView>
         )}
       </View>
+      ) : null}
 
-      <View style={styles.pane}>
+      {isWide || activeId ? (
+      <View style={[styles.pane, !isWide && styles.paneNarrow]}>
+        {!isWide && active ? (
+          <Pressable onPress={() => setActiveId(null)} style={styles.backRow}>
+            <Text style={styles.backRowText}>‹ Conversations</Text>
+          </Pressable>
+        ) : null}
         {!active ? (
           <View style={styles.emptyPane}>
             <Text style={styles.dim}>Select a conversation to read.</Text>
@@ -368,6 +379,7 @@ export function MessagesView({
           </>
         )}
       </View>
+      ) : null}
     </View>
   );
 }
@@ -387,6 +399,16 @@ function isFromMe(m: Message, mode: ViewMode, myId: string | null) {
 
 const styles = StyleSheet.create({
   root: { flexDirection: 'row', gap: 16, minHeight: 500, flex: 1 },
+  rootNarrow: { flexDirection: 'column' },
+  sidebarNarrow: { width: '100%' },
+  paneNarrow: { width: '100%', flex: undefined as any, minHeight: 480 },
+  backRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  backRowText: { fontSize: 14, fontWeight: '700', color: theme.colors.wyldPurple },
   sidebar: {
     width: 280,
     borderWidth: 1,

@@ -45,6 +45,8 @@ type Modules = {
   news_enabled: boolean;
   faq_enabled: boolean;
   marketing_enabled: boolean;
+  revenue_expenses_enabled: boolean;
+  applications_enabled: boolean;
   multi_location_enabled: boolean;
 };
 
@@ -74,6 +76,8 @@ const MODULE_GROUPS: {
       { key: 'analytics_enabled', label: 'Analytics & Reporting', hint: 'Revenue, attendance, tax exports.' },
       { key: 'billing_enabled', label: 'Billing', hint: 'Owner-side billing tab.' },
       { key: 'marketing_enabled', label: 'Marketing Materials', hint: 'Owner-only asset library (flyers, social posts, signage).' },
+      { key: 'revenue_expenses_enabled', label: 'Revenue & Expenses', hint: 'Owner tab to track revenue and expenses.' },
+      { key: 'applications_enabled', label: 'Applications', hint: 'Job postings on the owner side; also adds a Careers page to the public site.' },
     ],
   },
 ];
@@ -117,7 +121,12 @@ export default function GymDetail() {
       setModules(m as Modules | null);
 
       // Estimated monthly cost from the global pricing model.
-      const [pricing, { count: locCount }, { count: memCount }] = await Promise.all([
+      const [
+        pricing,
+        { count: locCount },
+        { count: memCount },
+        { count: empCount },
+      ] = await Promise.all([
         fetchPricingModel(),
         supabase
           .from('gym_locations')
@@ -128,12 +137,19 @@ export default function GymDetail() {
           .select('id', { count: 'exact', head: true })
           .eq('gym_id', gymId)
           .eq('status', 'active'),
+        supabase
+          .from('gym_employees')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .is('terminate_date', null),
       ]);
       const mods = m as Modules | null;
       const activeSet = new Set(
         FEATURES.filter((f) => f.flag && mods && (mods as any)[f.flag]).map((f) => f.key)
       );
-      setCost(computeCost(pricing, activeSet, locCount ?? 0, memCount ?? 0));
+      setCost(
+        computeCost(pricing, activeSet, locCount ?? 0, memCount ?? 0, empCount ?? 0)
+      );
 
       if (g.owner_id) {
         const { data: o } = await supabase

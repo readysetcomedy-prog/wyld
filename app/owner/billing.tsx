@@ -29,29 +29,40 @@ export default function OwnerBilling() {
     }
     let cancelled = false;
     (async () => {
-      const [model, { data: mods }, { count: locCount }, { count: memCount }] =
-        await Promise.all([
-          fetchPricingModel(),
-          supabase.from('gym_modules').select('*').eq('gym_id', gymId).maybeSingle(),
-          supabase
-            .from('gym_locations')
-            .select('id', { count: 'exact', head: true })
-            .eq('gym_id', gymId),
-          supabase
-            .from('gym_memberships')
-            .select('id', { count: 'exact', head: true })
-            .eq('gym_id', gymId)
-            .eq('status', 'active'),
-        ]);
+      const [
+        model,
+        { data: mods },
+        { count: locCount },
+        { count: memCount },
+        { count: empCount },
+      ] = await Promise.all([
+        fetchPricingModel(),
+        supabase.from('gym_modules').select('*').eq('gym_id', gymId).maybeSingle(),
+        supabase
+          .from('gym_locations')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId),
+        supabase
+          .from('gym_memberships')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .eq('status', 'active'),
+        supabase
+          .from('gym_employees')
+          .select('id', { count: 'exact', head: true })
+          .eq('gym_id', gymId)
+          .is('terminate_date', null),
+      ]);
       if (cancelled) return;
 
       const m = (mods as any) ?? {};
       const loc = locCount ?? 0;
       const mem = memCount ?? 0;
+      const emp = empCount ?? 0;
       const active = new Set(
         FEATURES.filter((f) => f.flag && m[f.flag]).map((f) => f.key)
       );
-      const cur = computeCost(model, active, loc, mem);
+      const cur = computeCost(model, active, loc, mem, emp);
       setCurrent(cur);
 
       // For each feature the gym doesn't have, the marginal cost to add it —
@@ -62,7 +73,7 @@ export default function OwnerBilling() {
         const withF = new Set(active);
         withF.add(f.key);
         const addCents =
-          computeCost(model, withF, loc, mem).totalCents - cur.totalCents;
+          computeCost(model, withF, loc, mem, emp).totalCents - cur.totalCents;
         return { key: f.key, label: f.label, addCents: Math.max(0, addCents) };
       });
       setUpgrades(ups);

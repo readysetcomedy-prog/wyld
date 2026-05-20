@@ -48,6 +48,7 @@ export type GymSite = {
     news_visible: boolean;
     faq_visible: boolean;
     store_visible: boolean;
+    applications_enabled: boolean;
   };
   settings: {
     contact_email: string | null;
