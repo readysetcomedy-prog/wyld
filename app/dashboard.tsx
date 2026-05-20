@@ -21,7 +21,8 @@ export default function Dashboard() {
   if (!profile || profile.id !== session.user.id) return null;
   if (profile.role === 'admin') return <Redirect href="/admin" />;
   if (profile.role === 'gym_owner') return <Redirect href="/owner" />;
-  if (profile.role === 'member') return <Redirect href="/member" />;
+  if (profile.role === 'member' || profile.role === 'gym_employee')
+    return <Redirect href="/member" />;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
