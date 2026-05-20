@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 16,
   },
   submitDisabled: { opacity: 0.6 },
   submitText: { color: '#fff', fontWeight: '800', fontSize: 16 },
