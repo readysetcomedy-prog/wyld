@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useCollabUnread } from '@/hooks/useCollabUnread';
 
 const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Gyms', href: '/admin/gyms', match: (p) => p.startsWith('/admin/gyms') },
@@ -27,6 +28,7 @@ const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
 export default function AdminLayout() {
   const { session, profile, loading, signOut } = useAuth();
   const unread = useUnreadMessages('admin');
+  const collab = useCollabUnread(profile?.id);
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
   const pathname = usePathname();
@@ -56,7 +58,9 @@ export default function AdminLayout() {
         >
           {TABS.map((tab) => {
             const isActive = tab.match(pathname);
-            const badge = tab.href === '/admin/messages' && unread > 0 ? unread : 0;
+            let badge = 0;
+            if (tab.href === '/admin/messages' && unread > 0) badge = unread;
+            else if (tab.href === '/admin/collaboration' && collab.total > 0) badge = collab.total;
             return (
               <Pressable
                 key={tab.href}
