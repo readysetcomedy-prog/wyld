@@ -218,6 +218,7 @@ export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
   const [form, setForm] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [memberPicker, setMemberPicker] = useState(false);
 
   const load = useCallback(async () => {
     if (!gymId) return;
@@ -450,10 +451,32 @@ export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
-      {!form ? (
-        <Pressable style={styles.btn} onPress={openNew}>
-          <Text style={styles.btnText}>+ Add employee</Text>
-        </Pressable>
+      {memberPicker ? (
+        <MemberPicker
+          gymId={gymId}
+          onCancel={() => setMemberPicker(false)}
+          onPick={(m) => {
+            setMemberPicker(false);
+            const f = emptyForm();
+            f.email = m.email;
+            f.full_name = m.full_name ?? '';
+            setForm(f);
+          }}
+        />
+      ) : !form ? (
+        <View style={styles.subRow}>
+          <Pressable style={styles.btn} onPress={openNew}>
+            <Text style={styles.btnText}>+ Add employee</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.btn, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}
+            onPress={() => setMemberPicker(true)}
+          >
+            <Text style={[styles.btnText, { color: theme.colors.charcoal }]}>
+              Search members…
+            </Text>
+          </Pressable>
+        </View>
       ) : (
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>{form.id ? 'Edit' : 'New'} employee</Text>
@@ -973,6 +996,110 @@ export function RolesEditor({ gymId: gymIdProp }: { gymId?: string | null } = {}
   );
 }
 
+// Search the gym's own members (anyone with a gym_memberships row at this
+// gym) and pick one to pre-fill the new-employee form.
+function MemberPicker({
+  gymId,
+  onCancel,
+  onPick,
+}: {
+  gymId: string | null;
+  onCancel: () => void;
+  onPick: (m: { user_id: string; email: string; full_name: string | null }) => void;
+}) {
+  const [rows, setRows] = useState<
+    { user_id: string; email: string; full_name: string | null }[] | null
+  >(null);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!gymId) return;
+    (async () => {
+      // gym_memberships -> profile lookup. Two queries to stay TS-clean.
+      const { data: mems } = await supabase
+        .from('gym_memberships')
+        .select('member_id')
+        .eq('gym_id', gymId);
+      const ids = ((mems as any[]) ?? []).map((m) => m.member_id);
+      if (ids.length === 0) {
+        setRows([]);
+        return;
+      }
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', ids);
+      setRows(
+        ((profs as any[]) ?? []).map((p) => ({
+          user_id: p.id,
+          email: p.email,
+          full_name: p.full_name,
+        }))
+      );
+    })();
+  }, [gymId]);
+
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.email.toLowerCase().includes(q) ||
+        (r.full_name ?? '').toLowerCase().includes(q)
+    );
+  }, [rows, search]);
+
+  return (
+    <View style={styles.formCard}>
+      <View style={styles.subRow}>
+        <Text style={styles.formTitle}>Pick a member to hire</Text>
+        <Pressable onPress={onCancel} style={styles.btnGhost}>
+          <Text style={styles.btnGhostText}>Cancel</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.dim}>
+        Only your gym&apos;s current members appear here. Anyone you want to hire who
+        isn&apos;t a member yet should sign up and join the gym first, then come back.
+      </Text>
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search by name or email…"
+        placeholderTextColor="#94a3b8"
+        style={styles.input}
+      />
+      {rows === null ? (
+        <ActivityIndicator color={theme.colors.charcoal} />
+      ) : filtered.length === 0 ? (
+        <Text style={styles.dim}>
+          {rows.length === 0
+            ? 'No members yet at this gym.'
+            : 'No members match that search.'}
+        </Text>
+      ) : (
+        <View style={styles.list}>
+          {filtered.map((r) => (
+            <Pressable
+              key={r.user_id}
+              onPress={() => onPick(r)}
+              style={styles.pickerRow}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickerName}>{r.full_name || '—'}</Text>
+                <Text style={styles.pickerEmail}>{r.email}</Text>
+              </View>
+              <Text style={[styles.btnText, { color: theme.colors.wyldPurple }]}>
+                Pick →
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
@@ -1151,4 +1278,16 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   editBtnText: { fontSize: 12, fontWeight: '700', color: theme.colors.charcoal },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  pickerName: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  pickerEmail: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
 });
