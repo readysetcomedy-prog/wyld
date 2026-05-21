@@ -15,6 +15,7 @@ import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 const TABS = [
   { label: 'My gyms', href: '/member' },
   { label: 'Find a gym', href: '/member/find' },
+  { label: 'Jobs', href: '/member/jobs' },
   { label: 'Messages', href: '/member/messages' },
   { label: 'Waivers', href: '/member/waivers' },
   { label: 'Profile', href: '/member/profile' },

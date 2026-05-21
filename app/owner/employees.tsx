@@ -182,6 +182,7 @@ export default function OwnerEmployees() {
       blurb="Roles, schedules, payroll, and HR for your team — all in one place."
       tabs={[
         { key: 'roster', label: 'Roster', body: <Roster /> },
+        { key: 'roles', label: 'Roles', body: <RolesEditor /> },
         {
           key: 'time-cards',
           label: 'Time Cards',
@@ -207,19 +208,21 @@ export default function OwnerEmployees() {
   );
 }
 
-function Roster() {
+export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
   const { profile } = useAuth();
-  const gymId = profile?.gym_id ?? null;
+  const gymId = gymIdProp ?? profile?.gym_id ?? null;
 
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [memberPicker, setMemberPicker] = useState(false);
 
   const load = useCallback(async () => {
     if (!gymId) return;
-    const [{ data: e }, { data: locs }] = await Promise.all([
+    const [{ data: e }, { data: locs }, { data: rs }] = await Promise.all([
       supabase
         .from('gym_employees')
         .select('*')
@@ -231,9 +234,15 @@ function Roster() {
         .select('id, label')
         .eq('gym_id', gymId)
         .order('display_order'),
+      supabase
+        .from('gym_roles')
+        .select('id, name')
+        .eq('gym_id', gymId)
+        .order('display_order'),
     ]);
     setEmployees((e as Employee[]) ?? []);
     setLocations((locs as any) ?? []);
+    setRoles((rs as any) ?? []);
   }, [gymId]);
 
   useEffect(() => {
@@ -442,10 +451,32 @@ function Roster() {
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
-      {!form ? (
-        <Pressable style={styles.btn} onPress={openNew}>
-          <Text style={styles.btnText}>+ Add employee</Text>
-        </Pressable>
+      {memberPicker ? (
+        <MemberPicker
+          gymId={gymId}
+          onCancel={() => setMemberPicker(false)}
+          onPick={(m) => {
+            setMemberPicker(false);
+            const f = emptyForm();
+            f.email = m.email;
+            f.full_name = m.full_name ?? '';
+            setForm(f);
+          }}
+        />
+      ) : !form ? (
+        <View style={styles.subRow}>
+          <Pressable style={styles.btn} onPress={openNew}>
+            <Text style={styles.btnText}>+ Add employee</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.btn, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}
+            onPress={() => setMemberPicker(true)}
+          >
+            <Text style={[styles.btnText, { color: theme.colors.charcoal }]}>
+              Search members…
+            </Text>
+          </Pressable>
+        </View>
       ) : (
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>{form.id ? 'Edit' : 'New'} employee</Text>
@@ -470,12 +501,34 @@ function Roster() {
                 value={form.phone}
                 onChange={(v) => setForm({ ...form, phone: v })}
               />
-              <Field
-                label="Position / title"
-                value={form.position}
-                onChange={(v) => setForm({ ...form, position: v })}
-                placeholder="Front desk, Trainer, Manager…"
-              />
+              <View style={styles.field}>
+                <Text style={styles.label}>Position / role</Text>
+                {roles.length === 0 ? (
+                  <>
+                    <TextInput
+                      value={form.position}
+                      onChangeText={(v) => setForm({ ...form, position: v })}
+                      placeholder="Front desk, Trainer, Manager…"
+                      placeholderTextColor="#94a3b8"
+                      style={styles.input}
+                    />
+                    <Text style={styles.dim}>
+                      Tip: add roles in the Roles subtab to pick from a dropdown here.
+                    </Text>
+                  </>
+                ) : (
+                  <Select
+                    ariaLabel="Position"
+                    value={form.position}
+                    onChange={(v) => setForm({ ...form, position: v })}
+                    placeholder="Pick a role…"
+                    options={[
+                      { value: '', label: '(none)' },
+                      ...roles.map((r) => ({ value: r.name, label: r.name })),
+                    ]}
+                  />
+                )}
+              </View>
             </View>
           </Section>
 
@@ -831,6 +884,222 @@ function Roster() {
   );
 }
 
+// Manage the gym's role/title list. Picked from in the Roster's Position
+// dropdown. Owner / admin only (via RLS).
+export function RolesEditor({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
+  const { profile } = useAuth();
+  const gymId = gymIdProp ?? profile?.gym_id ?? null;
+  const [roles, setRoles] = useState<{ id: string; name: string; display_order: number }[] | null>(null);
+  const [draft, setDraft] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!gymId) return;
+    const { data } = await supabase
+      .from('gym_roles')
+      .select('id, name, display_order')
+      .eq('gym_id', gymId)
+      .order('display_order')
+      .order('name');
+    setRoles((data as any) ?? []);
+  }, [gymId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function add() {
+    if (!gymId) return;
+    const name = draft.trim();
+    if (!name) return;
+    setErr(null);
+    const { error } = await supabase
+      .from('gym_roles')
+      .insert({ gym_id: gymId, name, display_order: roles?.length ?? 0 });
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setDraft('');
+    load();
+  }
+
+  async function rename(id: string, name: string) {
+    if (!name.trim()) return;
+    await supabase.from('gym_roles').update({ name: name.trim() }).eq('id', id);
+    load();
+  }
+
+  async function remove(id: string) {
+    if (typeof window !== 'undefined' && !window.confirm('Delete this role?')) return;
+    const { error } = await supabase.from('gym_roles').delete().eq('id', id);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    load();
+  }
+
+  if (!gymId) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.dim}>Your account isn&apos;t linked to a gym yet.</Text>
+      </View>
+    );
+  }
+  if (roles === null) return <ActivityIndicator color={theme.colors.charcoal} />;
+
+  return (
+    <View style={styles.root}>
+      <Text style={styles.sub}>
+        Add the roles your team can hold — Front desk, Trainer, Manager, etc. These
+        show up as a dropdown on the Roster.
+      </Text>
+      {err ? <Text style={styles.err}>{err}</Text> : null}
+
+      <View style={styles.subRow}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="New role"
+          placeholderTextColor="#94a3b8"
+          onSubmitEditing={add}
+          style={[styles.input, { flex: 1, minWidth: 180 }]}
+        />
+        <Pressable style={styles.btn} onPress={add}>
+          <Text style={styles.btnText}>+ Add role</Text>
+        </Pressable>
+      </View>
+
+      {roles.length === 0 ? (
+        <Text style={styles.dim}>No roles yet — add one above.</Text>
+      ) : (
+        <View style={styles.list}>
+          {roles.map((r) => (
+            <View key={r.id} style={styles.subRow}>
+              <TextInput
+                defaultValue={r.name}
+                onEndEditing={(e) => {
+                  const v = e.nativeEvent.text;
+                  if (v && v !== r.name) rename(r.id, v);
+                }}
+                style={[styles.input, { flex: 1, minWidth: 180 }]}
+              />
+              <Pressable onPress={() => remove(r.id)} style={styles.iconBtn}>
+                <Text style={styles.iconBtnText}>×</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Search the gym's own members (anyone with a gym_memberships row at this
+// gym) and pick one to pre-fill the new-employee form.
+function MemberPicker({
+  gymId,
+  onCancel,
+  onPick,
+}: {
+  gymId: string | null;
+  onCancel: () => void;
+  onPick: (m: { user_id: string; email: string; full_name: string | null }) => void;
+}) {
+  const [rows, setRows] = useState<
+    { user_id: string; email: string; full_name: string | null }[] | null
+  >(null);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!gymId) return;
+    (async () => {
+      // gym_memberships -> profile lookup. Two queries to stay TS-clean.
+      const { data: mems } = await supabase
+        .from('gym_memberships')
+        .select('member_id')
+        .eq('gym_id', gymId);
+      const ids = ((mems as any[]) ?? []).map((m) => m.member_id);
+      if (ids.length === 0) {
+        setRows([]);
+        return;
+      }
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', ids);
+      setRows(
+        ((profs as any[]) ?? []).map((p) => ({
+          user_id: p.id,
+          email: p.email,
+          full_name: p.full_name,
+        }))
+      );
+    })();
+  }, [gymId]);
+
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.email.toLowerCase().includes(q) ||
+        (r.full_name ?? '').toLowerCase().includes(q)
+    );
+  }, [rows, search]);
+
+  return (
+    <View style={styles.formCard}>
+      <View style={styles.subRow}>
+        <Text style={styles.formTitle}>Pick a member to hire</Text>
+        <Pressable onPress={onCancel} style={styles.btnGhost}>
+          <Text style={styles.btnGhostText}>Cancel</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.dim}>
+        Only your gym&apos;s current members appear here. Anyone you want to hire who
+        isn&apos;t a member yet should sign up and join the gym first, then come back.
+      </Text>
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search by name or email…"
+        placeholderTextColor="#94a3b8"
+        style={styles.input}
+      />
+      {rows === null ? (
+        <ActivityIndicator color={theme.colors.charcoal} />
+      ) : filtered.length === 0 ? (
+        <Text style={styles.dim}>
+          {rows.length === 0
+            ? 'No members yet at this gym.'
+            : 'No members match that search.'}
+        </Text>
+      ) : (
+        <View style={styles.list}>
+          {filtered.map((r) => (
+            <Pressable
+              key={r.user_id}
+              onPress={() => onPick(r)}
+              style={styles.pickerRow}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickerName}>{r.full_name || '—'}</Text>
+                <Text style={styles.pickerEmail}>{r.email}</Text>
+              </View>
+              <Text style={[styles.btnText, { color: theme.colors.wyldPurple }]}>
+                Pick →
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
@@ -1009,4 +1278,16 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   editBtnText: { fontSize: 12, fontWeight: '700', color: theme.colors.charcoal },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  pickerName: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal },
+  pickerEmail: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
 });

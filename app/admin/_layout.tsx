@@ -14,9 +14,13 @@ import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Gyms', href: '/admin/gyms', match: (p) => p.startsWith('/admin/gyms') },
+  { label: 'Members', href: '/admin/members', match: (p) => p === '/admin/members' },
   { label: 'Pricing', href: '/admin/pricing', match: (p) => p === '/admin/pricing' },
   { label: 'Users', href: '/admin/users', match: (p) => p === '/admin/users' },
   { label: 'Messages', href: '/admin/messages', match: (p) => p === '/admin/messages' },
+  { label: 'Revenue & Expenses', href: '/admin/revenue-expenses', match: (p) => p === '/admin/revenue-expenses' },
+  { label: 'Collaboration', href: '/admin/collaboration', match: (p) => p === '/admin/collaboration' },
+  { label: 'Start-Up', href: '/admin/start-up', match: (p) => p === '/admin/start-up' },
   { label: 'Settings', href: '/admin/settings', match: (p) => p === '/admin/settings' },
 ];
 
