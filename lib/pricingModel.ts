@@ -200,62 +200,72 @@ export function computeCost(
 
   // Locations — billed by tier, only when multi-location is on.
   if (active.has('multi_location_enabled') && locationCount > 0) {
-    const line = tierLine(
-      '__locations',
-      'Locations',
-      model.location_tiers,
-      model.location_tier_mode,
-      locationCount
+    lines.push(
+      tierLine(
+        '__locations',
+        'Locations',
+        model.location_tiers,
+        model.location_tier_mode,
+        locationCount
+      )
     );
-    if (line) lines.push(line);
   }
 
   // Members — billed by tier (every gym has members).
   if (memberCount > 0) {
-    const line = tierLine(
-      '__members',
-      'Members',
-      model.member_tiers,
-      model.member_tier_mode,
-      memberCount
+    lines.push(
+      tierLine(
+        '__members',
+        'Members',
+        model.member_tiers,
+        model.member_tier_mode,
+        memberCount
+      )
     );
-    if (line) lines.push(line);
   }
 
   // Employees — billed by tier.
   if (employeeCount > 0) {
-    const line = tierLine(
-      '__employees',
-      'Employees',
-      model.employee_tiers,
-      model.employee_tier_mode,
-      employeeCount
+    lines.push(
+      tierLine(
+        '__employees',
+        'Employees',
+        model.employee_tiers,
+        model.employee_tier_mode,
+        employeeCount
+      )
     );
-    if (line) lines.push(line);
   }
 
   return { lines, totalCents: lines.reduce((s, l) => s + l.cents, 0) };
 }
 
-// Cost line for a count-based group. In 'flat' mode the matched tier's price
-// is the whole charge; in 'per_unit' mode it's that price times the count.
+// Cost line for a count-based group. Always shows the count so owners can
+// see what's being counted, even when the matched tier is $0 or no tier
+// covers the count yet.
 function tierLine(
   key: string,
   label: string,
   tiers: Tier[],
   mode: TierMode,
   count: number
-): CostLine | null {
+): CostLine {
   const t = tierFor(tiers, count);
-  if (!t || t.price_cents <= 0) return null;
-  const cents = mode === 'flat' ? t.price_cents : t.price_cents * count;
-  const range = `${t.from_count}–${t.to_count ?? '∞'}`;
+  const cents = t ? (mode === 'flat' ? t.price_cents : t.price_cents * count) : 0;
+  let note: string;
+  if (!t) {
+    note = 'No tier set for this count';
+  } else if (mode === 'flat') {
+    note = `Flat rate for ${t.from_count}–${t.to_count ?? '∞'}`;
+  } else {
+    note = `${fmt(t.price_cents)} each`;
+  }
   return {
     key,
     label: `${label} (×${count})`,
     baseCents: cents,
     discountPct: 0,
     cents,
-    note: mode === 'flat' ? `Flat rate for ${range}` : `${fmt(t.price_cents)} each`,
+    note,
   };
 }
