@@ -41,7 +41,8 @@ export default function OwnerBilling() {
         supabase
           .from('gym_locations')
           .select('id', { count: 'exact', head: true })
-          .eq('gym_id', gymId),
+          .eq('gym_id', gymId)
+          .eq('is_paused', false),
         supabase
           .from('gym_memberships')
           .select('id', { count: 'exact', head: true })
