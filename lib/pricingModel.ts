@@ -21,16 +21,21 @@ export type ItemPricing = {
 };
 
 // How a tier group is priced. 'per_unit' charges the matched tier's price
-// times the count; 'flat' charges that tier's price as a single flat fee
-// for the whole range (tiers are never stacked).
+// per "new" member in that tier's range; 'flat' charges the tier's price as
+// a one-off fee for crossing into the range. Each tier carries its own mode
+// so you can mix them — e.g. a flat base range plus a per-extra "and beyond"
+// last tier. Costs accumulate across every tier the count has crossed.
 export type TierMode = 'per_unit' | 'flat';
 
-// A count-based pricing tier: an inclusive count range with a price.
-// `to_count` null means the range has no upper limit.
+// A count-based pricing tier: an inclusive count range with a price and a
+// mode. `to_count` null means the range has no upper limit (the "and beyond"
+// tier). `mode` is optional in storage so older rows fall back to the group
+// default on load.
 export type Tier = {
   from_count: number;
   to_count: number | null;
   price_cents: number;
+  mode?: TierMode;
 };
 
 export type PricingModel = {
@@ -240,25 +245,35 @@ export function computeCost(
   return { lines, totalCents: lines.reduce((s, l) => s + l.cents, 0) };
 }
 
-// Cost line for a count-based group. Always shows the count so owners can
-// see what's being counted, even when the matched tier is $0 or no tier
-// covers the count yet.
+// Cost line for a count-based group. Walks every tier the count has reached
+// and sums each tier's contribution — flat tiers add their fixed amount,
+// per-unit tiers add `price × the new members in that tier's range`.
 function tierLine(
   key: string,
   label: string,
   tiers: Tier[],
-  mode: TierMode,
+  groupMode: TierMode,
   count: number
 ): CostLine {
-  const t = tierFor(tiers, count);
-  const cents = t ? (mode === 'flat' ? t.price_cents : t.price_cents * count) : 0;
-  let note: string;
-  if (!t) {
-    note = 'No tier set for this count';
-  } else if (mode === 'flat') {
-    note = `Flat rate for ${t.from_count}–${t.to_count ?? '∞'}`;
-  } else {
-    note = `${fmt(t.price_cents)} each`;
+  const sorted = [...tiers].sort((a, b) => a.from_count - b.from_count);
+  let cents = 0;
+  const parts: string[] = [];
+  for (const t of sorted) {
+    if (count < t.from_count) break;
+    const m = t.mode ?? groupMode;
+    if (m === 'flat') {
+      cents += t.price_cents;
+      if (t.price_cents > 0) {
+        parts.push(`${t.from_count}–${t.to_count ?? '∞'}: ${fmt(t.price_cents)}`);
+      }
+    } else {
+      const top = t.to_count == null ? count : Math.min(count, t.to_count);
+      const inTier = top - t.from_count + 1;
+      if (inTier > 0 && t.price_cents > 0) {
+        cents += t.price_cents * inTier;
+        parts.push(`${t.from_count}–${t.to_count ?? '∞'}: ${fmt(t.price_cents)} × ${inTier}`);
+      }
+    }
   }
   return {
     key,
@@ -266,6 +281,6 @@ function tierLine(
     baseCents: cents,
     discountPct: 0,
     cents,
-    note,
+    note: parts.length ? parts.join('  +  ') : 'No tier set for this count',
   };
 }
