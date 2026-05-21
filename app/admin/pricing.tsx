@@ -31,7 +31,12 @@ type ItemForm = {
   included_with: IncludedWith;
   discounts: { when: string; percent: string }[];
 };
-type TierForm = { from_count: string; to_count: string; price: string };
+type TierForm = {
+  from_count: string;
+  to_count: string;
+  price: string;
+  mode: TierMode;
+};
 type Form = {
   items: Record<string, ItemForm>;
   location_tiers: TierForm[];
@@ -91,18 +96,21 @@ function formFromModel(m: PricingModel): Form {
         }
       : emptyItemForm();
   }
-  const tierForm = (t: Tier): TierForm => ({
+  // groupMode-aware: tiers loaded without an explicit mode inherit the group
+  // default so existing rows behave the same as before per-tier mode landed.
+  const tierFormFor = (groupMode: TierMode) => (t: Tier): TierForm => ({
     from_count: String(t.from_count),
     to_count: t.to_count != null ? String(t.to_count) : '',
     price: centsToStr(t.price_cents ?? 0),
+    mode: t.mode ?? groupMode,
   });
   return {
     items,
-    location_tiers: m.location_tiers.map(tierForm),
+    location_tiers: m.location_tiers.map(tierFormFor(m.location_tier_mode)),
     location_tier_mode: m.location_tier_mode,
-    member_tiers: m.member_tiers.map(tierForm),
+    member_tiers: m.member_tiers.map(tierFormFor(m.member_tier_mode)),
     member_tier_mode: m.member_tier_mode,
-    employee_tiers: m.employee_tiers.map(tierForm),
+    employee_tiers: m.employee_tiers.map(tierFormFor(m.employee_tier_mode)),
     employee_tier_mode: m.employee_tier_mode,
   };
 }
@@ -129,6 +137,7 @@ function modelFromForm(form: Form): PricingModel {
       from_count: Math.max(1, parseInt(t.from_count || '1', 10) || 1),
       to_count: Number.isFinite(to) && to > 0 ? to : null,
       price_cents: dollarsToCents(t.price),
+      mode: t.mode,
     };
   };
   return {
@@ -268,10 +277,11 @@ export default function AdminPricing() {
 
           <Text style={styles.sectionHeading}>Location tiers</Text>
           <Text style={styles.sectionHint}>
-            Set count ranges (from–to). &ldquo;Per location&rdquo; charges the range&apos;s
-            price times the count; &ldquo;Flat per range&rdquo; charges it once for the
-            whole range. Leave &ldquo;to&rdquo; blank for no upper limit. Only billed
-            when Multiple locations is on.
+            Set count ranges (from–to). Each tier you cross adds to the bill: flat
+            tiers add a one-time fee, per-location tiers add their rate times the new
+            locations in that tier. Toggle each tier&apos;s mode with the chip on its
+            row. Leave &ldquo;to&rdquo; blank for no upper limit (the
+            &ldquo;and beyond&rdquo; tier). Only billed when Multiple locations is on.
           </Text>
           <TierEditor
             tiers={form.location_tiers}
@@ -283,9 +293,9 @@ export default function AdminPricing() {
 
           <Text style={styles.sectionHeading}>Member tiers</Text>
           <Text style={styles.sectionHint}>
-            Set count ranges (from–to). &ldquo;Flat per range&rdquo; charges one price for
-            the range the count lands in — e.g. 50–100 members = $12 flat. &ldquo;Per
-            member&rdquo; charges the price times the count. Billed for every gym.
+            Tiers stack: each one you cross adds to the bill. Mix flat and per-member
+            tiers — e.g. 1–100 flat $12, then 101+ at $0.50 per new member = $37 for
+            150 members. Toggle each tier&apos;s mode on its row.
           </Text>
           <TierEditor
             tiers={form.member_tiers}
@@ -297,10 +307,9 @@ export default function AdminPricing() {
 
           <Text style={styles.sectionHeading}>Employee tiers</Text>
           <Text style={styles.sectionHint}>
-            Set count ranges (from–to). &ldquo;Flat per range&rdquo; charges one price for
-            the range the count lands in — e.g. 5–10 employees = $20 flat. &ldquo;Per
-            employee&rdquo; charges the price times the count. Active (non-terminated)
-            employees are counted.
+            Tiers stack the same way as members. Mix flat and per-employee tiers —
+            e.g. 1–10 flat $20, then 11+ at $5 per new employee. Active
+            (non-terminated) employees are counted.
           </Text>
           <TierEditor
             tiers={form.employee_tiers}
@@ -570,6 +579,7 @@ function TierEditor({
 }) {
   return (
     <View style={styles.itemCard}>
+      <Text style={styles.tinyLabel}>Default for new tiers</Text>
       <View style={styles.pillRow}>
         {(['per_unit', 'flat'] as const).map((m) => (
           <Pressable
@@ -633,7 +643,22 @@ function TierEditor({
               keyboardType="decimal-pad"
               style={styles.priceInput}
             />
-            <Text style={styles.discountWord}>{mode === 'flat' ? 'flat' : 'each'}</Text>
+            <Pressable
+              onPress={() =>
+                onChange(
+                  tiers.map((x, j) =>
+                    j === i
+                      ? { ...x, mode: x.mode === 'flat' ? 'per_unit' : 'flat' }
+                      : x
+                  )
+                )
+              }
+              style={styles.modeChip}
+            >
+              <Text style={styles.modeChipText}>
+                {t.mode === 'flat' ? 'flat' : `per ${unit}`}
+              </Text>
+            </Pressable>
             <Pressable
               onPress={() => onChange(tiers.filter((_, j) => j !== i))}
               style={styles.iconBtn}
@@ -646,7 +671,10 @@ function TierEditor({
       <Pressable
         style={styles.btnSmall}
         onPress={() =>
-          onChange([...tiers, { from_count: '', to_count: '', price: '' }])
+          onChange([
+            ...tiers,
+            { from_count: '', to_count: '', price: '', mode },
+          ])
         }
       >
         <Text style={styles.btnSmallText}>+ Add tier</Text>
@@ -749,7 +777,23 @@ const styles = StyleSheet.create({
   discountBlock: { gap: 8 },
   discountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   discountWord: { fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
+  tinyLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  modeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.wyldPurple,
+    backgroundColor: '#f3effe',
+  },
+  modeChipText: { fontSize: 12, fontWeight: '800', color: theme.colors.wyldPurple },
 
   iconBtn: {
     width: 32,
