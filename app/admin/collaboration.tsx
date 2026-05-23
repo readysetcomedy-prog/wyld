@@ -24,6 +24,7 @@ type Channel = {
   slug: string;
   description: string | null;
   archived: boolean;
+  is_private: boolean;
   created_by: string | null;
   created_at: string;
 };
@@ -133,6 +134,7 @@ export default function AdminCollaboration() {
   const [composing, setComposing] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
+  const [newChannelPrivate, setNewChannelPrivate] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
@@ -218,16 +220,12 @@ export default function AdminCollaboration() {
       setErr('Channel name must include at least one letter or number.');
       return;
     }
-    const { data, error } = await supabase
-      .from('wyld_collab_channels')
-      .insert({
-        name,
-        slug,
-        description: newChannelDesc.trim() || null,
-        created_by: userId,
-      })
-      .select('*')
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('wyld_collab_create_channel', {
+      p_name: name,
+      p_slug: slug,
+      p_description: newChannelDesc.trim() || null,
+      p_is_private: newChannelPrivate,
+    });
     if (error) {
       setErr(error.message);
       return;
@@ -235,7 +233,12 @@ export default function AdminCollaboration() {
     setComposing(false);
     setNewChannelName('');
     setNewChannelDesc('');
-    if (data) setSelectedId((data as Channel).id);
+    setNewChannelPrivate(false);
+    if (data) {
+      // The realtime subscription will refresh the rail; auto-select the
+      // newly-created channel.
+      setSelectedId(data as string);
+    }
   }
 
   const selected = channels?.find((c) => c.id === selectedId) ?? null;
@@ -266,6 +269,25 @@ export default function AdminCollaboration() {
               placeholderTextColor="#94a3b8"
               style={styles.input}
             />
+            <Pressable
+              onPress={() => setNewChannelPrivate((v) => !v)}
+              style={styles.privateRow}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  newChannelPrivate && styles.checkboxOn,
+                ]}
+              >
+                {newChannelPrivate ? <Text style={styles.checkboxMark}>✓</Text> : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.privateLabel}>Private channel</Text>
+                <Text style={styles.privateHint}>
+                  Only invited members can see or post. Admins must be invited too.
+                </Text>
+              </View>
+            </Pressable>
             {err ? <Text style={styles.err}>{err}</Text> : null}
             <Pressable onPress={createChannel} style={styles.btnPrimary}>
               <Text style={styles.btnPrimaryText}>Create</Text>
@@ -287,7 +309,9 @@ export default function AdminCollaboration() {
                   onPress={() => setSelectedId(c.id)}
                   style={[styles.channelRow, isActive && styles.channelRowActive]}
                 >
-                  <Text style={[styles.channelHash, isActive && { color: '#fff' }]}>#</Text>
+                  <Text style={[styles.channelHash, isActive && { color: '#fff' }]}>
+                    {c.is_private ? '🔒' : '#'}
+                  </Text>
                   <Text
                     style={[
                       styles.channelName,
@@ -367,9 +391,16 @@ function ChannelView({
   const [draftName, setDraftName] = useState(channel.name);
   const [draftDesc, setDraftDesc] = useState(channel.description ?? '');
   const [chanErr, setChanErr] = useState<string | null>(null);
+  const [showingMembers, setShowingMembers] = useState(false);
+  const [members, setMembers] = useState<string[]>([]);
   const scrollRef = useRef<ScrollView | null>(null);
 
-  const canEditChannel = isAdmin || channel.created_by === userId;
+  const isCreator = channel.created_by === userId;
+  const canManage = isCreator || isAdmin;
+  // For private channels, admin must also be a member to manage.
+  const canManagePrivate = channel.is_private
+    ? isCreator || (isAdmin && members.includes(userId))
+    : canManage;
 
   const load = useCallback(async () => {
     const { data: msgs } = await supabase
@@ -494,17 +525,98 @@ function ChannelView({
     setEditingChannel(false);
   }
 
-  async function archiveChannel() {
-    if (typeof window !== 'undefined' && !window.confirm(`Archive #${channel.name}?`)) return;
-    const { error } = await supabase
-      .from('wyld_collab_channels')
-      .update({ archived: true })
-      .eq('id', channel.id);
+  async function deleteChannel() {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        `Delete #${channel.name}? This permanently removes all messages and attachments. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    const { error } = await supabase.from('wyld_collab_channels').delete().eq('id', channel.id);
     if (error) {
       setChanErr(error.message);
       return;
     }
     onChannelGone();
+  }
+
+  // Load private-channel members; harmless no-op for public channels.
+  const loadMembers = useCallback(async () => {
+    if (!channel.is_private) {
+      setMembers([]);
+      return;
+    }
+    const { data } = await supabase
+      .from('wyld_collab_channel_members')
+      .select('user_id')
+      .eq('channel_id', channel.id);
+    setMembers(((data as any[]) ?? []).map((r) => r.user_id));
+  }, [channel.id, channel.is_private]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
+
+  // Realtime: keep the members list fresh.
+  useEffect(() => {
+    if (!channel.is_private) return;
+    const sub = supabase
+      .channel(`collab-members-${channel.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wyld_collab_channel_members',
+          filter: `channel_id=eq.${channel.id}`,
+        },
+        () => loadMembers()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [channel.id, channel.is_private, loadMembers]);
+
+  async function inviteMember(uid: string) {
+    setChanErr(null);
+    const { error } = await supabase
+      .from('wyld_collab_channel_members')
+      .insert({ channel_id: channel.id, user_id: uid, invited_by: userId });
+    if (error) {
+      setChanErr(error.message);
+      return;
+    }
+    loadMembers();
+  }
+
+  async function removeMember(uid: string) {
+    setChanErr(null);
+    if (
+      uid === channel.created_by &&
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        'Remove the channel creator? They will lose access to a channel they made.'
+      )
+    ) {
+      return;
+    }
+    const { error } = await supabase
+      .from('wyld_collab_channel_members')
+      .delete()
+      .eq('channel_id', channel.id)
+      .eq('user_id', uid);
+    if (error) {
+      setChanErr(error.message);
+      return;
+    }
+    if (uid === userId) {
+      onChannelGone();
+      return;
+    }
+    loadMembers();
   }
 
   return (
@@ -554,17 +666,41 @@ function ChannelView({
             </View>
           )}
         </View>
-        {canEditChannel && !editingChannel ? (
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Pressable onPress={() => setEditingChannel(true)} style={styles.linkBtn}>
-              <Text style={styles.linkBtnText}>Edit</Text>
-            </Pressable>
-            <Pressable onPress={archiveChannel} style={styles.linkBtn}>
-              <Text style={[styles.linkBtnText, { color: theme.colors.danger }]}>Archive</Text>
-            </Pressable>
+        {!editingChannel ? (
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+            {channel.is_private ? (
+              <Pressable onPress={() => setShowingMembers((v) => !v)} style={styles.linkBtn}>
+                <Text style={styles.linkBtnText}>
+                  {showingMembers ? 'Hide members' : `Members (${members.length})`}
+                </Text>
+              </Pressable>
+            ) : null}
+            {canManage ? (
+              <>
+                <Pressable onPress={() => setEditingChannel(true)} style={styles.linkBtn}>
+                  <Text style={styles.linkBtnText}>Edit</Text>
+                </Pressable>
+                <Pressable onPress={deleteChannel} style={styles.linkBtn}>
+                  <Text style={[styles.linkBtnText, { color: theme.colors.danger }]}>Delete</Text>
+                </Pressable>
+              </>
+            ) : null}
           </View>
         ) : null}
       </View>
+
+      {showingMembers && channel.is_private ? (
+        <MembersPanel
+          channel={channel}
+          userId={userId}
+          memberIds={members}
+          team={team}
+          teamById={teamById}
+          canManage={canManagePrivate}
+          onInvite={inviteMember}
+          onRemove={removeMember}
+        />
+      ) : null}
 
       <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesInner}>
         {messages === null ? (
@@ -799,6 +935,127 @@ function MessageItem({
           </Pressable>
         )}
       </View>
+    </View>
+  );
+}
+
+// -------- members panel for private channels
+
+function MembersPanel({
+  channel,
+  userId,
+  memberIds,
+  team,
+  teamById,
+  canManage,
+  onInvite,
+  onRemove,
+}: {
+  channel: Channel;
+  userId: string;
+  memberIds: string[];
+  team: TeamMember[];
+  teamById: Map<string, TeamMember>;
+  canManage: boolean;
+  onInvite: (uid: string) => void;
+  onRemove: (uid: string) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const memberSet = useMemo(() => new Set(memberIds), [memberIds]);
+
+  const candidates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return team
+      .filter((t) => !memberSet.has(t.id))
+      .filter(
+        (t) =>
+          !q ||
+          (t.full_name ?? '').toLowerCase().includes(q) ||
+          t.email.toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [search, team, memberSet]);
+
+  const memberRecords = useMemo(
+    () => memberIds.map((id) => teamById.get(id)).filter(Boolean) as TeamMember[],
+    [memberIds, teamById]
+  );
+
+  return (
+    <View style={styles.membersPanel}>
+      <Text style={styles.membersTitle}>
+        Members of #{channel.name} ({memberRecords.length})
+      </Text>
+      <View style={styles.membersList}>
+        {memberRecords.length === 0 ? (
+          <Text style={styles.dim}>No members yet.</Text>
+        ) : (
+          memberRecords.map((m) => (
+            <View key={m.id} style={styles.memberRow}>
+              <View style={styles.avatarSm}>
+                <Text style={styles.avatarSmText}>{initials(m.full_name || m.email)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.memberName}>
+                  {m.full_name || m.email}
+                  {m.id === channel.created_by ? (
+                    <Text style={styles.memberTag}>  · creator</Text>
+                  ) : null}
+                  {m.id === userId ? <Text style={styles.memberTag}>  · you</Text> : null}
+                </Text>
+                <Text style={styles.memberEmail}>{m.email}</Text>
+              </View>
+              {canManage || m.id === userId ? (
+                <Pressable onPress={() => onRemove(m.id)} style={styles.memberRemove}>
+                  <Text style={styles.memberRemoveText}>
+                    {m.id === userId ? 'Leave' : 'Remove'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ))
+        )}
+      </View>
+      {canManage ? (
+        <View style={{ gap: 6 }}>
+          <Text style={styles.membersTitle}>Invite</Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search team by name or email…"
+            placeholderTextColor="#94a3b8"
+            style={styles.input}
+          />
+          {candidates.length === 0 ? (
+            <Text style={styles.dim}>
+              {search ? 'No matching team members.' : 'Everyone on the WyLD team is already in.'}
+            </Text>
+          ) : (
+            <View style={{ gap: 4 }}>
+              {candidates.map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => onInvite(c.id)}
+                  style={styles.memberRow}
+                >
+                  <View style={styles.avatarSm}>
+                    <Text style={styles.avatarSmText}>
+                      {initials(c.full_name || c.email)}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.memberName}>{c.full_name || c.email}</Text>
+                    <Text style={styles.memberEmail}>{c.email}</Text>
+                  </View>
+                  <Text style={[styles.linkBtnText, { color: theme.colors.wyldPurple }]}>
+                    + Invite
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1301,5 +1558,54 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center', justifyContent: 'center',
+  },
+
+  privateRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 18, height: 18, borderRadius: 4,
+    borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxOn: {
+    backgroundColor: theme.colors.wyldPurple,
+    borderColor: theme.colors.wyldPurple,
+  },
+  checkboxMark: { color: '#fff', fontWeight: '900', fontSize: 12, lineHeight: 14 },
+  privateLabel: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  privateHint: { fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 },
+
+  membersPanel: {
+    padding: theme.spacing.md,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  membersTitle: {
+    fontSize: 12, fontWeight: '800', letterSpacing: 0.5,
+    textTransform: 'uppercase', color: theme.colors.textSecondary,
+  },
+  membersList: { gap: 4 },
+  memberRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1, borderColor: theme.colors.border,
+  },
+  memberName: { fontSize: 13, fontWeight: '700', color: theme.colors.charcoal },
+  memberEmail: { fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 },
+  memberTag: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '500' },
+  memberRemove: {
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+  },
+  memberRemoveText: {
+    fontSize: 11, fontWeight: '700', color: theme.colors.danger,
   },
 });
