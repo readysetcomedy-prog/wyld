@@ -42,6 +42,7 @@ type Permissions = {
   perm_offerings: boolean;
   perm_settings: boolean;
   perm_collaboration: boolean;
+  perm_demo: boolean;
 };
 
 const PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
@@ -61,6 +62,7 @@ const PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
   { key: 'perm_offerings', label: 'Offerings' },
   { key: 'perm_settings', label: 'Settings' },
   { key: 'perm_collaboration', label: 'Collaboration (WyLD only)' },
+  { key: 'perm_demo', label: 'Demo Accounts (WyLD only)' },
 ];
 
 const EMPTY_PERMS: Permissions = {
@@ -80,6 +82,7 @@ const EMPTY_PERMS: Permissions = {
   perm_offerings: false,
   perm_settings: false,
   perm_collaboration: false,
+  perm_demo: false,
 };
 
 type Employee = {
@@ -307,6 +310,7 @@ export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
         perm_offerings: e.perm_offerings,
         perm_settings: e.perm_settings,
         perm_collaboration: (e as any).perm_collaboration ?? false,
+        perm_demo: (e as any).perm_demo ?? false,
       },
       credentials: ((creds as any) ?? []).map((c: any) => ({
         id: c.id,

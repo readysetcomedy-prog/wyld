@@ -22,6 +22,7 @@ const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Revenue & Expenses', href: '/admin/revenue-expenses', match: (p) => p === '/admin/revenue-expenses' },
   { label: 'Collaboration', href: '/admin/collaboration', match: (p) => p === '/admin/collaboration' },
   { label: 'Start-Up', href: '/admin/start-up', match: (p) => p === '/admin/start-up' },
+  { label: 'Testing', href: '/admin/testing', match: (p) => p === '/admin/testing' },
   { label: 'Settings', href: '/admin/settings', match: (p) => p === '/admin/settings' },
 ];
 
