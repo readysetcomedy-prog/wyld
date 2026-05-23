@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, PanResponder, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { theme } from '@/lib/theme';
@@ -33,6 +33,16 @@ export function SignaturePad({
   const [, tick] = useState(0);
   const rerender = () => tick((n) => n + 1);
 
+  // Notify parent after strokes commits — avoids "setState during render of
+  // another component" when this fires from inside our own updater.
+  const isFirst = useRef(true);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => {
+    if (isFirst.current) { isFirst.current = false; return; }
+    onChangeRef.current(strokes.length === 0 ? null : JSON.stringify(strokes));
+  }, [strokes]);
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -47,22 +57,19 @@ export function SignaturePad({
       },
       onPanResponderRelease: () => {
         if (current.current.length > 0) {
-          setStrokes((prev) => {
-            const next = [...prev, current.current];
-            onChange(JSON.stringify(next));
-            return next;
-          });
+          const completed = current.current;
+          current.current = [];
+          setStrokes((prev) => [...prev, completed]);
+        } else {
+          current.current = [];
         }
-        current.current = [];
       },
     })
   ).current;
 
   function clear() {
-    setStrokes([]);
     current.current = [];
-    onChange(null);
-    rerender();
+    setStrokes([]);
   }
 
   return (

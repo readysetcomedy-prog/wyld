@@ -9,5 +9,6 @@ export default function OwnerScheduleRedirect() {
   const { profile, loading } = useAuth();
   if (loading) return null;
   if (!profile?.gym_id) return <Redirect href="/owner" />;
-  return <Redirect href={`/schedule/${profile.gym_id}` as never} />;
+  const back = encodeURIComponent('/owner');
+  return <Redirect href={`/schedule/${profile.gym_id}?back=${back}` as never} />;
 }
