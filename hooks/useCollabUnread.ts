@@ -25,8 +25,12 @@ export function useCollabUnread(userId: string | null | undefined) {
     }
 
     load();
+    // Unique suffix: this hook is mounted in multiple places at once, and
+    // supabase.channel(topic) returns the existing channel for a given topic
+    // — so a shared topic causes ".on() after subscribe()" on the 2nd mount.
+    const topic = `collab-unread-${userId}-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel(`collab-unread-${userId}`)
+      .channel(topic)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'wyld_collab_messages' },
