@@ -21,12 +21,14 @@ import {
   Tier,
   TierMode,
   computeCost,
+  computePendingSetupFees,
   fetchPricingModel,
 } from '@/lib/pricingModel';
 
 // Editable (string-backed) mirror of the persisted model.
 type ItemForm = {
   price: string;
+  setup_fee: string;
   inclusion: Inclusion;
   included_with: IncludedWith;
   discounts: { when: string; percent: string }[];
@@ -39,6 +41,7 @@ type TierForm = {
 };
 type Form = {
   items: Record<string, ItemForm>;
+  base_setup_fee: string;
   location_tiers: TierForm[];
   location_tier_mode: TierMode;
   member_tiers: TierForm[];
@@ -64,6 +67,7 @@ const cleanInt = (s: string) => s.replace(/[^0-9]/g, '');
 function emptyItemForm(): ItemForm {
   return {
     price: '',
+    setup_fee: '',
     inclusion: 'included',
     included_with: { mode: 'any', keys: [] },
     discounts: [],
@@ -87,6 +91,7 @@ function formFromModel(m: PricingModel): Form {
     items[f.key] = it
       ? {
           price: centsToStr(it.price_cents ?? 0),
+          setup_fee: centsToStr(it.setup_fee_cents ?? 0),
           inclusion: it.inclusion ?? 'included',
           included_with: normIncludedWith(it.included_with),
           discounts: (it.discounts ?? []).map((d) => ({
@@ -106,6 +111,7 @@ function formFromModel(m: PricingModel): Form {
   });
   return {
     items,
+    base_setup_fee: centsToStr(m.base_setup_fee_cents ?? 0),
     location_tiers: m.location_tiers.map(tierFormFor(m.location_tier_mode)),
     location_tier_mode: m.location_tier_mode,
     member_tiers: m.member_tiers.map(tierFormFor(m.member_tier_mode)),
@@ -121,6 +127,7 @@ function modelFromForm(form: Form): PricingModel {
     const it = form.items[f.key] ?? emptyItemForm();
     items[f.key] = {
       price_cents: dollarsToCents(it.price),
+      setup_fee_cents: dollarsToCents(it.setup_fee),
       inclusion: it.inclusion,
       included_with:
         it.inclusion === 'included_with'
@@ -142,6 +149,7 @@ function modelFromForm(form: Form): PricingModel {
   };
   return {
     items,
+    base_setup_fee_cents: dollarsToCents(form.base_setup_fee),
     location_tiers: form.location_tiers.map(toTier),
     location_tier_mode: form.location_tier_mode,
     member_tiers: form.member_tiers.map(toTier),
@@ -201,6 +209,17 @@ export default function AdminPricing() {
       parseInt(calcEmployees || '0', 10) || 0
     );
   }, [form, active, calcLocations, calcMembers, calcEmployees]);
+
+  // Calculator side never knows about a specific gym's already-paid fees,
+  // so it shows the full pending setup fees that a brand-new gym would
+  // see — base fee plus whatever's enabled.
+  const setupFees = useMemo(() => {
+    if (!form) return null;
+    const activeSet = new Set(
+      FEATURES.filter((f) => f.flag !== null && active[f.key]).map((f) => f.key)
+    );
+    return computePendingSetupFees(modelFromForm(form), activeSet, new Set());
+  }, [form, active]);
 
   if (!form) return <ActivityIndicator color={theme.colors.wyldPurple} />;
 
@@ -262,6 +281,30 @@ export default function AdminPricing() {
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save model'}</Text>
             </Pressable>
             {saved ? <Text style={styles.savedText}>Saved.</Text> : null}
+          </View>
+
+          <View style={styles.baseSetupCard}>
+            <Text style={styles.cardTitle}>Account setup fee</Text>
+            <Text style={styles.sectionHint}>
+              One-time fee charged to every new gym on their first bill,
+              regardless of which features they turn on. Recorded once per
+              gym — toggling features later won&apos;t re-charge this.
+            </Text>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Amount (USD)</Text>
+              <TextInput
+                value={form.base_setup_fee}
+                onChangeText={(v) => {
+                  const cleaned = cleanNum(v);
+                  setForm((f) => (f ? { ...f, base_setup_fee: cleaned } : f));
+                  setSaved(false);
+                }}
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+                keyboardType="decimal-pad"
+                style={styles.priceInput}
+              />
+            </View>
           </View>
 
           <Text style={styles.sectionHeading}>Feature pricing</Text>
@@ -369,7 +412,9 @@ export default function AdminPricing() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Estimated monthly cost</Text>
-            {breakdown ? <CostBreakdownView breakdown={breakdown} /> : null}
+            {breakdown ? (
+              <CostBreakdownView breakdown={breakdown} setupFees={setupFees ?? undefined} />
+            ) : null}
             <Text style={styles.sectionHint}>
               Reflects unsaved edits in the Model tab — save when the numbers look right.
             </Text>
@@ -505,6 +550,18 @@ function ItemCard({
           />
         </View>
       ) : null}
+
+      <View style={styles.fieldRow}>
+        <Text style={styles.fieldLabel}>Setup fee (USD, one-time)</Text>
+        <TextInput
+          value={value.setup_fee}
+          onChangeText={(v) => onChange({ setup_fee: cleanNum(v) })}
+          placeholder="0.00"
+          placeholderTextColor="#94a3b8"
+          keyboardType="decimal-pad"
+          style={styles.priceInput}
+        />
+      </View>
 
       {value.inclusion !== 'included' ? (
         <View style={styles.discountBlock}>
@@ -825,6 +882,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.charcoal },
+  baseSetupCard: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    backgroundColor: '#fffbeb',
+    gap: 8,
+  },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',

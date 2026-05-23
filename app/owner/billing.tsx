@@ -8,7 +8,9 @@ import { CostBreakdownView } from '@/components/CostBreakdown';
 import {
   FEATURES,
   CostBreakdown,
+  SetupFeesPending,
   computeCost,
+  computePendingSetupFees,
   fetchPricingModel,
 } from '@/lib/pricingModel';
 
@@ -20,6 +22,7 @@ export default function OwnerBilling() {
 
   const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState<CostBreakdown | null>(null);
+  const [setupFees, setSetupFees] = useState<SetupFeesPending | null>(null);
   const [upgrades, setUpgrades] = useState<Upgrade[]>([]);
 
   useEffect(() => {
@@ -35,6 +38,7 @@ export default function OwnerBilling() {
         { count: locCount },
         { count: memCount },
         { count: empCount },
+        { data: paidFees },
       ] = await Promise.all([
         fetchPricingModel(),
         supabase.from('gym_modules').select('*').eq('gym_id', gymId).maybeSingle(),
@@ -53,6 +57,10 @@ export default function OwnerBilling() {
           .select('id', { count: 'exact', head: true })
           .eq('gym_id', gymId)
           .is('terminate_date', null),
+        supabase
+          .from('gym_setup_fees_paid')
+          .select('fee_key')
+          .eq('gym_id', gymId),
       ]);
       if (cancelled) return;
 
@@ -63,8 +71,10 @@ export default function OwnerBilling() {
       const active = new Set(
         FEATURES.filter((f) => f.flag && m[f.flag]).map((f) => f.key)
       );
+      const paidKeys = new Set(((paidFees as any[]) ?? []).map((r) => r.fee_key));
       const cur = computeCost(model, active, loc, mem, emp);
       setCurrent(cur);
+      setSetupFees(computePendingSetupFees(model, active, paidKeys));
 
       // For each feature the gym doesn't have, the marginal cost to add it —
       // which naturally shows $0 when the feature is included or free.
@@ -108,7 +118,9 @@ export default function OwnerBilling() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Current monthly cost</Text>
-        {current ? <CostBreakdownView breakdown={current} /> : null}
+        {current ? (
+          <CostBreakdownView breakdown={current} setupFees={setupFees ?? undefined} />
+        ) : null}
       </View>
 
       {upgrades.length > 0 ? (
