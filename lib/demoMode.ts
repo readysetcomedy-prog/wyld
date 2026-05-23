@@ -129,7 +129,7 @@ export async function switchToDemo(email: string): Promise<void> {
       email: current.user?.email ?? null,
     });
   }
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
   const { error } = await supabase.auth.signInWithPassword({ email, password: 'demo' });
   if (error) throw error;
 }
@@ -138,7 +138,7 @@ export async function switchToDemo(email: string): Promise<void> {
 export async function returnToSelf(): Promise<void> {
   const stash = getStashedSession();
   if (!stash) return;
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
   const { error } = await supabase.auth.setSession({
     access_token: stash.access_token,
     refresh_token: stash.refresh_token,
