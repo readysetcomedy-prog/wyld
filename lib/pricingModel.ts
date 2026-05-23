@@ -13,6 +13,11 @@ export type IncludedWith = { mode: 'any' | 'all'; keys: string[] };
 
 export type ItemPricing = {
   price_cents: number;
+  // One-time setup fee for turning this feature on for the first time at a
+  // gym. Added to the gym's NEXT bill; once that bill is paid (recorded in
+  // gym_setup_fees_paid), it never reappears — toggling the feature off and
+  // back on doesn't re-charge it.
+  setup_fee_cents: number;
   inclusion: Inclusion;
   // When inclusion is 'included_with', the rule that makes this free.
   included_with: IncludedWith | null;
@@ -40,6 +45,9 @@ export type Tier = {
 
 export type PricingModel = {
   items: Record<string, ItemPricing>;
+  // One-time setup fee charged once per gym, regardless of which features
+  // are on. Hits the NEXT bill the first time, then never again.
+  base_setup_fee_cents: number;
   location_tiers: Tier[];
   location_tier_mode: TierMode;
   member_tiers: Tier[];
@@ -77,11 +85,12 @@ export const FEATURE_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 export function defaultItem(): ItemPricing {
-  return { price_cents: 0, inclusion: 'included', included_with: null, discounts: [] };
+  return { price_cents: 0, setup_fee_cents: 0, inclusion: 'included', included_with: null, discounts: [] };
 }
 
 export const EMPTY_MODEL: PricingModel = {
   items: {},
+  base_setup_fee_cents: 0,
   location_tiers: [],
   location_tier_mode: 'per_unit',
   member_tiers: [],
@@ -94,8 +103,24 @@ export function normalizeModel(raw: any): PricingModel {
   const m = raw && typeof raw === 'object' ? raw : {};
   const mode = (v: any, d: TierMode): TierMode =>
     v === 'flat' || v === 'per_unit' ? v : d;
+  // Older saved items may not have setup_fee_cents — coerce to 0 so the
+  // rest of the engine can treat it as a number unconditionally.
+  const items: Record<string, ItemPricing> = {};
+  const rawItems = m.items && typeof m.items === 'object' ? m.items : {};
+  for (const [k, v] of Object.entries(rawItems)) {
+    const it = v as Partial<ItemPricing>;
+    items[k] = {
+      price_cents: typeof it.price_cents === 'number' ? it.price_cents : 0,
+      setup_fee_cents: typeof it.setup_fee_cents === 'number' ? it.setup_fee_cents : 0,
+      inclusion: (it.inclusion as Inclusion) ?? 'included',
+      included_with: (it.included_with as IncludedWith | null) ?? null,
+      discounts: Array.isArray(it.discounts) ? it.discounts : [],
+    };
+  }
   return {
-    items: m.items && typeof m.items === 'object' ? m.items : {},
+    items,
+    base_setup_fee_cents:
+      typeof m.base_setup_fee_cents === 'number' ? m.base_setup_fee_cents : 0,
     location_tiers: Array.isArray(m.location_tiers) ? m.location_tiers : [],
     location_tier_mode: mode(m.location_tier_mode, 'per_unit'),
     member_tiers: Array.isArray(m.member_tiers) ? m.member_tiers : [],
@@ -135,6 +160,35 @@ export type CostLine = {
 };
 
 export type CostBreakdown = { lines: CostLine[]; totalCents: number };
+
+// One-time setup fees that haven't been billed yet for a gym. fee_key is
+// 'base' for the overall one-time fee, or a feature key for per-item fees.
+export type SetupFeeLine = { fee_key: string; label: string; cents: number };
+export type SetupFeesPending = { lines: SetupFeeLine[]; totalCents: number };
+
+// Compute the setup fees that should appear on this gym's NEXT bill —
+// i.e. the base fee plus every active item that has a setup_fee_cents and
+// hasn't already been recorded in gym_setup_fees_paid (passed in as
+// `paidKeys`). Once a fee shows up on a paid bill, the billing system
+// should insert its key into paidKeys; it'll never appear here again.
+export function computePendingSetupFees(
+  model: PricingModel,
+  active: Set<string>,
+  paidKeys: Set<string>
+): SetupFeesPending {
+  const lines: SetupFeeLine[] = [];
+  if (model.base_setup_fee_cents > 0 && !paidKeys.has('base')) {
+    lines.push({ fee_key: 'base', label: 'Account setup', cents: model.base_setup_fee_cents });
+  }
+  for (const f of FEATURES) {
+    if (f.flag !== null && !active.has(f.key)) continue;
+    const fee = model.items[f.key]?.setup_fee_cents ?? 0;
+    if (fee <= 0) continue;
+    if (paidKeys.has(f.key)) continue;
+    lines.push({ fee_key: f.key, label: f.label, cents: fee });
+  }
+  return { lines, totalCents: lines.reduce((s, l) => s + l.cents, 0) };
+}
 
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 

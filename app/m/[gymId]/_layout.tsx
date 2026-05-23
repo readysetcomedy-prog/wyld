@@ -49,13 +49,16 @@ export default function MemberGymLayout() {
   const load = useCallback(async () => {
     if (!session || !gymId) return;
     const [{ data: g }, { data: th }, { data: mem }, { data: emp }] = await Promise.all([
-      supabase.from('gyms').select('name, owner_id').eq('id', gymId).maybeSingle(),
+      supabase.from('gyms').select('name, owner_id, slug').eq('id', gymId).maybeSingle(),
       supabase.from('gym_themes').select('primary_color, accent_color, logo_url').eq('gym_id', gymId).is('location_id', null).maybeSingle(),
       supabase.from('gym_memberships').select('id').eq('gym_id', gymId).eq('member_id', session.user.id).maybeSingle(),
       supabase.from('gym_employees').select('id, terminate_date').eq('gym_id', gymId).or(`user_id.eq.${session.user.id},email.eq.${profile?.email ?? ''}`).maybeSingle(),
     ]);
 
     if (!g) { setResolved({ state: 'denied' }); return; }
+    // WyLD itself is not a gym dashboard — the WyLD employee experience
+    // lives inside the regular /member portal.
+    if ((g as any).slug === 'wyld') { setResolved({ state: 'denied' }); return; }
 
     const empActive = emp && (!(emp as any).terminate_date || (emp as any).terminate_date > new Date().toISOString().slice(0, 10));
     const hasAccess = !!mem || empActive || (g as any).owner_id === session.user.id || profile?.role === 'admin';

@@ -1,16 +1,46 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { CostBreakdown } from '@/lib/pricingModel';
+import { CostBreakdown, SetupFeesPending } from '@/lib/pricingModel';
 import { money } from '@/lib/pricing';
 import { theme } from '@/lib/theme';
 
 // Itemized monthly-cost breakdown — shared by the admin pricing calculator
-// and the per-gym cost card.
-export function CostBreakdownView({ breakdown }: { breakdown: CostBreakdown }) {
-  if (breakdown.lines.length === 0) {
+// and the per-gym cost card. Optional setupFees block renders ABOVE the
+// recurring breakdown as a one-time-fee section, so it's clear those won't
+// repeat next month.
+export function CostBreakdownView({
+  breakdown,
+  setupFees,
+}: {
+  breakdown: CostBreakdown;
+  setupFees?: SetupFeesPending;
+}) {
+  if (breakdown.lines.length === 0 && (!setupFees || setupFees.lines.length === 0)) {
     return <Text style={styles.empty}>Nothing enabled yet.</Text>;
   }
   return (
     <View style={styles.root}>
+      {setupFees && setupFees.lines.length > 0 ? (
+        <View style={styles.setupBlock}>
+          <Text style={styles.setupHeader}>One-time setup fees (next bill only)</Text>
+          {setupFees.lines.map((l) => (
+            <View key={l.fee_key} style={styles.row}>
+              <View style={styles.left}>
+                <Text style={styles.label}>{l.label}</Text>
+              </View>
+              <Text style={styles.amount}>{money(l.cents)}</Text>
+            </View>
+          ))}
+          <View style={[styles.row, styles.subtotalRow]}>
+            <Text style={styles.subtotalLabel}>Setup fees total</Text>
+            <Text style={styles.subtotalAmount}>{money(setupFees.totalCents)}</Text>
+          </View>
+          <Text style={styles.setupHint}>
+            These appear on the next bill once and are not charged again,
+            even if a feature is later toggled off and back on.
+          </Text>
+        </View>
+      ) : null}
+
       {breakdown.lines.map((l) => (
         <View key={l.key} style={styles.row}>
           <View style={styles.left}>
@@ -33,6 +63,14 @@ export function CostBreakdownView({ breakdown }: { breakdown: CostBreakdown }) {
         <Text style={styles.totalLabel}>Estimated monthly total</Text>
         <Text style={styles.totalAmount}>{money(breakdown.totalCents)}</Text>
       </View>
+      {setupFees && setupFees.lines.length > 0 ? (
+        <View style={[styles.row, styles.grandRow]}>
+          <Text style={styles.grandLabel}>Next bill (recurring + setup)</Text>
+          <Text style={styles.grandAmount}>
+            {money(breakdown.totalCents + setupFees.totalCents)}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -60,7 +98,24 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textDecorationLine: 'line-through',
   },
+
+  setupBlock: {
+    padding: 12, marginBottom: 6,
+    borderRadius: 10,
+    borderWidth: 1, borderColor: '#fde68a',
+    backgroundColor: '#fffbeb',
+  },
+  setupHeader: { fontSize: 12, fontWeight: '800', color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  setupHint: { fontSize: 11, color: '#92400e', marginTop: 6, lineHeight: 16 },
+  subtotalRow: { borderBottomWidth: 0, marginTop: 2 },
+  subtotalLabel: { fontSize: 13, fontWeight: '800', color: '#92400e' },
+  subtotalAmount: { fontSize: 15, fontWeight: '900', color: '#92400e' },
+
   totalRow: { borderBottomWidth: 0, marginTop: 4 },
   totalLabel: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
   totalAmount: { fontSize: 20, fontWeight: '900', color: theme.colors.wyldPurple },
+
+  grandRow: { borderBottomWidth: 0, marginTop: 2 },
+  grandLabel: { fontSize: 13, fontWeight: '800', color: theme.colors.textSecondary },
+  grandAmount: { fontSize: 16, fontWeight: '900', color: theme.colors.charcoal },
 });

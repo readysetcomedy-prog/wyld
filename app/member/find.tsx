@@ -34,6 +34,7 @@ export default function FindGym() {
       const { data } = await supabase
         .from('gyms')
         .select('id, name, slug, city, state')
+        .neq('slug', 'wyld')
         .order('name');
       setGyms((data as Gym[] | null) ?? []);
     })();

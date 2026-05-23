@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { TabPlaceholder } from '@/components/TabPlaceholder';
 
 // A subtab's body is either a placeholder blurb (string) or a real component
@@ -24,6 +25,7 @@ export function SubTabsPage({
   const [active, setActive] = useState(tabs[0].key);
   const activeTab = tabs.find((t) => t.key === active) ?? tabs[0];
   const isPlaceholder = typeof activeTab.body === 'string';
+  const gymTheme = useGymTheme();
 
   return (
     <View style={styles.root}>
@@ -43,7 +45,10 @@ export function SubTabsPage({
             <Pressable
               key={t.key}
               onPress={() => setActive(t.key)}
-              style={[styles.tab, isActive && styles.tabActive]}
+              style={[
+                styles.tab,
+                isActive && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary },
+              ]}
             >
               <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
                 {t.label}

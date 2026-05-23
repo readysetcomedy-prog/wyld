@@ -14,6 +14,7 @@ import { theme } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 import { supabase } from '@/lib/supabase';
 import { ScrollToTopContext } from '@/lib/scrollContext';
+import { GymThemeProvider, tintWithWhite } from '@/lib/gymTheme';
 
 type ModuleKey =
   | 'bookings_enabled'
@@ -52,7 +53,14 @@ const TABS: Tab[] = [
   { label: 'Settings', href: '/owner/settings' },
 ];
 
-type Brand = { name: string; primary_color: string; accent_color: string; logo_url: string | null };
+type Brand = {
+  name: string;
+  primary_color: string;       // website primary (logo background, sidebar fallback)
+  accent_color: string;        // website accent
+  dashboard_primary_color: string;  // resolved (falls back to website primary)
+  dashboard_accent_color: string;   // resolved (falls back to website accent)
+  logo_url: string | null;
+};
 
 export default function OwnerLayout() {
   const { session, profile, loading, signOut } = useAuth();
@@ -87,17 +95,21 @@ export default function OwnerLayout() {
         supabase.from('gyms').select('name').eq('id', profile.gym_id).maybeSingle(),
         supabase
           .from('gym_themes')
-          .select('primary_color, accent_color, logo_url')
+          .select('primary_color, accent_color, dashboard_primary_color, dashboard_accent_color, logo_url')
           .eq('gym_id', profile.gym_id)
           .is('location_id', null)
           .maybeSingle(),
       ]);
       if (cancelled) return;
       setModules((mods as any) ?? {});
+      const websitePrimary = (th as any)?.primary_color ?? theme.colors.wyldPurple;
+      const websiteAccent = (th as any)?.accent_color ?? theme.colors.tealDark;
       setBrand({
         name: (g as any)?.name ?? 'My Gym',
-        primary_color: (th as any)?.primary_color ?? theme.colors.wyldPurple,
-        accent_color: (th as any)?.accent_color ?? theme.colors.tealDark,
+        primary_color: websitePrimary,
+        accent_color: websiteAccent,
+        dashboard_primary_color: (th as any)?.dashboard_primary_color ?? websitePrimary,
+        dashboard_accent_color: (th as any)?.dashboard_accent_color ?? websiteAccent,
         logo_url: (th as any)?.logo_url ?? null,
       });
     })();
@@ -114,10 +126,13 @@ export default function OwnerLayout() {
     return <Redirect href="/dashboard" />;
   }
 
-  const sidebarBg = brand?.primary_color ?? theme.colors.wyldPurple;
-  const accent = brand?.accent_color ?? theme.colors.tealDark;
+  const sidebarBg = brand?.dashboard_primary_color ?? theme.colors.wyldPurple;
+  const accent = brand?.dashboard_accent_color ?? theme.colors.tealDark;
+  // 8% of the dashboard primary on white — visible enough to feel branded,
+  // not so saturated that it fights the content.
+  const contentTint = brand ? tintWithWhite(sidebarBg, 0.08) : theme.colors.background;
   return (
-    <View style={[styles.root, isWide && styles.rootWide]}>
+    <View style={[styles.root, isWide && styles.rootWide, { backgroundColor: contentTint }]}>
       <View style={[styles.sidebar, isWide && styles.sidebarWide, { backgroundColor: sidebarBg }]}>
         <View style={styles.brand}>
           {brand?.logo_url ? (
@@ -189,11 +204,15 @@ export default function OwnerLayout() {
 
       <ScrollView
         ref={contentScrollRef}
-        style={styles.content}
+        style={[styles.content, { backgroundColor: contentTint }]}
         contentContainerStyle={styles.contentInner}
       >
         <ScrollToTopContext.Provider value={scrollToTop}>
-          <Slot />
+          <GymThemeProvider
+            value={{ primary: sidebarBg, accent, contentTint }}
+          >
+            <Slot />
+          </GymThemeProvider>
         </ScrollToTopContext.Provider>
         {!isWide ? (
           <Pressable

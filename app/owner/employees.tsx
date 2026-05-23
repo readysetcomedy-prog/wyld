@@ -15,6 +15,7 @@ import { theme } from '@/lib/theme';
 import { Select } from '@/components/Select';
 import { DateTimeField } from '@/components/DateTimeField';
 import { SubTabsPage } from '@/components/SubTabs';
+import { useGymTheme } from '@/lib/gymTheme';
 import { useRouter } from 'expo-router';
 
 const WORK_TYPES: { value: string; label: string }[] = [
@@ -47,7 +48,7 @@ type Permissions = {
   perm_schedule: boolean;
 };
 
-const PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
+const GYM_PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
   { key: 'perm_billing', label: 'Billing' },
   { key: 'perm_website', label: 'Website' },
   { key: 'perm_messages', label: 'Messages' },
@@ -64,8 +65,20 @@ const PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
   { key: 'perm_offerings', label: 'Offerings' },
   { key: 'perm_settings', label: 'Settings' },
   { key: 'perm_schedule', label: 'Schedule' },
-  { key: 'perm_collaboration', label: 'Collaboration (WyLD only)' },
-  { key: 'perm_demo', label: 'Demo Accounts (WyLD only)' },
+];
+
+// WyLD-staff roster uses a different subset — only perms that gate WyLD-side
+// surfaces (admin pages, collaboration, demo switcher), not gym-side tabs
+// like Billing/Website which don't apply to WyLD employees.
+const WYLD_PERMISSION_LABELS: { key: keyof Permissions; label: string }[] = [
+  { key: 'perm_messages', label: 'Messages' },
+  { key: 'perm_employees', label: 'Employees (manage WyLD staff)' },
+  { key: 'perm_schedule', label: 'Schedule (manage WyLD schedule)' },
+  { key: 'perm_applications', label: 'Applications' },
+  { key: 'perm_revenue_expenses', label: 'Revenue & Expenses' },
+  { key: 'perm_collaboration', label: 'Collaboration channels' },
+  { key: 'perm_demo', label: 'Demo accounts' },
+  { key: 'perm_settings', label: 'Settings' },
 ];
 
 const EMPTY_PERMS: Permissions = {
@@ -268,9 +281,14 @@ export default function OwnerEmployees() {
   );
 }
 
-export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
+export function Roster({
+  gymId: gymIdProp,
+  kind = 'gym',
+}: { gymId?: string | null; kind?: 'gym' | 'wyld' } = {}) {
   const { profile } = useAuth();
   const gymId = gymIdProp ?? profile?.gym_id ?? null;
+  const permissionLabels = kind === 'wyld' ? WYLD_PERMISSION_LABELS : GYM_PERMISSION_LABELS;
+  const gymTheme = useGymTheme();
 
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
@@ -528,7 +546,7 @@ export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
         />
       ) : !form ? (
         <View style={styles.subRow}>
-          <Pressable style={styles.btn} onPress={openNew}>
+          <Pressable style={[styles.btn, { backgroundColor: gymTheme.primary }]} onPress={openNew}>
             <Text style={styles.btnText}>+ Add employee</Text>
           </Pressable>
           <Pressable
@@ -705,12 +723,16 @@ export function Roster({ gymId: gymIdProp }: { gymId?: string | null } = {}) {
 
             {form.is_management ? (
               <View style={styles.permsBox}>
-                <Text style={styles.subTitle}>Owner-side access</Text>
+                <Text style={styles.subTitle}>
+                  {kind === 'wyld' ? 'WyLD admin access' : 'Owner-side access'}
+                </Text>
                 <Text style={styles.dim}>
-                  Pick which owner tabs they can see and manage.
+                  {kind === 'wyld'
+                    ? 'Pick which WyLD admin pages this manager can see and act on.'
+                    : 'Pick which owner tabs they can see and manage.'}
                 </Text>
                 <View style={styles.permsGrid}>
-                  {PERMISSION_LABELS.map((p) => (
+                  {permissionLabels.map((p) => (
                     <View key={p.key} style={styles.permRow}>
                       <Switch
                         value={form.perms[p.key]}
