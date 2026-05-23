@@ -62,7 +62,11 @@ export default function MemberProfile() {
         .select('waiver_id, gym_id')
         .eq('member_id', session.user.id),
     ]);
-    const gymIds = ((mems as any[]) ?? []).map((m) => m.gym?.id).filter(Boolean);
+    // WyLD isn't a customer-facing gym — it's the org running the platform.
+    // Memberships against it (if any) shouldn't surface in the user's
+    // "Your gyms" list.
+    const visibleMems = ((mems as any[]) ?? []).filter((m) => m.gym?.slug !== 'wyld');
+    const gymIds = visibleMems.map((m) => m.gym?.id).filter(Boolean);
     const { data: waivers } = gymIds.length === 0
       ? { data: [] }
       : await supabase
@@ -84,7 +88,7 @@ export default function MemberProfile() {
     const sigCounts = new Map<string, number>();
     ((sigs as any[]) ?? []).forEach((s) => sigCounts.set(s.gym_id, (sigCounts.get(s.gym_id) ?? 0) + 1));
 
-    setRows(((mems as any[]) ?? []).map((m) => {
+    setRows(visibleMems.map((m) => {
       const emp = empByGym.get(m.gym.id);
       return {
         membership_id: m.id,

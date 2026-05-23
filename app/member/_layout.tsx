@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+import { useIsWyldEmployee } from '@/hooks/useIsWyldEmployee';
 
 const TABS = [
   { label: 'Find a gym', href: '/member/find' },
@@ -23,6 +24,7 @@ const TABS = [
 export default function MemberLayout() {
   const { session, loading, signOut, profile } = useAuth();
   const unread = useUnreadMessages('member', null, profile?.id ?? null);
+  const isWyldEmployee = useIsWyldEmployee();
   const pathname = usePathname();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -40,7 +42,7 @@ export default function MemberLayout() {
           <Image source={{ uri: WYLD_INC_LOGO_URL }} style={styles.logo} resizeMode="contain" />
           <View>
             <Text style={styles.brandName}>WyLD</Text>
-            <Text style={styles.brandRole}>Member</Text>
+            <Text style={styles.brandRole}>{isWyldEmployee ? 'Employee' : 'Member'}</Text>
           </View>
         </View>
         <ScrollView
