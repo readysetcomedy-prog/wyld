@@ -118,6 +118,14 @@ export default function MyGyms() {
                   </View>
                   <Text style={styles.chevron}>›</Text>
                 </Pressable>
+                {isEmployee ? (
+                  <Pressable
+                    onPress={() => router.push(`/schedule/${r.gym_id}` as never)}
+                    style={styles.scheduleBtn}
+                  >
+                    <Text style={styles.scheduleBtnText}>Schedule</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
                   onPress={() => leave(r)}
                   disabled={leaving === r.id}
@@ -197,4 +205,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   leaveText: { color: theme.colors.danger, fontWeight: '700', fontSize: 13 },
+  scheduleBtn: {
+    paddingHorizontal: theme.spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.wyldPurple,
+  },
+  scheduleBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 });

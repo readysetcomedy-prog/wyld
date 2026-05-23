@@ -30,6 +30,7 @@ export default function RootLayout() {
         <Stack.Screen name="member" />
         <Stack.Screen name="g/[slug]" />
         <Stack.Screen name="demo-switch" />
+        <Stack.Screen name="schedule/[gymId]" />
       </Stack>
       <DemoOverlay />
     </AuthProvider>

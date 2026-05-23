@@ -48,6 +48,7 @@ type Modules = {
   revenue_expenses_enabled: boolean;
   applications_enabled: boolean;
   multi_location_enabled: boolean;
+  schedule_enabled: boolean;
 };
 
 type Owner = { id: string; full_name: string | null; email: string };
@@ -71,6 +72,7 @@ const MODULE_GROUPS: {
       { key: 'bookings_enabled', label: 'Bookings', hint: 'Owner tab for reservations.' },
       { key: 'offerings_enabled', label: 'Offerings', hint: 'Memberships, day passes, pricing.' },
       { key: 'employees_enabled', label: 'Employees', hint: 'Roles + staff list.' },
+      { key: 'schedule_enabled', label: 'Schedule', hint: 'Per-location shift schedule with pickup requests, rotations, history.' },
       { key: 'time_cards_enabled', label: 'Time Cards', hint: 'Clock-ins, hours, payroll export.' },
       { key: 'door_enabled', label: 'Door Management', hint: 'Lock state + access log.' },
       { key: 'analytics_enabled', label: 'Analytics & Reporting', hint: 'Revenue, attendance, tax exports.' },
