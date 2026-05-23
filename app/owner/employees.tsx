@@ -15,6 +15,7 @@ import { theme } from '@/lib/theme';
 import { Select } from '@/components/Select';
 import { DateTimeField } from '@/components/DateTimeField';
 import { SubTabsPage } from '@/components/SubTabs';
+import { useRouter } from 'expo-router';
 
 const WORK_TYPES: { value: string; label: string }[] = [
   { value: '', label: 'Not set' },
@@ -184,6 +185,56 @@ function parseIsoDate(s: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function SchedulingLauncher() {
+  const { profile } = useAuth();
+  const router = useRouter();
+  if (!profile?.gym_id) return null;
+  return (
+    <View style={launcherStyles.card}>
+      <Text style={launcherStyles.title}>Shift Schedule</Text>
+      <Text style={launcherStyles.body}>
+        Build per-location shifts, set coverage targets, review pickup requests,
+        run rotations, and see the full change history. Employees see a
+        read-only view (with pickup requests) from their gym tile under My gyms.
+      </Text>
+      <Pressable
+        onPress={() => router.push(`/schedule/${profile.gym_id}` as never)}
+        style={launcherStyles.btn}
+      >
+        <Text style={launcherStyles.btnText}>Open Schedule</Text>
+      </Pressable>
+      <Text style={launcherStyles.hint}>
+        Tip: lanes are your locations and the role filter chips come from each
+        employee's position. Configure required hours and the "employees can
+        view until" cutoff via the ⚙ on each location chip.
+      </Text>
+    </View>
+  );
+}
+
+const launcherStyles = StyleSheet.create({
+  card: {
+    padding: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+    gap: 10,
+  },
+  title: { fontSize: 20, fontWeight: '800', color: theme.colors.charcoal },
+  body: { fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  btn: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.wyldPurple,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: theme.radius.md,
+    marginTop: 6,
+  },
+  btnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  hint: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 4, fontStyle: 'italic' },
+});
+
 export default function OwnerEmployees() {
   return (
     <SubTabsPage
@@ -200,7 +251,7 @@ export default function OwnerEmployees() {
         {
           key: 'scheduling',
           label: 'Scheduling',
-          body: 'Build shifts, publish a schedule, and let your team request changes.',
+          body: <SchedulingLauncher />,
         },
         {
           key: 'hr',
