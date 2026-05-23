@@ -79,7 +79,9 @@ export default function DemoSwitch() {
     }
     try {
       await returnToSelf();
-      if (typeof window !== 'undefined') window.location.href = '/';
+      // Stay on /demo-switch so the user can pick another account. A full
+      // reload re-runs auth context so the restored session is in effect.
+      if (typeof window !== 'undefined') window.location.href = '/demo-switch';
     } catch (e: any) {
       setErr(e?.message ?? 'Failed to restore session');
     }

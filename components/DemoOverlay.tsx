@@ -119,7 +119,10 @@ function DemoOverlayWeb() {
                 try {
                   await returnToSelf();
                 } catch {}
-                router.replace('/');
+                // Full reload so the restored session takes effect, and land
+                // on the demo switcher so the user can pick another account.
+                if (typeof window !== 'undefined') window.location.href = '/demo-switch';
+                else router.replace('/demo-switch' as never);
               }}
             >
               <Text style={styles.bannerBtnText}>Return to my account</Text>
