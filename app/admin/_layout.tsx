@@ -16,6 +16,8 @@ import { useCollabUnread } from '@/hooks/useCollabUnread';
 const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Gyms', href: '/admin/gyms', match: (p) => p.startsWith('/admin/gyms') },
   { label: 'Members', href: '/admin/members', match: (p) => p === '/admin/members' },
+  { label: 'Employees', href: '/admin/employees', match: (p) => p === '/admin/employees' },
+  { label: 'Schedule', href: '/admin/schedule', match: (p) => p === '/admin/schedule' },
   { label: 'Pricing', href: '/admin/pricing', match: (p) => p === '/admin/pricing' },
   { label: 'Users', href: '/admin/users', match: (p) => p === '/admin/users' },
   { label: 'Messages', href: '/admin/messages', match: (p) => p === '/admin/messages' },
