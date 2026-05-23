@@ -345,8 +345,6 @@ function Postings({ gymId }: { gymId: string }) {
     load();
   }
 
-  if (postings === null) return <ActivityIndicator color={theme.colors.wyldPurple} />;
-
   const roleOptions = useMemo(
     () => [{ value: '', label: '(none)' }, ...roles.map((r) => ({ value: r.id, label: r.name }))],
     [roles]
@@ -358,6 +356,8 @@ function Postings({ gymId }: { gymId: string }) {
     ],
     [locations]
   );
+
+  if (postings === null) return <ActivityIndicator color={theme.colors.wyldPurple} />;
 
   return (
     <View style={styles.root}>
