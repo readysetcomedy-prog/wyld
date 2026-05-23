@@ -17,6 +17,8 @@ import { DateTimeField } from '@/components/DateTimeField';
 import { SubTabsPage } from '@/components/SubTabs';
 import { useGymTheme } from '@/lib/gymTheme';
 import { useRouter } from 'expo-router';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 const WORK_TYPES: { value: string; label: string }[] = [
   { value: '', label: 'Not set' },
@@ -290,7 +292,6 @@ export function Roster({
   const permissionLabels = kind === 'wyld' ? WYLD_PERMISSION_LABELS : GYM_PERMISSION_LABELS;
   const gymTheme = useGymTheme();
 
-  const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [form, setForm] = useState<Form | null>(null);
@@ -298,34 +299,38 @@ export function Roster({
   const [err, setErr] = useState<string | null>(null);
   const [memberPicker, setMemberPicker] = useState(false);
 
-  const load = useCallback(async () => {
+  // Bounded per-gym metadata — pulled once per gym, not paginated.
+  useEffect(() => {
     if (!gymId) return;
-    const [{ data: e }, { data: locs }, { data: rs }] = await Promise.all([
-      supabase
-        .from('gym_employees')
-        .select('*')
-        .eq('gym_id', gymId)
-        .order('display_order')
-        .order('full_name'),
-      supabase
-        .from('gym_locations')
-        .select('id, label')
-        .eq('gym_id', gymId)
-        .order('display_order'),
-      supabase
-        .from('gym_roles')
-        .select('id, name')
-        .eq('gym_id', gymId)
-        .order('display_order'),
-    ]);
-    setEmployees((e as Employee[]) ?? []);
-    setLocations((locs as any) ?? []);
-    setRoles((rs as any) ?? []);
+    Promise.all([
+      supabase.from('gym_locations').select('id, label').eq('gym_id', gymId).order('display_order'),
+      supabase.from('gym_roles').select('id, name').eq('gym_id', gymId).order('display_order'),
+    ]).then(([{ data: locs }, { data: rs }]) => {
+      setLocations((locs as any) ?? []);
+      setRoles((rs as any) ?? []);
+    });
   }, [gymId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Paginated employee roster. Per-gym headcount can be small or huge;
+  // either way one page fits in memory and additional pages stream in
+  // as the owner scrolls.
+  const loadPage = useCallback(async (from: number, to: number) => {
+    if (!gymId) return [];
+    const { data } = await supabase
+      .from('gym_employees')
+      .select('*')
+      .eq('gym_id', gymId)
+      .order('display_order')
+      .order('full_name')
+      .range(from, to);
+    return ((data as Employee[]) ?? []);
+  }, [gymId]);
+
+  const { items: employees, loading, hasMore, loadMore, reload: load } = useInfiniteList<Employee>({
+    pageSize: 50,
+    load: loadPage,
+    deps: [gymId],
+  });
 
   function openNew() {
     setErr(null);
@@ -931,7 +936,9 @@ export function Roster({
       )}
 
       {!form ? (
-        employees.length === 0 ? (
+        employees === null ? (
+          <ActivityIndicator color={theme.colors.wyldPurple} />
+        ) : employees.length === 0 ? (
           <Text style={styles.dim}>No employees yet. Add your first one above.</Text>
         ) : (
           <View style={styles.list}>
@@ -962,6 +969,7 @@ export function Roster({
                 </Pressable>
               </View>
             ))}
+            <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
           </View>
         )
       ) : null}

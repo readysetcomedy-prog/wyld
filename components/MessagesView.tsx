@@ -14,6 +14,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { Select } from '@/components/Select';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 export type ViewMode = 'owner' | 'member' | 'admin';
 
@@ -73,7 +75,6 @@ export function MessagesView({
   const myId = profile?.id ?? null;
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
-  const [threads, setThreads] = useState<ThreadWithMeta[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [composing, setComposing] = useState('');
@@ -104,38 +105,31 @@ export function MessagesView({
   const readField: keyof Thread =
     mode === 'owner' ? 'gym_last_read_at' : mode === 'admin' ? 'admin_last_read_at' : 'user_last_read_at';
 
-  const loadThreads = useCallback(async () => {
-    if (!myId) return;
+  // Paginated thread fetcher. Each page is `last_message_at desc` so the
+  // top of the sidebar always has the most recent activity; older
+  // conversations stream in as the user scrolls. Per-page we also fetch
+  // the joined name/avatar data for whatever rows came back.
+  const loadThreadsPage = useCallback(async (from: number, to: number): Promise<ThreadWithMeta[]> => {
+    if (!myId) return [];
 
     let q = supabase.from('message_threads').select('*');
     if (mode === 'owner') {
-      if (!gymId) {
-        setThreads([]);
-        return;
-      }
+      if (!gymId) return [];
       q = q.eq('gym_id', gymId);
     } else if (mode === 'member') {
-      // Member sees threads where they're the user_id (member_gym + admin_user)
       q = q.eq('user_id', myId);
     } else {
-      // admin: support threads, plus gym-less contact_form threads — which is
-      // where "Get a Quote" requests from the public site land.
       q = q.or('kind.eq.admin_user,and(kind.eq.contact_form,gym_id.is.null)');
     }
-    const { data, error } = await q.order('last_message_at', { ascending: false });
-    if (error) {
-      setErr(error.message);
-      return;
-    }
+    const { data, error } = await q
+      .order('last_message_at', { ascending: false })
+      .range(from, to);
+    if (error) { setErr(error.message); return []; }
 
-    // Enrich: figure out "otherName" labels.
     const list = (data as Thread[]) ?? [];
-    const userIds = Array.from(
-      new Set(list.filter((t) => t.user_id).map((t) => t.user_id!))
-    );
-    const gymIds = Array.from(
-      new Set(list.filter((t) => t.gym_id).map((t) => t.gym_id!))
-    );
+    if (list.length === 0) return [];
+    const userIds = Array.from(new Set(list.filter((t) => t.user_id).map((t) => t.user_id!)));
+    const gymIds = Array.from(new Set(list.filter((t) => t.gym_id).map((t) => t.gym_id!)));
     const [{ data: users }, { data: gyms }, { data: gymThemes }] = await Promise.all([
       userIds.length
         ? supabase.from('profiles').select('id, full_name, email, avatar_url').in('id', userIds)
@@ -149,9 +143,7 @@ export function MessagesView({
     ]);
     const userMap = new Map<string, { name: string; email: string; avatar_url: string | null }>(
       (users ?? []).map((u: any) => [u.id, {
-        name: u.full_name || u.email,
-        email: u.email,
-        avatar_url: u.avatar_url ?? null,
+        name: u.full_name || u.email, email: u.email, avatar_url: u.avatar_url ?? null,
       }])
     );
     const gymMap = new Map<string, string>((gyms ?? []).map((g: any) => [g.id, g.name]));
@@ -159,7 +151,7 @@ export function MessagesView({
       (gymThemes ?? []).map((t: any) => [t.gym_id, t.logo_url ?? null])
     );
 
-    const enriched: ThreadWithMeta[] = list.map((t) => {
+    return list.map((t) => {
       let otherName = 'Unknown';
       let otherAvatar: string | null = null;
       if (t.kind === 'member_gym') {
@@ -186,10 +178,28 @@ export function MessagesView({
       const unread = readAt == null || new Date(t.last_message_at) > new Date(readAt);
       return { ...t, otherName, otherAvatar, unread };
     });
+  }, [mode, gymId, myId, readField]);
 
-    setThreads(enriched);
-    onUnreadChange?.(enriched.filter((t) => t.unread).length);
-  }, [mode, gymId, myId, readField, onUnreadChange]);
+  const { items: threads, loading: threadsLoading, hasMore: threadsHasMore, loadMore: loadMoreThreads, reload: reloadThreads } =
+    useInfiniteList<ThreadWithMeta>({
+      pageSize: 50,
+      load: loadThreadsPage,
+      deps: [mode, gymId, myId],
+    });
+
+  // Notify parent of (loaded) unread count. This is approximate when the
+  // viewer has more than one page of threads — older unread conversations
+  // off-screen aren't counted until their page loads — but the more
+  // important behavior is that the sidebar reflects unread state for
+  // anything currently rendered.
+  useEffect(() => {
+    if (!threads) return;
+    onUnreadChange?.(threads.filter((t) => t.unread).length);
+  }, [threads, onUnreadChange]);
+
+  // Replacement for the previous loadThreads() callers — they all just
+  // wanted "reset the thread list so the new state shows up".
+  const loadThreads = reloadThreads;
 
   // Load the pool of people the viewer can search to start a new
   // conversation. Owner mode: everyone at their gym (members + employees).
@@ -246,57 +256,85 @@ export function MessagesView({
     return () => { cancelled = true; };
   }, [mode, gymId]);
 
-  useEffect(() => {
-    loadThreads();
-  }, [loadThreads]);
-
   // user_id -> avatar_url for everyone who has sent a message in the
   // currently-open thread, plus the active thread's "other party" gym
   // logo if applicable. Used to render the small avatar next to each
   // bubble in the conversation.
   const [senderAvatars, setSenderAvatars] = useState<Map<string, string | null>>(new Map());
+  // Pagination for messages inside the open thread. We load the latest
+  // PAGE_SIZE first (most recent at the bottom), then a "Load older"
+  // affordance prepends older pages so opening a thread with 10k
+  // messages never has to ship them all at once.
+  const MESSAGES_PAGE = 50;
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [hasOlder, setHasOlder] = useState(false);
+
+  const resolveAvatarsFor = useCallback(async (msgs: Message[]) => {
+    const senderIds = Array.from(
+      new Set(msgs.map((m) => m.sender_user_id).filter((v): v is string => !!v))
+    );
+    if (senderIds.length === 0) return;
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, avatar_url')
+      .in('id', senderIds);
+    setSenderAvatars((prev) => {
+      const next = new Map(prev);
+      ((profs as any[]) ?? []).forEach((p) => next.set(p.id, p.avatar_url ?? null));
+      return next;
+    });
+  }, []);
 
   const loadMessages = useCallback(
     async (threadId: string) => {
+      // Latest page first: order desc, take PAGE_SIZE, then reverse for
+      // ascending display.
       const { data, error } = await supabase
         .from('messages')
         .select('*')
         .eq('thread_id', threadId)
-        .order('created_at');
-      if (error) {
-        setErr(error.message);
-        return;
-      }
-      const msgs = (data as Message[]) ?? [];
+        .order('created_at', { ascending: false })
+        .limit(MESSAGES_PAGE + 1);
+      if (error) { setErr(error.message); return; }
+      const raw = ((data as Message[]) ?? []);
+      const more = raw.length > MESSAGES_PAGE;
+      const msgs = (more ? raw.slice(0, MESSAGES_PAGE) : raw).slice().reverse();
       setMessages(msgs);
+      setHasOlder(more);
+      setSenderAvatars(new Map());
+      resolveAvatarsFor(msgs);
 
-      // Resolve avatars for every distinct human sender in this thread.
-      const senderIds = Array.from(
-        new Set(msgs.map((m) => m.sender_user_id).filter((v): v is string => !!v))
-      );
-      if (senderIds.length > 0) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, avatar_url')
-          .in('id', senderIds);
-        setSenderAvatars(new Map(((profs as any[]) ?? []).map((p) => [p.id, p.avatar_url ?? null])));
-      } else {
-        setSenderAvatars(new Map());
-      }
-
-      // Mark thread read.
       const patch: Record<string, string> = {};
       patch[readField as string] = new Date().toISOString();
       await supabase.from('message_threads').update(patch).eq('id', threadId);
-      // Refresh thread list to clear unread badge.
       loadThreads();
     },
-    [readField, loadThreads]
+    [readField, loadThreads, resolveAvatarsFor]
   );
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeId || olderLoading || messages.length === 0) return;
+    setOlderLoading(true);
+    const oldestSoFar = messages[0].created_at;
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('thread_id', activeId)
+      .lt('created_at', oldestSoFar)
+      .order('created_at', { ascending: false })
+      .limit(MESSAGES_PAGE + 1);
+    const raw = ((data as Message[]) ?? []);
+    const more = raw.length > MESSAGES_PAGE;
+    const older = (more ? raw.slice(0, MESSAGES_PAGE) : raw).slice().reverse();
+    setMessages((prev) => [...older, ...prev]);
+    setHasOlder(more);
+    resolveAvatarsFor(older);
+    setOlderLoading(false);
+  }, [activeId, olderLoading, messages, resolveAvatarsFor]);
 
   useEffect(() => {
     if (activeId) loadMessages(activeId);
-    else setMessages([]);
+    else { setMessages([]); setHasOlder(false); }
   }, [activeId, loadMessages]);
 
   async function send() {
@@ -523,6 +561,13 @@ export function MessagesView({
                 ))}
               </View>
             ) : null}
+            {!trimmedSearch ? (
+              <LoadMoreSentinel
+                loading={threadsLoading}
+                hasMore={threadsHasMore}
+                onLoadMore={loadMoreThreads}
+              />
+            ) : null}
           </ScrollView>
         )}
       </View>
@@ -552,6 +597,17 @@ export function MessagesView({
             </View>
 
             <ScrollView style={styles.messageList} contentContainerStyle={styles.messageListInner}>
+              {hasOlder ? (
+                <Pressable
+                  style={[styles.loadOlderBtn, olderLoading && { opacity: 0.6 }]}
+                  disabled={olderLoading}
+                  onPress={loadOlderMessages}
+                >
+                  <Text style={styles.loadOlderBtnText}>
+                    {olderLoading ? 'Loading…' : '↑ Load older messages'}
+                  </Text>
+                </Pressable>
+              ) : null}
               {messages.length === 0 ? (
                 <Text style={styles.dim}>No messages yet.</Text>
               ) : (
@@ -752,6 +808,13 @@ const styles = StyleSheet.create({
   threadHeaderSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
   messageList: { flex: 1 },
   messageListInner: { padding: 16, gap: 8 },
+  loadOlderBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  loadOlderBtnText: { color: theme.colors.textSecondary, fontWeight: '700', fontSize: 12 },
   bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   bubbleRowMe: { justifyContent: 'flex-end' },
   bubbleRowThem: { justifyContent: 'flex-start' },

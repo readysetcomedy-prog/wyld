@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type Gym = {
   id: string;
@@ -23,44 +25,44 @@ type Gym = {
 export default function FindGym() {
   const { session } = useAuth();
   const router = useRouter();
-  const [gyms, setGyms] = useState<Gym[] | null>(null);
   const [memberOf, setMemberOf] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [joining, setJoining] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('gyms')
-        .select('id, name, slug, city, state')
-        .neq('slug', 'wyld')
-        .order('name');
-      setGyms((data as Gym[] | null) ?? []);
-    })();
-    if (session?.user) {
-      (async () => {
-        const { data } = await supabase
-          .from('gym_memberships')
-          .select('gym_id')
-          .eq('member_id', session.user.id);
-        setMemberOf(new Set((data ?? []).map((m: any) => m.gym_id)));
-      })();
-    }
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    supabase
+      .from('gym_memberships')
+      .select('gym_id')
+      .eq('member_id', session.user.id)
+      .then(({ data }) => setMemberOf(new Set((data ?? []).map((m: any) => m.gym_id))));
   }, [session?.user?.id]);
 
-  const filtered = useMemo(() => {
-    if (!gyms) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return gyms;
-    return gyms.filter((g) => {
-      return (
-        g.name.toLowerCase().includes(q) ||
-        (g.city ?? '').toLowerCase().includes(q) ||
-        (g.state ?? '').toLowerCase().includes(q)
-      );
-    });
-  }, [gyms, search]);
+  const loadPage = useCallback(async (from: number, to: number) => {
+    let q = supabase
+      .from('gyms')
+      .select('id, name, slug, city, state')
+      .neq('slug', 'wyld');
+    if (debouncedSearch) {
+      const p = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
+      q = q.or(`name.ilike.${p},city.ilike.${p},state.ilike.${p}`);
+    }
+    const { data } = await q.order('name').range(from, to);
+    return ((data as Gym[]) ?? []);
+  }, [debouncedSearch]);
+
+  const { items: gyms, loading, hasMore, loadMore } = useInfiniteList<Gym>({
+    pageSize: 50,
+    load: loadPage,
+    deps: [debouncedSearch],
+  });
 
   async function join(gymId: string) {
     if (!session?.user) return;
@@ -97,11 +99,11 @@ export default function FindGym() {
 
       {gyms == null ? (
         <ActivityIndicator color={theme.colors.wyldPurple} />
-      ) : filtered.length === 0 ? (
+      ) : gyms.length === 0 ? (
         <Text style={styles.dim}>No matches.</Text>
       ) : (
         <View style={styles.list}>
-          {filtered.map((g) => {
+          {gyms.map((g) => {
             const isMember = memberOf.has(g.id);
             return (
               <View key={g.id} style={styles.row}>
@@ -134,6 +136,7 @@ export default function FindGym() {
               </View>
             );
           })}
+          <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
         </View>
       )}
     </View>

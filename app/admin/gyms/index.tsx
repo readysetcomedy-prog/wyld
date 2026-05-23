@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type GymRow = {
   id: string;
@@ -24,78 +26,74 @@ type GymRow = {
 
 export default function GymsList() {
   const router = useRouter();
-  const [gyms, setGyms] = useState<GymRow[] | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from('gyms')
-        .select('id, name, slug, city, state, custom_domain, owner_id')
-        .order('name');
-      if (error) {
-        setError(error.message);
-        setGyms([]);
-        return;
-      }
-      const ownerIds = Array.from(
-        new Set((data ?? []).map((g) => g.owner_id).filter(Boolean) as string[]),
-      );
-      let ownersById: Record<string, { full_name: string | null; email: string }> = {};
-      if (ownerIds.length) {
-        const { data: owners } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', ownerIds);
-        ownersById = Object.fromEntries(
-          (owners ?? []).map((o) => [o.id, { full_name: o.full_name, email: o.email }]),
-        );
-      }
-      setGyms(
-        (data ?? []).map((g) => ({
-          id: g.id,
-          name: g.name,
-          slug: g.slug,
-          city: g.city,
-          state: g.state,
-          custom_domain: g.custom_domain,
-          owner_name: g.owner_id ? ownersById[g.owner_id]?.full_name ?? null : null,
-          owner_email: g.owner_id ? ownersById[g.owner_id]?.email ?? null : null,
-        })),
-      );
-    })();
-  }, []);
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
 
-  const filtered = useMemo(() => {
-    if (!gyms) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return gyms;
-    return gyms.filter((g) => {
-      return (
-        g.name.toLowerCase().includes(q) ||
-        (g.city ?? '').toLowerCase().includes(q) ||
-        (g.state ?? '').toLowerCase().includes(q) ||
-        (g.owner_name ?? '').toLowerCase().includes(q) ||
-        (g.owner_email ?? '').toLowerCase().includes(q) ||
-        (g.slug ?? '').toLowerCase().includes(q)
+  // Paginated query. Search hits server-side ilike on name/city/state/slug;
+  // owner-name/email are filled in after the page is fetched (owner lookup
+  // is one extra query per page, bounded by pageSize).
+  const loadPage = useCallback(async (from: number, to: number) => {
+    setError(null);
+    let q = supabase
+      .from('gyms')
+      .select('id, name, slug, city, state, custom_domain, owner_id');
+    if (debouncedSearch) {
+      const p = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
+      q = q.or(`name.ilike.${p},city.ilike.${p},state.ilike.${p},slug.ilike.${p}`);
+    }
+    const { data, error: qErr } = await q.order('name').range(from, to);
+    if (qErr) { setError(qErr.message); return []; }
+    const rows = (data ?? []) as any[];
+    const ownerIds = Array.from(
+      new Set(rows.map((g) => g.owner_id).filter(Boolean) as string[]),
+    );
+    let ownersById: Record<string, { full_name: string | null; email: string }> = {};
+    if (ownerIds.length) {
+      const { data: owners } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', ownerIds);
+      ownersById = Object.fromEntries(
+        (owners ?? []).map((o: any) => [o.id, { full_name: o.full_name, email: o.email }]),
       );
-    });
-  }, [gyms, search]);
+    }
+    return rows.map((g) => ({
+      id: g.id,
+      name: g.name,
+      slug: g.slug,
+      city: g.city,
+      state: g.state,
+      custom_domain: g.custom_domain,
+      owner_name: g.owner_id ? ownersById[g.owner_id]?.full_name ?? null : null,
+      owner_email: g.owner_id ? ownersById[g.owner_id]?.email ?? null : null,
+    })) as GymRow[];
+  }, [debouncedSearch]);
+
+  const { items: gyms, loading, hasMore, loadMore } = useInfiniteList<GymRow>({
+    pageSize: 50,
+    load: loadPage,
+    deps: [debouncedSearch],
+  });
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Gyms</Text>
         <Text style={styles.subtitle}>
-          {gyms ? `${gyms.length} total` : 'Loading…'}
+          {gyms ? `${gyms.length} loaded${hasMore ? '+' : ''}` : 'Loading…'}
         </Text>
       </View>
 
       <TextInput
         value={search}
         onChangeText={setSearch}
-        placeholder="Search by name, city, state, owner, or slug"
+        placeholder="Search by name, city, state, or slug"
         placeholderTextColor="#94a3b8"
         style={styles.search}
         autoCorrect={false}
@@ -105,13 +103,13 @@ export default function GymsList() {
 
       {gyms == null ? (
         <ActivityIndicator color={theme.colors.wyldPurple} style={{ marginTop: 24 }} />
-      ) : filtered.length === 0 ? (
+      ) : gyms.length === 0 ? (
         <Text style={styles.empty}>
-          {gyms.length === 0 ? 'No gyms yet.' : 'No matches.'}
+          {debouncedSearch ? 'No matches.' : 'No gyms yet.'}
         </Text>
       ) : (
         <View style={styles.list}>
-          {filtered.map((g) => (
+          {gyms.map((g) => (
             <Pressable
               key={g.id}
               style={styles.row}
@@ -130,6 +128,7 @@ export default function GymsList() {
               <Text style={styles.rowChevron}>›</Text>
             </Pressable>
           ))}
+          <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
         </View>
       )}
     </View>
