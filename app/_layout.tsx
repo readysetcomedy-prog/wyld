@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/lib/auth';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { DemoOverlay } from '@/components/DemoOverlay';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -28,7 +29,10 @@ export default function RootLayout() {
         <Stack.Screen name="admin" />
         <Stack.Screen name="member" />
         <Stack.Screen name="g/[slug]" />
+        <Stack.Screen name="demo-switch" />
+        <Stack.Screen name="schedule/[gymId]" />
       </Stack>
+      <DemoOverlay />
     </AuthProvider>
   );
 }
