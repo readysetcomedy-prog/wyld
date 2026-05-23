@@ -142,17 +142,18 @@ export default function Careers() {
     );
   }
 
+  const careersPage = (site.pages.careers ?? {}) as { headline?: string; subheadline?: string; body?: string };
+  const headline = (careersPage.headline?.trim()) || `Careers at ${site.gym.name}`;
+  const eyebrow = (careersPage.subheadline?.trim()) || 'JOIN OUR TEAM';
+  const intro =
+    (careersPage.body?.trim()) ||
+    `Browse our open positions${site.currentLocation ? ` at ${site.currentLocation.label}` : ''} and apply directly below.`;
+
   return (
     <View style={[styles.page, isWide && styles.pageWide]}>
-      <Text style={[styles.eyebrow, { color: accent }]}>JOIN OUR TEAM</Text>
-      <Text style={[styles.title, { color: primary }]}>
-        Careers at {site.gym.name}
-      </Text>
-      <Text style={styles.intro}>
-        Browse our open positions
-        {site.currentLocation ? ` at ${site.currentLocation.label}` : ''} and
-        apply directly below.
-      </Text>
+      <Text style={[styles.eyebrow, { color: accent }]}>{eyebrow}</Text>
+      <Text style={[styles.title, { color: primary }]}>{headline}</Text>
+      <Text style={styles.intro}>{intro}</Text>
 
       {loading ? (
         <ActivityIndicator color={accent} style={{ marginTop: 24 }} />

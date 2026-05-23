@@ -44,6 +44,7 @@ type Modules = {
   faq_visible: boolean;
   store_visible: boolean;
   multi_location_enabled: boolean;
+  applications_enabled: boolean;
 };
 
 type Settings = {
@@ -102,7 +103,7 @@ type PageContent = {
   styles?: Record<string, BlockStyle>;
 };
 
-const PAGE_KEYS = ['home', 'about', 'services', 'contact', 'schedule', 'store', 'news', 'faq'] as const;
+const PAGE_KEYS = ['home', 'about', 'services', 'careers', 'contact', 'schedule', 'store', 'news', 'faq'] as const;
 type PageKey = (typeof PAGE_KEYS)[number];
 
 // Which named blocks each page exposes for per-section styling.
@@ -113,6 +114,7 @@ const PAGE_BLOCKS: Record<PageKey, { key: string; label: string }[]> = {
   ],
   about: [{ key: 'body', label: 'Body' }],
   services: [{ key: 'body', label: 'Body' }],
+  careers: [{ key: 'body', label: 'Intro above the open positions' }],
   contact: [
     { key: 'body', label: '"Get in touch" intro' },
     { key: 'hours', label: 'Hours card' },
@@ -127,6 +129,7 @@ const PAGE_LABELS: Record<PageKey, string> = {
   home: 'Home',
   about: 'About',
   services: 'Services',
+  careers: 'Careers',
   contact: 'Contact',
   schedule: 'Schedule',
   store: 'Store',
@@ -392,6 +395,10 @@ export default function Website() {
   const visiblePages: PageKey[] = PAGE_KEYS.filter((k) => {
     if (k === 'news') return modules.news_enabled || pages.news != null;
     if (k === 'faq') return modules.faq_enabled || pages.faq != null;
+    // Careers page only renders on the public site when applications_enabled
+    // is on. Still editable here as long as the owner already has content
+    // for it (so they can prep before flipping the module).
+    if (k === 'careers') return modules.applications_enabled || pages.careers != null;
     return true;
   });
 
