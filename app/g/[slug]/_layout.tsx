@@ -86,9 +86,19 @@ export default function SiteLayout() {
   const [site, setSite] = useState<GymSite | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Mobile nav scroll-more indicator
+  // Mobile nav scroll-more indicator. The chevron needs to show on initial
+  // page load (before any user scroll) when content overflows. Tracking
+  // both viewport+content widths in refs and recomputing on every event
+  // means whichever of onLayout/onContentSizeChange fires first, the
+  // arrow appears as soon as both are known.
   const [navMore, setNavMore] = useState(false);
   const navViewportW = useRef(0);
+  const navContentW = useRef(0);
+  const recomputeNavMore = () => {
+    if (navViewportW.current > 0 && navContentW.current > 0) {
+      setNavMore(navContentW.current > navViewportW.current + 4);
+    }
+  };
 
   useEffect(() => {
     if (!slug) return;
@@ -364,12 +374,12 @@ export default function SiteLayout() {
                   );
                 }}
                 onContentSizeChange={(w) => {
-                  if (navViewportW.current > 0) {
-                    setNavMore(w > navViewportW.current + 4);
-                  }
+                  navContentW.current = w;
+                  recomputeNavMore();
                 }}
                 onLayout={(e) => {
                   navViewportW.current = e.nativeEvent.layout.width;
+                  recomputeNavMore();
                 }}
                 contentContainerStyle={[styles.nav, isWide && styles.navWide]}
               >
