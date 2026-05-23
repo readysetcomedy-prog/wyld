@@ -4,8 +4,11 @@ import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { TabPlaceholder } from '@/components/TabPlaceholder';
 import { WaiversManager } from '@/components/WaiversManager';
+import { DashboardColorsSection } from '@/components/DashboardColorsSection';
+import { useGymTheme } from '@/lib/gymTheme';
 
 const TABS = [
+  { key: 'dashboard', label: 'Dashboard' },
   { key: 'waivers', label: 'Waivers' },
   { key: 'forms', label: 'Forms' },
   { key: 'time-zone', label: 'Time Zone' },
@@ -14,7 +17,8 @@ const TABS = [
 export default function Settings() {
   const { profile } = useAuth();
   const gymId = profile?.gym_id ?? null;
-  const [active, setActive] = useState('waivers');
+  const [active, setActive] = useState('dashboard');
+  const gymTheme = useGymTheme();
 
   return (
     <View style={styles.root}>
@@ -34,7 +38,10 @@ export default function Settings() {
             <Pressable
               key={t.key}
               onPress={() => setActive(t.key)}
-              style={[styles.tab, isActive && styles.tabActive]}
+              style={[
+                styles.tab,
+                isActive && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary },
+              ]}
             >
               <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
                 {t.label}
@@ -43,6 +50,12 @@ export default function Settings() {
           );
         })}
       </ScrollView>
+
+      {active === 'dashboard' ? (
+        <View style={styles.body}>
+          <DashboardColorsSection />
+        </View>
+      ) : null}
 
       {active === 'waivers' ? (
         gymId ? (

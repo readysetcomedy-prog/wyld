@@ -15,6 +15,7 @@ import { theme } from '@/lib/theme';
 import { Select } from '@/components/Select';
 import { DateTimeField } from '@/components/DateTimeField';
 import { SubTabsPage } from '@/components/SubTabs';
+import { useGymTheme } from '@/lib/gymTheme';
 import { useRouter } from 'expo-router';
 
 const WORK_TYPES: { value: string; label: string }[] = [
@@ -287,6 +288,7 @@ export function Roster({
   const { profile } = useAuth();
   const gymId = gymIdProp ?? profile?.gym_id ?? null;
   const permissionLabels = kind === 'wyld' ? WYLD_PERMISSION_LABELS : GYM_PERMISSION_LABELS;
+  const gymTheme = useGymTheme();
 
   const [employees, setEmployees] = useState<Employee[] | null>(null);
   const [locations, setLocations] = useState<{ id: string; label: string | null }[]>([]);
@@ -544,7 +546,7 @@ export function Roster({
         />
       ) : !form ? (
         <View style={styles.subRow}>
-          <Pressable style={styles.btn} onPress={openNew}>
+          <Pressable style={[styles.btn, { backgroundColor: gymTheme.primary }]} onPress={openNew}>
             <Text style={styles.btnText}>+ Add employee</Text>
           </Pressable>
           <Pressable

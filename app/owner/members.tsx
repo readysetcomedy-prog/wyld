@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 
 type Membership = {
   id: string;
@@ -39,6 +40,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function OwnerMembers() {
   const { profile } = useAuth();
   const router = useRouter();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
 
   const [rows, setRows] = useState<Membership[] | null>(null);
@@ -129,7 +131,10 @@ export default function OwnerMembers() {
             Active members, payment status, and notes. Tap a member to manage.
           </Text>
         </View>
-        <Pressable style={styles.addBtn} onPress={() => setAddOpen(true)}>
+        <Pressable
+          style={[styles.addBtn, { backgroundColor: gymTheme.primary }]}
+          onPress={() => setAddOpen(true)}
+        >
           <Text style={styles.addBtnText}>+ Add member</Text>
         </Pressable>
       </View>
@@ -148,7 +153,10 @@ export default function OwnerMembers() {
           {(['all', 'active', 'paused', 'cancelled'] as const).map((s) => (
             <Pressable
               key={s}
-              style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                statusFilter === s && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary },
+              ]}
               onPress={() => setStatusFilter(s)}
             >
               <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
