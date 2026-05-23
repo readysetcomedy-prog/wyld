@@ -13,14 +13,22 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme as wyldTheme } from '@/lib/theme';
 
-type Tab = { label: string; href: (gymId: string) => string; employeesOnly?: boolean };
+type Tab = {
+  label: string;
+  href: (gymId: string) => string;
+  employeesOnly?: boolean;
+  requires?: 'calendar';
+};
 
 const TABS: Tab[] = [
   { label: 'Overview', href: (g) => `/m/${g}` },
   { label: 'Messages', href: (g) => `/m/${g}/messages` },
   { label: 'Waivers', href: (g) => `/m/${g}/waivers` },
   { label: 'Membership Billing', href: (g) => `/m/${g}/billing` },
-  { label: 'Schedule', href: (g) => `/m/${g}/schedule`, employeesOnly: true },
+  // Schedule is visible to every member as long as the gym has a public
+  // calendar — members browse and book here; employees get a "My work
+  // schedule" jump-off inside the same page.
+  { label: 'Schedule', href: (g) => `/m/${g}/schedule`, requires: 'calendar' },
   { label: 'Employee Profile', href: (g) => `/m/${g}/employee`, employeesOnly: true },
 ];
 
@@ -43,16 +51,17 @@ export default function MemberGymLayout() {
   const [resolved, setResolved] = useState<
     | { state: 'loading' }
     | { state: 'denied' }
-    | { state: 'ok'; isEmployee: boolean }
+    | { state: 'ok'; isEmployee: boolean; calendarEnabled: boolean }
   >({ state: 'loading' });
 
   const load = useCallback(async () => {
     if (!session || !gymId) return;
-    const [{ data: g }, { data: th }, { data: mem }, { data: emp }] = await Promise.all([
+    const [{ data: g }, { data: th }, { data: mem }, { data: emp }, { data: mods }] = await Promise.all([
       supabase.from('gyms').select('name, owner_id, slug').eq('id', gymId).maybeSingle(),
       supabase.from('gym_themes').select('primary_color, accent_color, logo_url').eq('gym_id', gymId).is('location_id', null).maybeSingle(),
       supabase.from('gym_memberships').select('id').eq('gym_id', gymId).eq('member_id', session.user.id).maybeSingle(),
       supabase.from('gym_employees').select('id, terminate_date').eq('gym_id', gymId).or(`user_id.eq.${session.user.id},email.eq.${profile?.email ?? ''}`).maybeSingle(),
+      supabase.from('gym_modules').select('calendar_enabled').eq('gym_id', gymId).maybeSingle(),
     ]);
 
     if (!g) { setResolved({ state: 'denied' }); return; }
@@ -70,7 +79,11 @@ export default function MemberGymLayout() {
       primary_color: (th as any)?.primary_color ?? wyldTheme.colors.wyldPurple,
       accent_color: (th as any)?.accent_color ?? wyldTheme.colors.tealDark,
     });
-    setResolved({ state: 'ok', isEmployee: !!empActive });
+    setResolved({
+      state: 'ok',
+      isEmployee: !!empActive,
+      calendarEnabled: !!(mods as any)?.calendar_enabled,
+    });
   }, [session, gymId, profile?.email, profile?.role]);
 
   useEffect(() => { load(); }, [load]);
@@ -94,7 +107,11 @@ export default function MemberGymLayout() {
     );
   }
 
-  const visibleTabs = TABS.filter((t) => !t.employeesOnly || resolved.isEmployee);
+  const visibleTabs = TABS.filter((t) => {
+    if (t.employeesOnly && !resolved.isEmployee) return false;
+    if (t.requires === 'calendar' && !resolved.calendarEnabled) return false;
+    return true;
+  });
 
   return (
     <View style={[styles.root, isWide && styles.rootWide]}>
