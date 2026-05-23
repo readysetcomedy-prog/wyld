@@ -13,7 +13,6 @@ import { theme, WYLD_INC_LOGO_URL } from '@/lib/theme';
 import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const TABS = [
-  { label: 'My gyms', href: '/member' },
   { label: 'Find a gym', href: '/member/find' },
   { label: 'Jobs', href: '/member/jobs' },
   { label: 'Messages', href: '/member/messages' },
