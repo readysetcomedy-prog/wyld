@@ -52,6 +52,9 @@ export default function AdminLayout() {
             <Text style={styles.brandRole}>Admin</Text>
           </View>
         </View>
+        {profile?.full_name ? (
+          <Text style={styles.greeting}>Welcome, {profile.full_name.split(' ')[0]}!</Text>
+        ) : null}
 
         <ScrollView
           horizontal={!isWide}
@@ -157,6 +160,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  greeting: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.charcoal,
+    marginBottom: theme.spacing.sm,
   },
 
   tabsWide: { flexDirection: 'column', gap: 2 },

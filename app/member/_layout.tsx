@@ -45,6 +45,9 @@ export default function MemberLayout() {
             <Text style={styles.brandRole}>{isWyldEmployee ? 'Employee' : 'Member'}</Text>
           </View>
         </View>
+        {profile?.full_name ? (
+          <Text style={styles.greeting}>Welcome, {profile.full_name.split(' ')[0]}!</Text>
+        ) : null}
         <ScrollView
           horizontal={!isWide}
           showsHorizontalScrollIndicator={false}
@@ -130,6 +133,7 @@ const styles = StyleSheet.create({
   logo: { width: 44, height: 44 },
   brandName: { fontSize: 15, fontWeight: '800', color: theme.colors.charcoal },
   brandRole: { fontSize: 11, color: theme.colors.wyldPurple, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+  greeting: { fontSize: 14, fontWeight: '700', color: theme.colors.charcoal, marginBottom: theme.spacing.sm },
 
   tabsWide: { flexDirection: 'column', gap: 2 },
   tabsMobile: { flexDirection: 'row', gap: theme.spacing.xs, paddingVertical: theme.spacing.xs },

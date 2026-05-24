@@ -151,6 +151,9 @@ export default function OwnerLayout() {
             <Text style={styles.brandRole}>Owner Dashboard</Text>
           </View>
         </View>
+        {profile?.full_name ? (
+          <Text style={styles.greeting}>Welcome, {profile.full_name.split(' ')[0]}!</Text>
+        ) : null}
 
         <ScrollView
           horizontal={!isWide}
@@ -263,6 +266,7 @@ const styles = StyleSheet.create({
   brandText: { gap: 2, flex: 1, minWidth: 0 },
   brandGym: { fontSize: 15, fontWeight: '800', color: '#fff' },
   brandRole: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 },
+  greeting: { fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: theme.spacing.sm },
 
   tabsWide: { flexDirection: 'column', gap: 2 },
   tabsMobile: { flexDirection: 'row', gap: theme.spacing.xs, paddingVertical: theme.spacing.xs },
