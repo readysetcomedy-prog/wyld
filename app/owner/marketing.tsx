@@ -13,6 +13,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { pickAndUploadImages } from '@/components/ImageUpload';
 
 type Asset = {
@@ -27,6 +28,7 @@ type Asset = {
 
 export default function OwnerMarketing() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
   const [assets, setAssets] = useState<Asset[] | null>(null);
   const [marketingEnabled, setMarketingEnabled] = useState<boolean | null>(null);
@@ -137,7 +139,7 @@ export default function OwnerMarketing() {
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
-      <Pressable style={styles.btn} onPress={add} disabled={uploading}>
+      <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={add} disabled={uploading}>
         <Text style={styles.btnText}>
           {uploading ? 'Uploading…' : '+ Upload images'}
         </Text>

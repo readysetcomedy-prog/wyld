@@ -11,6 +11,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { expandEvents, GymEvent, EventOccurrence } from '@/lib/events';
 import { useInfiniteList } from '@/hooks/useInfiniteList';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
@@ -34,6 +35,7 @@ const HORIZON_DAYS = 60;
 
 export default function OwnerBookings() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
   const [events, setEvents] = useState<GymEvent[] | null>(null);
   const [bookingsEnabled, setBookingsEnabled] = useState<boolean | null>(null);
@@ -288,7 +290,7 @@ export default function OwnerBookings() {
                 <View style={styles.bookingList}>
                   {r.bookings.map((b) => (
                     <View key={b.id} style={styles.bookingRow}>
-                      <View style={styles.avatar}>
+                      <View style={[styles.avatar, { backgroundColor: gymTheme.primary }]}>
                         <Text style={styles.avatarText}>
                           {(b.member_name || '?').charAt(0).toUpperCase()}
                         </Text>
