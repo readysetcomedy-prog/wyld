@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Platform } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 
 const KEY_ON = 'wyld_demo_mode_on';
 const KEY_POS = 'wyld_demo_badge_pos';
@@ -117,29 +117,17 @@ export function useStashedSession(): StashedSession | null {
 
 // Stash the *current* session, then sign in as the demo email.
 //
-// CRITICAL: refresh the admin's session FIRST so the tokens we stash are
-// freshly minted. The SDK auto-refreshes the access_token periodically,
-// which rotates the refresh_token; if we stashed an older refresh_token
-// it'd already be in the rotation/reuse-detection window by the time
-// the user clicked Return, producing the 400 invalid_grant we were
-// hitting in production.
-//
-// We deliberately don't call signOut() before signInWithPassword:
-// signInWithPassword replaces the local session by itself, and any
-// server-side side effects of signOut have caused trouble in the past.
+// Only stash on the FIRST switch (admin → demo). Bouncing between demo
+// accounts later must not overwrite the original-admin stash. Reads
+// whatever the SDK currently has via getSession() — that's the freshest
+// refresh_token the SDK knows about; refreshing before stashing rotated
+// the token and somehow ended up giving us a 400 on return, so we just
+// snapshot the current state.
 export async function switchToDemo(email: string): Promise<void> {
   const existing = getStashedSession();
   if (!existing) {
-    // Force a refresh to get the freshest possible refresh_token before
-    // we hand control to the demo session.
-    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
-    const current = refreshed?.session ?? (await supabase.auth.getSession()).data.session;
-    if (refreshErr) {
-      // Non-fatal — we'll fall back to whatever getSession() returns,
-      // which is still better than nothing.
-      // eslint-disable-next-line no-console
-      console.warn('[demoMode] refresh before stash failed:', refreshErr.message);
-    }
+    const { data } = await supabase.auth.getSession();
+    const current = data.session;
     if (current) {
       setStashedSession({
         access_token: current.access_token,
@@ -154,40 +142,65 @@ export async function switchToDemo(email: string): Promise<void> {
 
 // Restore the previously stashed admin session.
 //
-// Uses refreshSession() with the stashed refresh_token to mint a fresh
-// session. Because switchToDemo refreshed *before* stashing, this
-// refresh_token has never been used — it should be accepted by the
-// Supabase auth server.
+// Hits Supabase Auth's /token?grant_type=refresh_token endpoint directly
+// instead of going through supabase.auth.refreshSession(). Two reasons:
 //
-// Safety net for failures: when refreshSession is called with a bad
-// token, the SDK clears the current session as a side effect — which
-// would dump the user out of their demo session and bounce them to
-// /sign-in via the auth guard. We capture the current demo session
-// FIRST and setSession() back to it on failure so the user stays
-// where they are and sees the error inline, instead of being silently
-// kicked.
+// 1) The SDK helper has a side-effect of clearing the current session if
+//    the refresh fails, which was dumping the user out of their demo
+//    session and bouncing them to /sign-in via the layout's auth gate —
+//    the symptom that originally read as "takes me to the login".
+// 2) The SDK swallowed/wrapped error responses; the raw fetch gives us
+//    the actual `error` / `error_description` from gotrue, which is
+//    logged to console for triage.
+//
+// On success we install the new tokens via supabase.auth.setSession()
+// so the SDK takes over from there. On failure we throw the parsed
+// error and leave the demo session untouched (no setSession call =
+// the demo's tokens stay in storage as-is).
 export async function returnToSelf(): Promise<void> {
   const stash = getStashedSession();
   if (!stash) throw new Error('No stashed session to restore');
 
-  // Snapshot the current (demo) session so we can roll back if the
-  // refresh fails.
-  const { data: currentData } = await supabase.auth.getSession();
-  const currentSession = currentData.session;
+  const resp = await fetch(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ refresh_token: stash.refresh_token }),
+    },
+  );
 
-  const { error } = await supabase.auth.refreshSession({
-    refresh_token: stash.refresh_token,
-  });
-  if (error) {
-    if (currentSession) {
-      // Best-effort restore so the demo session keeps working.
-      await supabase.auth.setSession({
-        access_token: currentSession.access_token,
-        refresh_token: currentSession.refresh_token,
-      });
-    }
-    throw error;
+  if (!resp.ok) {
+    let detail: any = null;
+    try { detail = await resp.json(); } catch {}
+    // eslint-disable-next-line no-console
+    console.error('[demoMode] refresh-token grant failed', resp.status, detail);
+    const msg =
+      detail?.error_description
+      ?? detail?.msg
+      ?? detail?.error
+      ?? `Refresh failed (${resp.status}).`;
+    throw new Error(msg);
   }
+
+  const body = await resp.json();
+  if (!body?.access_token || !body?.refresh_token) {
+    throw new Error('Refresh endpoint returned no tokens.');
+  }
+
+  // Install the freshly-minted admin session. setSession with a
+  // non-expired access_token doesn't trigger any refresh path, so this
+  // is a clean swap with no side effects.
+  const { error } = await supabase.auth.setSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+  });
+  if (error) throw error;
+
   setStashedSession(null);
 }
 

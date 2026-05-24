@@ -12,6 +12,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Exported so the demo-mode return-to-self path can hit Supabase Auth
+// directly (bypassing the SDK's refresh-token plumbing, which had been
+// silently swallowing the actual error response).
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseAnonKey;
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: Platform.OS === 'web' ? undefined : AsyncStorage,
