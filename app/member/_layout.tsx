@@ -19,6 +19,7 @@ const TABS = [
   { label: 'Messages', href: '/member/messages' },
   { label: 'Waivers', href: '/member/waivers' },
   { label: 'Profile', href: '/member/profile' },
+  { label: 'Settings', href: '/member/settings' },
 ];
 
 export default function MemberLayout() {
