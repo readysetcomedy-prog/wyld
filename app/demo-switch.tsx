@@ -11,6 +11,7 @@ import {
   useStashedSession,
   switchToDemo,
   returnToSelf,
+  setStashedSession,
 } from '@/lib/demoMode';
 import { Image } from 'react-native';
 
@@ -85,8 +86,22 @@ export default function DemoSwitch() {
       if (typeof window !== 'undefined') window.location.href = '/dashboard';
       else router.replace('/dashboard' as never);
     } catch (e: any) {
-      setErr(e?.message ?? 'Could not restore your account session.');
+      // Stashed refresh_token rejected (likely an older stash from before
+      // we started force-refreshing on switch). Tell the user what's up
+      // and offer the manual escape hatch so they aren't stuck in demo.
+      setErr(
+        `Your saved admin session expired — Supabase rejected the refresh token. ` +
+        `Click "Sign out & go to sign-in" to clear it; your next demo switch will ` +
+        `stash a fresh token so this won't happen again. (Details: ${e?.message ?? 'unknown'})`,
+      );
     }
+  }
+
+  async function bailOut() {
+    setStashedSession(null);
+    await supabase.auth.signOut();
+    if (typeof window !== 'undefined') window.location.href = '/sign-in';
+    else router.replace('/sign-in' as never);
   }
 
   return (
@@ -109,7 +124,14 @@ export default function DemoSwitch() {
         </Text>
       </Pressable>
 
-      {err ? <Text style={styles.err}>{err}</Text> : null}
+      {err ? (
+        <View style={styles.errBox}>
+          <Text style={styles.err}>{err}</Text>
+          <Pressable style={styles.bailBtn} onPress={bailOut}>
+            <Text style={styles.bailBtnText}>Sign out & go to sign-in</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {accounts === null ? (
         <ActivityIndicator color={theme.colors.wyldPurple} />
@@ -174,6 +196,18 @@ const styles = StyleSheet.create({
   },
   backBtnText: { color: theme.colors.charcoal, fontWeight: '700', fontSize: 13 },
   err: { color: theme.colors.danger, fontSize: 13 },
+  errBox: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FEF2F2',
+  },
+  bailBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 6, backgroundColor: theme.colors.danger,
+  },
+  bailBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   empty: { color: theme.colors.textSecondary, fontStyle: 'italic' },
 
   grid: {
