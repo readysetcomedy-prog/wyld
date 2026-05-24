@@ -159,16 +159,50 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
   }, [gymId, mode, myEmployeeId]);
 
   const loadFilters = useCallback(async () => {
-    if (mode !== 'manage' || !currentUserId) return;
+    // Persisted per-user in BOTH manage and view modes — same table,
+    // same per-(user, gym) row. Used to be manager-only; now any
+    // employee browsing the read-only schedule also keeps their last
+    // location + role filter selection across visits.
+    if (!currentUserId) return;
     const { data } = await supabase
       .from('schedule_manager_filters')
-      .select('visible_location_ids')
+      .select('visible_location_ids, role_filter')
       .eq('manager_user_id', currentUserId)
       .eq('gym_id', gymId)
       .maybeSingle();
     const ids: string[] = (data as any)?.visible_location_ids ?? [];
     if (ids.length > 0) setVisibleLocationIds(new Set(ids));
-  }, [gymId, currentUserId, mode]);
+    const role = (data as any)?.role_filter as string | null | undefined;
+    if (role != null) setRoleFilter(role);
+  }, [gymId, currentUserId]);
+
+  // Distinct roles for this gym. Sourced from gym_roles (the
+  // owner-managed role catalog) so even roles nobody currently holds
+  // are pickable as filters. Falls back to distinct employees.position
+  // values for gyms that haven't seeded their roles table yet.
+  const [gymRoles, setGymRoles] = useState<string[]>([]);
+  useEffect(() => {
+    supabase
+      .from('gym_roles')
+      .select('name')
+      .eq('gym_id', gymId)
+      .order('display_order')
+      .then(({ data }) => {
+        setGymRoles(((data as any[]) ?? []).map((r) => r.name as string).filter(Boolean));
+      });
+  }, [gymId]);
+
+  // Persist the role filter selection (both modes) so coming back to
+  // the schedule shows the same view the user left it in.
+  const persistRoleFilter = useCallback(async (role: string | null) => {
+    if (!currentUserId) return;
+    await supabase.from('schedule_manager_filters').upsert({
+      manager_user_id: currentUserId,
+      gym_id: gymId,
+      role_filter: role,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'manager_user_id,gym_id' });
+  }, [currentUserId, gymId]);
 
   // ---------- Default-times persistence (manage) ----------
   useEffect(() => {
@@ -218,12 +252,25 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const getEmp = (id: string) => empById.get(id) ?? null;
 
-  // Distinct positions present in this gym's employees (for filter chips)
+  // Filter chips show every role the gym has defined (gym_roles), plus
+  // any free-text positions actually in use on employees that aren't in
+  // gym_roles yet. Sorted in catalog order first, then loose ones.
   const allRoles = useMemo(() => {
-    const s = new Set<string>();
-    employees.forEach((e) => { if (e.position) s.add(e.position); });
-    return Array.from(s).sort();
-  }, [employees]);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of gymRoles) {
+      if (r && !seen.has(r)) { seen.add(r); out.push(r); }
+    }
+    const loose: string[] = [];
+    employees.forEach((e) => {
+      if (e.position && !seen.has(e.position)) {
+        seen.add(e.position);
+        loose.push(e.position);
+      }
+    });
+    loose.sort();
+    return [...out, ...loose];
+  }, [gymRoles, employees]);
 
   function shiftsForCell(dateStr: string, locId: string): ScheduleShift[] {
     const loc = locations.find((l) => l.id === locId);
@@ -266,13 +313,15 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
     const next = new Set(visibleLocationIds);
     if (next.has(locId)) next.delete(locId); else next.add(locId);
     setVisibleLocationIds(next);
-    if (mode === 'manage' && currentUserId) {
+    // Persist in BOTH modes so an employee's location filter survives a
+    // page reload, not just a manager's.
+    if (currentUserId) {
       await supabase.from('schedule_manager_filters').upsert({
         manager_user_id: currentUserId,
         gym_id: gymId,
         visible_location_ids: Array.from(next),
         updated_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'manager_user_id,gym_id' });
     }
   }
 
@@ -540,7 +589,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBarContent}>
           <Pressable
             style={[styles.filterChip, roleFilter === null && styles.filterChipActive]}
-            onPress={() => setRoleFilter(null)}
+            onPress={() => { setRoleFilter(null); persistRoleFilter(null); }}
           >
             <Text style={[styles.filterChipText, roleFilter === null && styles.filterChipTextActive]}>All Roles</Text>
           </Pressable>
@@ -548,7 +597,11 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
             <Pressable
               key={r}
               style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
-              onPress={() => setRoleFilter(r === roleFilter ? null : r)}
+              onPress={() => {
+                const next = r === roleFilter ? null : r;
+                setRoleFilter(next);
+                persistRoleFilter(next);
+              }}
             >
               <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>{r}</Text>
             </Pressable>
