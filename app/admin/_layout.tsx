@@ -19,7 +19,6 @@ const TABS: { label: string; href: string; match: (p: string) => boolean }[] = [
   { label: 'Employees', href: '/admin/employees', match: (p) => p === '/admin/employees' },
   { label: 'Schedule', href: '/admin/schedule', match: (p) => p === '/admin/schedule' },
   { label: 'Pricing', href: '/admin/pricing', match: (p) => p === '/admin/pricing' },
-  { label: 'Users', href: '/admin/users', match: (p) => p === '/admin/users' },
   { label: 'Messages', href: '/admin/messages', match: (p) => p === '/admin/messages' },
   { label: 'Revenue & Expenses', href: '/admin/revenue-expenses', match: (p) => p === '/admin/revenue-expenses' },
   { label: 'Collaboration', href: '/admin/collaboration', match: (p) => p === '/admin/collaboration' },
