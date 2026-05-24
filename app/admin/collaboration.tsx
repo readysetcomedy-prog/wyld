@@ -394,6 +394,12 @@ function ChannelView({
   const [showingMembers, setShowingMembers] = useState(false);
   const [members, setMembers] = useState<string[]>([]);
   const scrollRef = useRef<ScrollView | null>(null);
+  // Pagination: open the latest CHANNEL_PAGE_SIZE messages, then prepend
+  // older history via "Load older" so channels with thousands of messages
+  // open instantly.
+  const CHANNEL_PAGE_SIZE = 50;
+  const [hasOlder, setHasOlder] = useState(false);
+  const [olderLoading, setOlderLoading] = useState(false);
 
   const isCreator = channel.created_by === userId;
   const canManage = isCreator || isAdmin;
@@ -402,17 +408,11 @@ function ChannelView({
     ? isCreator || (isAdmin && members.includes(userId))
     : canManage;
 
-  const load = useCallback(async () => {
-    const { data: msgs } = await supabase
-      .from('wyld_collab_messages')
-      .select('*')
-      .eq('channel_id', channel.id)
-      .order('created_at');
-    const rows = ((msgs as any[]) ?? []) as Message[];
-    if (rows.length === 0) {
-      setMessages([]);
-      return;
-    }
+  // Pulls attachments/reactions/mentions for a batch of messages and
+  // attaches them in-place. Bounded by the batch size since we use
+  // .in() on the message ids.
+  const enrichMessages = useCallback(async (rows: Message[]) => {
+    if (rows.length === 0) return;
     const ids = rows.map((m) => m.id);
     const [{ data: atts }, { data: rxns }, { data: mens }] = [
       await supabase.from('wyld_collab_attachments').select('*').in('message_id', ids),
@@ -442,8 +442,43 @@ function ChannelView({
       m.reactions = byRxn.get(m.id) ?? [];
       m.mentions = byMen.get(m.id) ?? [];
     });
+  }, []);
+
+  const load = useCallback(async () => {
+    // Latest page first: query desc + limit, then reverse for display.
+    const { data: msgs } = await supabase
+      .from('wyld_collab_messages')
+      .select('*')
+      .eq('channel_id', channel.id)
+      .order('created_at', { ascending: false })
+      .limit(CHANNEL_PAGE_SIZE + 1);
+    const raw = ((msgs as any[]) ?? []) as Message[];
+    const more = raw.length > CHANNEL_PAGE_SIZE;
+    const rows = (more ? raw.slice(0, CHANNEL_PAGE_SIZE) : raw).slice().reverse();
+    await enrichMessages(rows);
     setMessages(rows);
-  }, [channel.id]);
+    setHasOlder(more);
+  }, [channel.id, enrichMessages]);
+
+  const loadOlder = useCallback(async () => {
+    if (olderLoading || !hasOlder || !messages || messages.length === 0) return;
+    setOlderLoading(true);
+    const oldest = messages[0].created_at;
+    const { data: msgs } = await supabase
+      .from('wyld_collab_messages')
+      .select('*')
+      .eq('channel_id', channel.id)
+      .lt('created_at', oldest)
+      .order('created_at', { ascending: false })
+      .limit(CHANNEL_PAGE_SIZE + 1);
+    const raw = ((msgs as any[]) ?? []) as Message[];
+    const more = raw.length > CHANNEL_PAGE_SIZE;
+    const older = (more ? raw.slice(0, CHANNEL_PAGE_SIZE) : raw).slice().reverse();
+    await enrichMessages(older);
+    setMessages((prev) => (prev ? [...older, ...prev] : older));
+    setHasOlder(more);
+    setOlderLoading(false);
+  }, [channel.id, enrichMessages, hasOlder, messages, olderLoading]);
 
   const markRead = useCallback(async () => {
     await supabase
@@ -496,13 +531,16 @@ function ChannelView({
     };
   }, [channel.id, load, markRead]);
 
-  // Auto-scroll to bottom on new content.
-  const messageCount = messages?.length ?? 0;
+  // Auto-scroll to bottom when the LATEST message changes — fires on
+  // initial load and on incoming realtime messages, but does not fire
+  // when older history is prepended via Load older (which only changes
+  // messages[0], not the last id).
+  const latestMessageId = messages && messages.length > 0 ? messages[messages.length - 1].id : null;
   useEffect(() => {
-    if (messageCount > 0) {
+    if (latestMessageId) {
       requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
     }
-  }, [messageCount]);
+  }, [latestMessageId]);
 
   async function saveChannel() {
     const name = draftName.trim();
@@ -703,6 +741,17 @@ function ChannelView({
       ) : null}
 
       <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.messagesInner}>
+        {hasOlder && messages !== null ? (
+          <Pressable
+            style={[styles.loadOlderBtn, olderLoading && { opacity: 0.6 }]}
+            disabled={olderLoading}
+            onPress={loadOlder}
+          >
+            <Text style={styles.loadOlderBtnText}>
+              {olderLoading ? 'Loading…' : '↑ Load older messages'}
+            </Text>
+          </Pressable>
+        ) : null}
         {messages === null ? (
           <ActivityIndicator color={theme.colors.wyldPurple} />
         ) : messages.length === 0 ? (
@@ -1434,6 +1483,13 @@ const styles = StyleSheet.create({
 
   messages: { flex: 1 },
   messagesInner: { padding: theme.spacing.md, gap: 4, paddingBottom: theme.spacing.lg },
+  loadOlderBtn: {
+    alignSelf: 'center', marginBottom: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border,
+    backgroundColor: '#fff',
+  },
+  loadOlderBtnText: { color: theme.colors.textSecondary, fontWeight: '700', fontSize: 12 },
 
   msg: { paddingVertical: 6, paddingHorizontal: 6, borderRadius: 8 },
   msgGrouped: { paddingTop: 0, paddingBottom: 2 },
