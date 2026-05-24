@@ -24,6 +24,7 @@ import { PhoneLink, EmailLink } from '@/components/ContactLink';
 import { WYLD_INC_LOGO_URL } from '@/lib/theme';
 
 const DEFAULT_MODULES = {
+  website_enabled: true,
   calendar_enabled: false,
   store_enabled: false,
   news_enabled: false,
@@ -285,6 +286,23 @@ export default function SiteLayout() {
         <Text style={styles.notFoundTitle}>Gym not found</Text>
         <Text style={styles.notFoundBody}>
           No gym matches the URL <Text style={styles.mono}>/g/{slug}</Text>.
+        </Text>
+        <Pressable style={styles.retry} onPress={() => router.replace('/' as never)}>
+          <Text style={styles.retryText}>Go home</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // Gym opted out of having a public website. Show a friendly page
+  // instead of a half-rendered shell.
+  if (site && (site.modules as any).website_enabled === false) {
+    return (
+      <View style={styles.notFound}>
+        <Text style={styles.notFoundTitle}>{site.gym.name}</Text>
+        <Text style={styles.notFoundBody}>
+          This gym doesn't have a public website right now. Reach out to
+          them directly or join through your WyLD member portal.
         </Text>
         <Pressable style={styles.retry} onPress={() => router.replace('/' as never)}>
           <Text style={styles.retryText}>Go home</Text>

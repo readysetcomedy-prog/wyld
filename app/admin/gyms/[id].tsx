@@ -33,6 +33,7 @@ type Gym = {
 
 type Modules = {
   gym_id: string;
+  website_enabled: boolean;
   calendar_enabled: boolean;
   store_enabled: boolean;
   bookings_enabled: boolean;
@@ -60,6 +61,7 @@ const MODULE_GROUPS: {
   {
     label: 'Public-site pages',
     rows: [
+      { key: 'website_enabled', label: 'Website', hint: 'Whether this gym has a public website on WyLD. Off = no /g/[slug] site.' },
       { key: 'calendar_enabled', label: 'Calendar / Schedule', hint: 'Adds a Schedule page on the site.' },
       { key: 'store_enabled', label: 'Store', hint: 'Adds a Store page on the site.' },
       { key: 'news_enabled', label: 'News / Blog', hint: 'Adds a News page on the site.' },

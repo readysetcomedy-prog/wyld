@@ -127,7 +127,10 @@ function modelFromForm(form: Form): PricingModel {
     const it = form.items[f.key] ?? emptyItemForm();
     items[f.key] = {
       price_cents: dollarsToCents(it.price),
-      setup_fee_cents: dollarsToCents(it.setup_fee),
+      // Always-on features inherit their onboarding cost from the
+      // top-level base_setup_fee_cents — never store a per-item value
+      // for them, even if the form draft has one from an older model.
+      setup_fee_cents: f.flag === null ? 0 : dollarsToCents(it.setup_fee),
       inclusion: it.inclusion,
       included_with:
         it.inclusion === 'included_with'
@@ -436,6 +439,10 @@ function ItemCard({
   value: ItemForm;
   onChange: (patch: Partial<ItemForm>) => void;
 }) {
+  // Always-on features (FEATURES with flag === null) skip the per-item
+  // setup-fee input because the top-level base_setup_fee_cents already
+  // covers their onboarding.
+  const alwaysOn = FEATURES.find((f) => f.key === featureKey)?.flag === null;
   // Other features can be referenced as conditions / "included with" targets.
   const otherOptions = FEATURES.filter((f) => f.key !== featureKey).map((f) => ({
     value: f.key,
@@ -551,17 +558,25 @@ function ItemCard({
         </View>
       ) : null}
 
-      <View style={styles.fieldRow}>
-        <Text style={styles.fieldLabel}>Setup fee (USD, one-time)</Text>
-        <TextInput
-          value={value.setup_fee}
-          onChangeText={(v) => onChange({ setup_fee: cleanNum(v) })}
-          placeholder="0.00"
-          placeholderTextColor="#94a3b8"
-          keyboardType="decimal-pad"
-          style={styles.priceInput}
-        />
-      </View>
+      {alwaysOn ? (
+        <Text style={styles.alwaysOnHint}>
+          Always-on platform fee. Onboarding cost is handled by the
+          'Account setup fee' at the top of the page — this item has no
+          separate setup fee.
+        </Text>
+      ) : (
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Setup fee (USD, one-time)</Text>
+          <TextInput
+            value={value.setup_fee}
+            onChangeText={(v) => onChange({ setup_fee: cleanNum(v) })}
+            placeholder="0.00"
+            placeholderTextColor="#94a3b8"
+            keyboardType="decimal-pad"
+            style={styles.priceInput}
+          />
+        </View>
+      )}
 
       {value.inclusion !== 'included' ? (
         <View style={styles.discountBlock}>
@@ -817,6 +832,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     color: theme.colors.charcoal,
     minWidth: 100,
+  },
+  alwaysOnHint: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
+    lineHeight: 17,
   },
   pctInput: {
     borderWidth: 1,

@@ -116,6 +116,7 @@ export default function MemberGymSchedule() {
         section_dividers: true,
       },
       modules: {
+        website_enabled: !!data.modules.website_enabled,
         calendar_enabled: !!data.modules.calendar_enabled,
         store_enabled: !!data.modules.store_enabled,
         news_enabled: !!data.modules.news_enabled,

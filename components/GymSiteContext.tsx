@@ -45,6 +45,7 @@ export type GymSite = {
     about_enabled: boolean;
     services_enabled: boolean;
     contact_enabled: boolean;
+    website_enabled: boolean;
     news_visible: boolean;
     faq_visible: boolean;
     store_visible: boolean;
