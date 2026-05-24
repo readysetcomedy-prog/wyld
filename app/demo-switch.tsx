@@ -10,6 +10,7 @@ import {
   useDemoAuthorized,
   useStashedSession,
   switchToDemo,
+  returnToSelf,
 } from '@/lib/demoMode';
 import { Image } from 'react-native';
 
@@ -26,7 +27,7 @@ type DemoAccount = {
 // a stashed session — that way demo users can bounce between fake accounts
 // or get back to themselves from anywhere in the app.
 export default function DemoSwitch() {
-  const { session, profile, loading, signOut } = useAuth();
+  const { session, profile, loading } = useAuth();
   const router = useRouter();
   const authorized = useDemoAuthorized(profile?.id);
   const stash = useStashedSession();
@@ -71,18 +72,21 @@ export default function DemoSwitch() {
     }
   }
 
-  // The previous "Return to my account" flow tried to restore the stashed
-  // refresh token but routinely failed (revoked tokens, missing storage
-  // entries), so we just sign out cleanly and let the user log back in.
-  // Honors the user's request: "I'll just log back into my admin account".
   async function back() {
-    if (stash) {
-      await signOut();
-      if (typeof window !== 'undefined') window.location.href = '/sign-in';
-      else router.replace('/sign-in' as never);
+    if (!stash) {
+      router.back();
       return;
     }
-    router.back();
+    setErr(null);
+    try {
+      await returnToSelf();
+      // refreshSession replaced the auth state — full reload so every
+      // consumer (AuthProvider, cached queries) sees the admin again.
+      if (typeof window !== 'undefined') window.location.href = '/dashboard';
+      else router.replace('/dashboard' as never);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Could not restore your account session.');
+    }
   }
 
   return (
@@ -93,15 +97,15 @@ export default function DemoSwitch() {
           <Text style={styles.title}>Demo quick-switch</Text>
           <Text style={styles.sub}>
             {stash
-              ? 'Pick another demo account, or sign out and log back into your real account.'
-              : 'Sign in as any demo account.'}
+              ? `Signed in as a demo account. Pick another, or return to ${stash.email ?? 'your account'}.`
+              : 'Sign in as any demo account. Your real session is stashed so you can return.'}
           </Text>
         </View>
       </View>
 
       <Pressable style={styles.backBtn} onPress={back}>
         <Text style={styles.backBtnText}>
-          {stash ? 'Sign out' : '← Back'}
+          {stash ? `← Return to ${stash.email ?? 'my account'}` : '← Back'}
         </Text>
       </Pressable>
 

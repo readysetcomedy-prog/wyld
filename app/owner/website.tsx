@@ -175,7 +175,7 @@ export default function Website() {
         supabase
           .from('gym_modules')
           .select(
-            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled'
+            'gym_id, website_enabled, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled, applications_enabled'
           )
           .eq('gym_id', gymId)
           .maybeSingle(),

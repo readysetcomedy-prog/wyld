@@ -135,16 +135,26 @@ export async function switchToDemo(email: string): Promise<void> {
 }
 
 // Restore the previously stashed session.
+//
+// We stash both tokens but the access_token is short-lived (~1h) so by
+// the time the user clicks "Return to my account" it's almost always
+// expired. Use refreshSession() with the stashed refresh_token to mint
+// a fresh session directly — that's what the SDK does internally for
+// auto-refresh, and it works whether or not the access_token is dead.
+//
+// Important: we only clear the stash AFTER a successful refresh. If
+// the refresh fails (refresh_token revoked or expired) we keep the
+// stash so the user can retry / inspect the error, and we re-throw so
+// the caller can surface it instead of silently dumping the user to
+// the sign-in page.
 export async function returnToSelf(): Promise<void> {
   const stash = getStashedSession();
-  if (!stash) return;
-  await supabase.auth.signOut({ scope: 'local' });
-  const { error } = await supabase.auth.setSession({
-    access_token: stash.access_token,
+  if (!stash) throw new Error('No stashed session to restore');
+  const { error } = await supabase.auth.refreshSession({
     refresh_token: stash.refresh_token,
   });
-  setStashedSession(null);
   if (error) throw error;
+  setStashedSession(null);
 }
 
 // ---- Authorization check (cached per-session) -------------------------
