@@ -395,10 +395,10 @@ export default function Website() {
   const visiblePages: PageKey[] = PAGE_KEYS.filter((k) => {
     if (k === 'news') return modules.news_enabled || pages.news != null;
     if (k === 'faq') return modules.faq_enabled || pages.faq != null;
-    // Careers page only renders on the public site when applications_enabled
-    // is on. Still editable here as long as the owner already has content
-    // for it (so they can prep before flipping the module).
-    if (k === 'careers') return modules.applications_enabled || pages.careers != null;
+    // Careers is always editable here so owners can prep content before
+    // they flip applications_enabled on. The PUBLIC site still respects
+    // the module flag — the public Careers route renders a "not enabled"
+    // card when the module is off.
     return true;
   });
 
