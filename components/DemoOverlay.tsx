@@ -1,14 +1,12 @@
 // Global overlay for the demo-accounts dev tool. Renders nothing on native.
-// Two pieces:
-//   1. A draggable "D" badge — visible when the user is demo-authorized AND
-//      has the toggle on, OR when a stashed original session exists.
-//   2. A "Return to my account" banner — visible whenever a stashed session
-//      exists, so the founder can pop back from any demo without having to
-//      sign in again. Failure surfaces inline; on success we leave it where
-//      it is (refreshSession swapped the auth state).
+// Just a draggable "D" badge — visible when the user is demo-authorized AND
+// has the toggle on, OR when a stashed original session exists so a demo
+// session can still get back to the switcher. Returning to the real
+// account lives on /demo-switch (the button on that page); no overlay
+// banner — explicit request from the user, it was in the way.
 
 import { useEffect, useRef, useState } from 'react';
-import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import {
@@ -17,7 +15,6 @@ import {
   useStashedSession,
   getBadgePos,
   setBadgePos,
-  returnToSelf,
 } from '@/lib/demoMode';
 import { theme } from '@/lib/theme';
 
@@ -104,53 +101,9 @@ function DemoOverlayWeb() {
 
   const showBadge =
     !!profile && (((authorized === true) && on) || !!stash);
-  const showBanner = !!stash;
-  const [bannerErr, setBannerErr] = useState<string | null>(null);
-  const [returning, setReturning] = useState(false);
-
-  async function onReturn() {
-    setBannerErr(null);
-    setReturning(true);
-    try {
-      await returnToSelf();
-      // refreshSession() already replaced the auth state in the global
-      // client; force a reload so every consumer (AuthProvider listener,
-      // any cached queries) sees the restored admin session.
-      if (typeof window !== 'undefined') window.location.href = '/dashboard';
-      else router.replace('/dashboard' as never);
-    } catch (e: any) {
-      setReturning(false);
-      setBannerErr(e?.message ?? 'Could not restore your account session.');
-    }
-  }
 
   return (
     <>
-      {showBanner ? (
-        <View style={styles.banner} pointerEvents="box-none">
-          <View style={styles.bannerInner}>
-            <Text style={styles.bannerText}>
-              Signed in as a demo account
-              {stash?.email ? <Text style={styles.bannerEmail}> — your account: {stash.email}</Text> : null}
-            </Text>
-            <Pressable
-              style={[styles.bannerBtn, returning && { opacity: 0.6 }]}
-              disabled={returning}
-              onPress={onReturn}
-            >
-              <Text style={styles.bannerBtnText}>
-                {returning ? 'Returning…' : 'Return to my account'}
-              </Text>
-            </Pressable>
-          </View>
-          {bannerErr ? (
-            <View style={styles.bannerError}>
-              <Text style={styles.bannerErrorText}>{bannerErr}</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
       {showBadge ? (
         <View
           // @ts-expect-error — react-native-web accepts DOM event handlers
@@ -186,44 +139,4 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   badgeText: { color: '#fff', fontWeight: '900', fontSize: 22 },
-
-  banner: {
-    position: 'fixed' as any,
-    left: 0, right: 0, top: 0,
-    zIndex: 9998,
-    alignItems: 'center',
-  },
-  bannerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fbbf24',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    maxWidth: '100%',
-    flexWrap: 'wrap',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  bannerText: { color: '#1f2937', fontWeight: '700', fontSize: 13 },
-  bannerEmail: { fontWeight: '500' },
-  bannerBtn: {
-    backgroundColor: '#1f2937',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  bannerBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  bannerError: {
-    marginTop: 4,
-    backgroundColor: '#7f1d1d',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  bannerErrorText: { color: '#fee2e2', fontSize: 12, fontWeight: '600' },
 });
