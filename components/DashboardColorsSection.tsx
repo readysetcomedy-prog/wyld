@@ -125,7 +125,9 @@ export function DashboardColorsSection() {
           <Text style={styles.previewBtnText}>Sample button</Text>
         </View>
         <Text style={styles.previewHint}>
-          Sidebar = primary. Active tabs and CTAs = accent on dark, primary on light.
+          Sidebar + active sub-tabs use your primary. Action buttons
+          (+ Add, Save, etc.) use your accent so they pop against the
+          page background.
         </Text>
       </View>
 

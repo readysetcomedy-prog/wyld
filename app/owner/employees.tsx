@@ -551,7 +551,7 @@ export function Roster({
         />
       ) : !form ? (
         <View style={styles.subRow}>
-          <Pressable style={[styles.btn, { backgroundColor: gymTheme.primary }]} onPress={openNew}>
+          <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={openNew}>
             <Text style={styles.btnText}>+ Add employee</Text>
           </Pressable>
           <Pressable
