@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
 import { SubTabsPage } from '@/components/SubTabs';
 import { Roster, RolesEditor } from '@/app/owner/employees';
+import { TimeCardsManager } from '@/components/TimeCardsManager';
 
 export default function AdminEmployees() {
   const [wyldGymId, setWyldGymId] = useState<string | null | undefined>(undefined);
@@ -51,7 +52,7 @@ export default function AdminEmployees() {
         {
           key: 'time-cards',
           label: 'Time Cards',
-          body: 'Clock-ins and clock-outs, total hours per pay period, and exports for payroll.',
+          body: <TimeCardsManager gymId={wyldGymId} />,
         },
         { key: 'scheduling', label: 'Scheduling', body: <WyldSchedulingLauncher gymId={wyldGymId} /> },
         {

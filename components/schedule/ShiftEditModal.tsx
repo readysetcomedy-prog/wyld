@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { TimePicker } from './TimePicker';
 import { calcShiftHours, detectNextDay, hasConflict } from './utils';
 import {
@@ -27,6 +28,7 @@ type Props = {
 export function ShiftEditModal({
   visible, shift, location, employee, allShifts, onSave, onDelete, onClose,
 }: Props) {
+  const gymTheme = useGymTheme();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -163,7 +165,7 @@ export function ShiftEditModal({
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.saveBtn, saving && styles.btnDisabled]}
+                style={[styles.saveBtn, { backgroundColor: gymTheme.accent }, saving && styles.btnDisabled]}
                 disabled={saving}
                 onPress={handleSave}
               >

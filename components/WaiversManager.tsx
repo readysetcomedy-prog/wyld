@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { WaiverRichEditor } from '@/components/WaiverRichEditor';
 import {
   WaiverBlock,
@@ -36,6 +37,7 @@ type Editing = {
 };
 
 export function WaiversManager({ gymId }: { gymId: string }) {
+  const gymTheme = useGymTheme();
   const [waivers, setWaivers] = useState<Waiver[] | null>(null);
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -187,7 +189,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
       {!editing ? (
         <View style={styles.topButtons}>
           <Pressable
-            style={styles.btn}
+            style={[styles.btn, { backgroundColor: gymTheme.accent }]}
             onPress={() =>
               openEditor({ title: '', blocks: [], applies_to_all: true, offeringIds: [] })
             }
@@ -195,7 +197,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
             <Text style={styles.btnText}>+ New waiver</Text>
           </Pressable>
           <Pressable
-            style={styles.btnOutline}
+            style={[styles.btnOutline, { borderColor: gymTheme.accent }]}
             onPress={() =>
               openEditor({
                 title: PREMADE_WAIVER_TITLE,
@@ -205,7 +207,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
               })
             }
           >
-            <Text style={styles.btnOutlineText}>Use Premade Template</Text>
+            <Text style={[styles.btnOutlineText, { color: gymTheme.accent }]}>Use Premade Template</Text>
           </Pressable>
         </View>
       ) : null}
@@ -234,14 +236,20 @@ export function WaiversManager({ gymId }: { gymId: string }) {
               style={styles.radio}
               onPress={() => setEditing({ ...editing, applies_to_all: true })}
             >
-              <View style={[styles.radioDot, editing.applies_to_all && styles.radioDotOn]} />
+              <View style={[
+                styles.radioDot,
+                editing.applies_to_all && { borderColor: gymTheme.accent, backgroundColor: gymTheme.accent },
+              ]} />
               <Text style={styles.radioText}>All offerings</Text>
             </Pressable>
             <Pressable
               style={styles.radio}
               onPress={() => setEditing({ ...editing, applies_to_all: false })}
             >
-              <View style={[styles.radioDot, !editing.applies_to_all && styles.radioDotOn]} />
+              <View style={[
+                styles.radioDot,
+                !editing.applies_to_all && { borderColor: gymTheme.accent, backgroundColor: gymTheme.accent },
+              ]} />
               <Text style={styles.radioText}>Specific offerings</Text>
             </Pressable>
           </View>
@@ -268,7 +276,10 @@ export function WaiversManager({ gymId }: { gymId: string }) {
                         })
                       }
                     >
-                      <View style={[styles.checkBox, on && styles.checkBoxOn]}>
+                      <View style={[
+                        styles.checkBox,
+                        on && { backgroundColor: gymTheme.accent, borderColor: gymTheme.accent },
+                      ]}>
                         {on ? <Text style={styles.checkMark}>✓</Text> : null}
                       </View>
                       <Text style={styles.checkLabel}>{o.name}</Text>
@@ -280,7 +291,7 @@ export function WaiversManager({ gymId }: { gymId: string }) {
           ) : null}
 
           <View style={styles.editorButtons}>
-            <Pressable style={styles.btn} onPress={save} disabled={saving}>
+            <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={save} disabled={saving}>
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save waiver'}</Text>
             </Pressable>
             <Pressable style={styles.btnGhost} onPress={() => setEditing(null)}>

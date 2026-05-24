@@ -154,7 +154,7 @@ export default function OwnerMembers() {
           </Text>
         </View>
         <Pressable
-          style={[styles.addBtn, { backgroundColor: gymTheme.primary }]}
+          style={[styles.addBtn, { backgroundColor: gymTheme.accent }]}
           onPress={() => setAddOpen(true)}
         >
           <Text style={styles.addBtnText}>+ Add member</Text>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInfiniteList } from '@/hooks/useInfiniteList';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+import { useGymTheme } from '@/lib/gymTheme';
 import {
   View,
   Text,
@@ -74,6 +75,7 @@ const emptyForm = (locationId: string | null): Form => ({
 
 export default function OwnerStore() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
 
   const [locations, setLocations] = useState<Loc[]>([]);
@@ -311,7 +313,7 @@ export default function OwnerStore() {
             <Pressable
               key={v}
               onPress={() => setView(v)}
-              style={[styles.viewBtn, view === v && styles.viewBtnActive]}
+              style={[styles.viewBtn, view === v && { backgroundColor: gymTheme.primary }]}
             >
               <Text style={[styles.viewBtnText, view === v && styles.viewBtnTextActive]}>
                 {v === 'products' ? 'Products' : 'Inventory'}
@@ -321,7 +323,7 @@ export default function OwnerStore() {
         </View>
         {!form ? (
           <Pressable
-            style={styles.btn}
+            style={[styles.btn, { backgroundColor: gymTheme.accent }]}
             onPress={() => {
               setForm(emptyForm(locFilter));
               setView('products');
@@ -496,7 +498,7 @@ export default function OwnerStore() {
             </View>
           </View>
           <View style={styles.formButtons}>
-            <Pressable style={styles.btn} onPress={save} disabled={saving}>
+            <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={save} disabled={saving}>
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
             </Pressable>
             <Pressable style={styles.btnGhost} onPress={() => setForm(null)}>
@@ -541,7 +543,7 @@ export default function OwnerStore() {
                   </View>
                   <View style={styles.cardBody}>
                     <Text style={styles.cardName} numberOfLines={2}>{p.name}</Text>
-                    <Text style={styles.cardPrice}>
+                    <Text style={[styles.cardPrice, { color: gymTheme.primary }]}>
                       {p.price_cents != null ? `$${(p.price_cents / 100).toFixed(2)}` : '—'}
                     </Text>
                     <View style={styles.tagRow}>

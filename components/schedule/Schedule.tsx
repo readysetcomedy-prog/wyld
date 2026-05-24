@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { useAuth } from '@/lib/auth';
 import { TimePicker } from './TimePicker';
 import { ShiftEditModal } from './ShiftEditModal';
@@ -42,6 +43,7 @@ type Props = {
 
 export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
   const { session } = useAuth();
+  const gymTheme = useGymTheme();
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
   const currentUserId = session?.user?.id ?? '';
@@ -159,16 +161,50 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
   }, [gymId, mode, myEmployeeId]);
 
   const loadFilters = useCallback(async () => {
-    if (mode !== 'manage' || !currentUserId) return;
+    // Persisted per-user in BOTH manage and view modes — same table,
+    // same per-(user, gym) row. Used to be manager-only; now any
+    // employee browsing the read-only schedule also keeps their last
+    // location + role filter selection across visits.
+    if (!currentUserId) return;
     const { data } = await supabase
       .from('schedule_manager_filters')
-      .select('visible_location_ids')
+      .select('visible_location_ids, role_filter')
       .eq('manager_user_id', currentUserId)
       .eq('gym_id', gymId)
       .maybeSingle();
     const ids: string[] = (data as any)?.visible_location_ids ?? [];
     if (ids.length > 0) setVisibleLocationIds(new Set(ids));
-  }, [gymId, currentUserId, mode]);
+    const role = (data as any)?.role_filter as string | null | undefined;
+    if (role != null) setRoleFilter(role);
+  }, [gymId, currentUserId]);
+
+  // Distinct roles for this gym. Sourced from gym_roles (the
+  // owner-managed role catalog) so even roles nobody currently holds
+  // are pickable as filters. Falls back to distinct employees.position
+  // values for gyms that haven't seeded their roles table yet.
+  const [gymRoles, setGymRoles] = useState<string[]>([]);
+  useEffect(() => {
+    supabase
+      .from('gym_roles')
+      .select('name')
+      .eq('gym_id', gymId)
+      .order('display_order')
+      .then(({ data }) => {
+        setGymRoles(((data as any[]) ?? []).map((r) => r.name as string).filter(Boolean));
+      });
+  }, [gymId]);
+
+  // Persist the role filter selection (both modes) so coming back to
+  // the schedule shows the same view the user left it in.
+  const persistRoleFilter = useCallback(async (role: string | null) => {
+    if (!currentUserId) return;
+    await supabase.from('schedule_manager_filters').upsert({
+      manager_user_id: currentUserId,
+      gym_id: gymId,
+      role_filter: role,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'manager_user_id,gym_id' });
+  }, [currentUserId, gymId]);
 
   // ---------- Default-times persistence (manage) ----------
   useEffect(() => {
@@ -218,12 +254,25 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const getEmp = (id: string) => empById.get(id) ?? null;
 
-  // Distinct positions present in this gym's employees (for filter chips)
+  // Filter chips show every role the gym has defined (gym_roles), plus
+  // any free-text positions actually in use on employees that aren't in
+  // gym_roles yet. Sorted in catalog order first, then loose ones.
   const allRoles = useMemo(() => {
-    const s = new Set<string>();
-    employees.forEach((e) => { if (e.position) s.add(e.position); });
-    return Array.from(s).sort();
-  }, [employees]);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of gymRoles) {
+      if (r && !seen.has(r)) { seen.add(r); out.push(r); }
+    }
+    const loose: string[] = [];
+    employees.forEach((e) => {
+      if (e.position && !seen.has(e.position)) {
+        seen.add(e.position);
+        loose.push(e.position);
+      }
+    });
+    loose.sort();
+    return [...out, ...loose];
+  }, [gymRoles, employees]);
 
   function shiftsForCell(dateStr: string, locId: string): ScheduleShift[] {
     const loc = locations.find((l) => l.id === locId);
@@ -266,13 +315,15 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
     const next = new Set(visibleLocationIds);
     if (next.has(locId)) next.delete(locId); else next.add(locId);
     setVisibleLocationIds(next);
-    if (mode === 'manage' && currentUserId) {
+    // Persist in BOTH modes so an employee's location filter survives a
+    // page reload, not just a manager's.
+    if (currentUserId) {
       await supabase.from('schedule_manager_filters').upsert({
         manager_user_id: currentUserId,
         gym_id: gymId,
         visible_location_ids: Array.from(next),
         updated_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'manager_user_id,gym_id' });
     }
   }
 
@@ -489,7 +540,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                 <View style={styles.bell}><Text style={styles.bellText}>{pendingCount}</Text></View>
               ) : null}
             </Pressable>
-            <Pressable style={[styles.iconBtn, styles.iconBtnPrimary]} onPress={() => setShowRotation(true)}>
+            <Pressable style={[styles.iconBtn, { backgroundColor: gymTheme.accent, borderColor: gymTheme.accent }]} onPress={() => setShowRotation(true)}>
               <Text style={[styles.iconBtnText, { color: '#fff' }]}>Rotation</Text>
             </Pressable>
           </View>
@@ -498,18 +549,18 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
 
       {/* View toggle */}
       <View style={styles.toggleRow}>
-        <Pressable style={[styles.toggleBtn, viewMode === 'month' && styles.toggleBtnActive]} onPress={() => setViewMode('month')}>
-          <Text style={[styles.toggleText, viewMode === 'month' && styles.toggleTextActive]}>Month</Text>
+        <Pressable style={[styles.toggleBtn, viewMode === 'month' && { borderBottomColor: gymTheme.primary }]} onPress={() => setViewMode('month')}>
+          <Text style={[styles.toggleText, viewMode === 'month' && { color: gymTheme.primary }]}>Month</Text>
         </Pressable>
-        <Pressable style={[styles.toggleBtn, viewMode === 'day' && styles.toggleBtnActive]} onPress={() => setViewMode('day')}>
-          <Text style={[styles.toggleText, viewMode === 'day' && styles.toggleTextActive]}>Day</Text>
+        <Pressable style={[styles.toggleBtn, viewMode === 'day' && { borderBottomColor: gymTheme.primary }]} onPress={() => setViewMode('day')}>
+          <Text style={[styles.toggleText, viewMode === 'day' && { color: gymTheme.primary }]}>Day</Text>
         </Pressable>
-        <Pressable style={[styles.toggleBtn, detailView && styles.toggleBtnActive]} onPress={() => setDetailView((v) => !v)}>
-          <Text style={[styles.toggleText, detailView && styles.toggleTextActive]}>Detail</Text>
+        <Pressable style={[styles.toggleBtn, detailView && { borderBottomColor: gymTheme.primary }]} onPress={() => setDetailView((v) => !v)}>
+          <Text style={[styles.toggleText, detailView && { color: gymTheme.primary }]}>Detail</Text>
         </Pressable>
         {mode === 'view' && (
-          <Pressable style={[styles.toggleBtn, mineOnly && styles.toggleBtnActive]} onPress={() => setMineOnly((v) => !v)}>
-            <Text style={[styles.toggleText, mineOnly && styles.toggleTextActive]}>Mine</Text>
+          <Pressable style={[styles.toggleBtn, mineOnly && { borderBottomColor: gymTheme.primary }]} onPress={() => setMineOnly((v) => !v)}>
+            <Text style={[styles.toggleText, mineOnly && { color: gymTheme.primary }]}>Mine</Text>
           </Pressable>
         )}
       </View>
@@ -539,16 +590,20 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
       <View style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBarContent}>
           <Pressable
-            style={[styles.filterChip, roleFilter === null && styles.filterChipActive]}
-            onPress={() => setRoleFilter(null)}
+            style={[styles.filterChip, roleFilter === null && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary }]}
+            onPress={() => { setRoleFilter(null); persistRoleFilter(null); }}
           >
             <Text style={[styles.filterChipText, roleFilter === null && styles.filterChipTextActive]}>All Roles</Text>
           </Pressable>
           {allRoles.map((r) => (
             <Pressable
               key={r}
-              style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
-              onPress={() => setRoleFilter(r === roleFilter ? null : r)}
+              style={[styles.filterChip, roleFilter === r && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary }]}
+              onPress={() => {
+                const next = r === roleFilter ? null : r;
+                setRoleFilter(next);
+                persistRoleFilter(next);
+              }}
             >
               <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>{r}</Text>
             </Pressable>
@@ -587,7 +642,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
       ) : null}
 
       {pendingSwap && (
-        <View style={[styles.banner, styles.bannerPurple]}>
+        <View style={[styles.banner, { backgroundColor: gymTheme.primary }]}>
           <Text style={[styles.bannerText, { color: '#fff' }]}>
             Swap mode: tap another shift to swap employees
           </Text>
@@ -628,7 +683,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                         style={[
                           styles.dayCell, { width: CELL_PCT },
                           !inMonth && styles.dayCellOther,
-                          isToday && styles.dayCellToday,
+                          isToday && { borderColor: gymTheme.primary, borderWidth: 2 },
                         ]}
                       >
                         <View style={styles.dayCellTop}>
@@ -668,7 +723,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                                         key={s.id}
                                         style={[
                                           styles.chip,
-                                          isMine && styles.chipMine,
+                                          isMine && { backgroundColor: gymTheme.primary },
                                           swap === 'source' && styles.chipSwapSource,
                                           swap === 'target' && styles.chipSwapTarget,
                                         ]}
@@ -783,7 +838,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
               <Pressable onPress={() => setViewDate(new Date())}>
                 <Text style={styles.monthLabel}>{formatDateLabel(viewDate)}</Text>
                 {viewDateStr === todayDateStr && (
-                  <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>Today</Text></View>
+                  <View style={[styles.todayBadge, { backgroundColor: gymTheme.accent }]}><Text style={styles.todayBadgeText}>Today</Text></View>
                 )}
               </Pressable>
               <Pressable onPress={nextDay} style={styles.navBtn}><Text style={styles.navBtnText}>›</Text></Pressable>
@@ -888,7 +943,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                           </Text>
                         </View>
                       ) : (
-                        <Pressable style={styles.pickupBtn} onPress={() => openPickup(viewDateStr, loc)}>
+                        <Pressable style={[styles.pickupBtn, { backgroundColor: gymTheme.accent }]} onPress={() => openPickup(viewDateStr, loc)}>
                           <Text style={styles.pickupBtnText}>Request Pickup</Text>
                         </Pressable>
                       )}
@@ -962,7 +1017,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                       <Text style={styles.empItemName}>{e.full_name}</Text>
                       {e.position ? <Text style={styles.empItemPos}>{e.position}</Text> : null}
                     </View>
-                    {selectedEmployee?.id === e.id && <View style={styles.empItemCheck} />}
+                    {selectedEmployee?.id === e.id && <View style={[styles.empItemCheck, { backgroundColor: gymTheme.accent }]} />}
                   </Pressable>
                 ))}
             </ScrollView>
@@ -981,7 +1036,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
             <ScrollView>
               {DELETE_REASONS.filter((r) => r !== 'Error in Entry').map((r) => (
                 <Pressable key={r} style={styles.reasonRow} onPress={() => setAbsenceReason(r)}>
-                  <View style={[styles.radio, absenceReason === r && styles.radioActive]} />
+                  <View style={[styles.radio, absenceReason === r && { borderColor: gymTheme.accent, backgroundColor: gymTheme.accent }]} />
                   <Text style={[styles.reasonText, absenceReason === r && styles.reasonTextActive]}>{r}</Text>
                 </Pressable>
               ))}

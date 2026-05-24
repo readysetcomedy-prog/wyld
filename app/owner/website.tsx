@@ -13,6 +13,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { pickAndUploadImages } from '@/components/ImageUpload';
 import { fetchBaseUrl, liveUrlForGym, DEFAULT_BASE_URL } from '@/lib/appSettings';
 import { ColorPickerField } from '@/components/ColorPicker';
@@ -150,6 +151,7 @@ const PAGE_NOTES: Partial<Record<PageKey, string>> = {
 
 export default function Website() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const [gym, setGym] = useState<Gym | null>(null);
   const [themeRow, setThemeRow] = useState<Theme | null>(null);
   // When null = editing default ("All locations / shared"). UUID = editing that location's overrides.
@@ -412,7 +414,7 @@ export default function Website() {
           <Pressable
             onPress={() => typeof window !== 'undefined' && window.open(liveUrl, '_blank')}
           >
-            <Text style={styles.liveLink}>{liveUrl} ↗</Text>
+            <Text style={[styles.liveLink, { color: gymTheme.primary }]}>{liveUrl} ↗</Text>
           </Pressable>
         ) : (
           <Text style={styles.dim}>Your admin needs to set a slug before your site is live.</Text>
@@ -461,7 +463,7 @@ export default function Website() {
             </View>
           )}
           <View style={styles.col}>
-            <Pressable style={styles.btn} onPress={uploadLogo}>
+            <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={uploadLogo}>
               <Text style={styles.btnText}>{themeRow.logo_url ? 'Replace logo' : 'Upload logo'}</Text>
             </Pressable>
             {themeRow.logo_url ? (
@@ -502,7 +504,7 @@ export default function Website() {
             return (
               <Pressable
                 key={opt.value}
-                style={[styles.presetTile, active && { borderColor: theme.colors.wyldPurple, borderWidth: 2 }]}
+                style={[styles.presetTile, active && { borderColor: gymTheme.primary, borderWidth: 2 }]}
                 onPress={() => saveTheme({ style_preset: opt.value })}
               >
                 <View style={[styles.presetSwatch, presetSwatchStyle(opt.value)]} />
@@ -525,7 +527,7 @@ export default function Website() {
             {(['split', 'fullbleed'] as const).map((v) => (
               <Pressable
                 key={v}
-                style={[styles.segItem, themeRow.hero_variant === v && styles.segItemActive]}
+                style={[styles.segItem, themeRow.hero_variant === v && { backgroundColor: gymTheme.primary }]}
                 onPress={() => saveTheme({ hero_variant: v })}
               >
                 <Text
@@ -659,7 +661,7 @@ export default function Website() {
               ))}
             </View>
           )}
-          <Pressable style={styles.btn} onPress={() => uploadGallery(activePage)}>
+          <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={() => uploadGallery(activePage)}>
             <Text style={styles.btnText}>Upload images</Text>
           </Pressable>
         </View>
@@ -862,6 +864,7 @@ export default function Website() {
 }
 
 function NewsPostsManager({ gymId }: { gymId: string }) {
+  const gymTheme = useGymTheme();
   const [posts, setPosts] = useState<NewsPost[] | null>(null);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<NewsPost | null>(null);
@@ -951,7 +954,7 @@ function NewsPostsManager({ gymId }: { gymId: string }) {
         }}
       >
         <Text style={styles.cardTitle}>Blog posts</Text>
-        <Pressable style={styles.btn} onPress={createPost}>
+        <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={createPost}>
           <Text style={styles.btnText}>New post</Text>
         </Pressable>
       </View>
@@ -1056,7 +1059,7 @@ function NewsPostsManager({ gymId }: { gymId: string }) {
                 </Pressable>
               </View>
             ) : null}
-            <Pressable style={styles.btn} onPress={uploadCover}>
+            <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={uploadCover}>
               <Text style={styles.btnText}>
                 {editing.cover_image_url ? 'Replace image' : 'Upload image'}
               </Text>
@@ -1080,7 +1083,7 @@ function NewsPostsManager({ gymId }: { gymId: string }) {
             }}
           >
             <Pressable
-              style={styles.btn}
+              style={[styles.btn, { backgroundColor: gymTheme.accent }]}
               onPress={() =>
                 savePost({
                   published_at: editing.published_at ? null : new Date().toISOString(),
@@ -1149,6 +1152,7 @@ function FaqItemsManager({
   items: FaqItem[];
   onChange: (next: FaqItem[]) => void;
 }) {
+  const gymTheme = useGymTheme();
   const [items, setItems] = useState<FaqItem[]>(initial);
   useEffect(() => {
     setItems(initial);
@@ -1194,7 +1198,7 @@ function FaqItemsManager({
         }}
       >
         <Text style={styles.cardTitle}>FAQ items</Text>
-        <Pressable style={styles.btn} onPress={add}>
+        <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={add}>
           <Text style={styles.btnText}>Add question</Text>
         </Pressable>
       </View>
@@ -1258,10 +1262,11 @@ function ToggleChip({
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const gymTheme = useGymTheme();
   return (
     <Pressable
       onPress={() => onChange(!value)}
-      style={[styles.chip, value && styles.chipActive]}
+      style={[styles.chip, value && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary }]}
     >
       <Text style={[styles.chipText, value && styles.chipTextActive]}>
         {value ? '✓ ' : ''}
@@ -1280,13 +1285,14 @@ function Segmented({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const gymTheme = useGymTheme();
   return (
     <View style={styles.segGroup}>
       {options.map((o) => (
         <Pressable
           key={o.value}
           onPress={() => onChange(o.value)}
-          style={[styles.segItem, value === o.value && styles.segItemActive]}
+          style={[styles.segItem, value === o.value && { backgroundColor: gymTheme.primary }]}
         >
           <Text
             style={[styles.segItemText, value === o.value && styles.segItemTextActive]}

@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 
 function slugify(s: string) {
   return s
@@ -49,6 +50,7 @@ export function LocationsManager({
   gymId: string;
   multiLocationEnabled: boolean;
 }) {
+  const gymTheme = useGymTheme();
   const router = useRouter();
   const [locations, setLocations] = useState<GymLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -378,7 +380,7 @@ export function LocationsManager({
                   updateLocation(loc.id, { allow_visiting_members: !loc.allow_visiting_members })
                 }
               >
-                <View style={[styles.checkBox, loc.allow_visiting_members && styles.checkBoxOn]}>
+                <View style={[styles.checkBox, loc.allow_visiting_members && { backgroundColor: gymTheme.accent, borderColor: gymTheme.accent }]}>
                   {loc.allow_visiting_members ? <Text style={styles.checkMark}>✓</Text> : null}
                 </View>
                 <Text style={styles.checkLabel}>
@@ -415,7 +417,7 @@ export function LocationsManager({
       ))}
 
       {multiLocationEnabled || locations.length === 0 ? (
-        <Pressable style={styles.btn} onPress={addLocation}>
+        <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={addLocation}>
           <Text style={styles.btnText}>+ Add location</Text>
         </Pressable>
       ) : (

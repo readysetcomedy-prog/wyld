@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-nat
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { money } from '@/lib/pricing';
 import { CostBreakdownView } from '@/components/CostBreakdown';
 import {
@@ -18,6 +19,7 @@ type Upgrade = { key: string; label: string; addCents: number };
 
 export default function OwnerBilling() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
 
   const [loading, setLoading] = useState(true);
@@ -137,7 +139,7 @@ export default function OwnerBilling() {
                 {u.addCents === 0 ? (
                   <Text style={styles.upFree}>Included — free</Text>
                 ) : (
-                  <Text style={styles.upPrice}>+{money(u.addCents)}/mo</Text>
+                  <Text style={[styles.upPrice, { color: gymTheme.primary }]}>+{money(u.addCents)}/mo</Text>
                 )}
               </View>
             ))}

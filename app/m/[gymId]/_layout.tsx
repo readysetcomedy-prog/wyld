@@ -29,6 +29,7 @@ const TABS: Tab[] = [
   // calendar — members browse and book here; employees get a "My work
   // schedule" jump-off inside the same page.
   { label: 'Schedule', href: (g) => `/m/${g}/schedule`, requires: 'calendar' },
+  { label: 'Time Clock', href: (g) => `/m/${g}/time-clock`, employeesOnly: true },
   { label: 'Employee Profile', href: (g) => `/m/${g}/employee`, employeesOnly: true },
 ];
 
@@ -126,9 +127,15 @@ export default function MemberGymLayout() {
           )}
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.brandName} numberOfLines={1}>{gym.name}</Text>
-            <Text style={styles.brandRole}>Member dashboard</Text>
+            <Text style={styles.brandRole}>
+              {resolved.state === 'ok' && resolved.isEmployee ? 'Employee dashboard' : 'Member dashboard'}
+            </Text>
           </View>
         </Pressable>
+
+        {profile?.full_name ? (
+          <Text style={styles.greeting}>Welcome, {profile.full_name.split(' ')[0]}!</Text>
+        ) : null}
 
         <Pressable
           style={styles.backRow}
@@ -202,6 +209,7 @@ const styles = StyleSheet.create({
   logoFallbackText: { color: '#fff', fontWeight: '800', fontSize: 20 },
   brandName: { color: '#fff', fontWeight: '800', fontSize: 16 },
   brandRole: { color: 'rgba(255,255,255,0.7)', fontWeight: '700', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  greeting: { color: '#fff', fontWeight: '700', fontSize: 14, marginTop: 6 },
 
   backRow: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6,

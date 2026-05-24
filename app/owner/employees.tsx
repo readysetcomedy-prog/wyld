@@ -15,6 +15,7 @@ import { theme } from '@/lib/theme';
 import { Select } from '@/components/Select';
 import { DateTimeField } from '@/components/DateTimeField';
 import { SubTabsPage } from '@/components/SubTabs';
+import { TimeCardsManager } from '@/components/TimeCardsManager';
 import { useGymTheme } from '@/lib/gymTheme';
 import { useRouter } from 'expo-router';
 import { useInfiniteList } from '@/hooks/useInfiniteList';
@@ -251,6 +252,8 @@ const launcherStyles = StyleSheet.create({
 });
 
 export default function OwnerEmployees() {
+  const { profile } = useAuth();
+  const gymId = profile?.gym_id ?? null;
   return (
     <SubTabsPage
       title="Employees"
@@ -261,7 +264,9 @@ export default function OwnerEmployees() {
         {
           key: 'time-cards',
           label: 'Time Cards',
-          body: 'Clock-ins and clock-outs, total hours per pay period, and exports for payroll.',
+          body: gymId
+            ? <TimeCardsManager gymId={gymId} />
+            : 'Your account isn\'t linked to a gym yet.',
         },
         {
           key: 'scheduling',
@@ -551,7 +556,7 @@ export function Roster({
         />
       ) : !form ? (
         <View style={styles.subRow}>
-          <Pressable style={[styles.btn, { backgroundColor: gymTheme.primary }]} onPress={openNew}>
+          <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={openNew}>
             <Text style={styles.btnText}>+ Add employee</Text>
           </Pressable>
           <Pressable

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInfiniteList } from '@/hooks/useInfiniteList';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+import { useGymTheme } from '@/lib/gymTheme';
 import {
   View,
   Text,
@@ -225,6 +226,7 @@ function DisabledPlaceholder() {
 }
 
 function Postings({ gymId }: { gymId: string }) {
+  const gymTheme = useGymTheme();
   const [postings, setPostings] = useState<Posting[] | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -370,7 +372,7 @@ function Postings({ gymId }: { gymId: string }) {
       {err ? <Text style={styles.err}>{err}</Text> : null}
 
       {!form ? (
-        <Pressable style={styles.btn} onPress={openNew}>
+        <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={openNew}>
           <Text style={styles.btnText}>+ New posting</Text>
         </Pressable>
       ) : (
@@ -446,7 +448,7 @@ function Postings({ gymId }: { gymId: string }) {
           </Section>
 
           <View style={styles.formButtons}>
-            <Pressable style={styles.btn} onPress={save} disabled={saving}>
+            <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={save} disabled={saving}>
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save posting'}</Text>
             </Pressable>
             <Pressable style={styles.btnGhost} onPress={() => setForm(null)}>
@@ -512,6 +514,7 @@ function Postings({ gymId }: { gymId: string }) {
 }
 
 function Applications({ gymId }: { gymId: string }) {
+  const gymTheme = useGymTheme();
   const [postingsById, setPostingsById] = useState<Record<string, Posting>>({});
   const [rolesById, setRolesById] = useState<Record<string, Role>>({});
   const [filter, setFilter] = useState<'all' | AppStatus>('all');
@@ -672,9 +675,9 @@ function Applications({ gymId }: { gymId: string }) {
             <Pressable
               key={c.key}
               onPress={() => setFilter(c.key)}
-              style={[styles.chip, on && styles.chipOn]}
+              style={[styles.chip, on && { backgroundColor: '#f3effe', borderColor: gymTheme.primary }]}
             >
-              <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
+              <Text style={[styles.chipText, on && { color: gymTheme.primary }]}>{c.label}</Text>
             </Pressable>
           );
         })}
@@ -723,7 +726,7 @@ function Applications({ gymId }: { gymId: string }) {
                 {app.cover_note ? (
                   <View style={styles.coverWrap}>
                     <Pressable onPress={() => setExpanded((e) => ({ ...e, [app.id]: !isExpanded }))}>
-                      <Text style={styles.coverToggle}>
+                      <Text style={[styles.coverToggle, { color: gymTheme.primary }]}>
                         {isExpanded ? 'Hide cover note' : 'Show cover note'}
                       </Text>
                     </Pressable>
@@ -764,7 +767,7 @@ function Applications({ gymId }: { gymId: string }) {
                   ) : null}
                   {canHire ? (
                     <Pressable
-                      style={[styles.btn, isBusy && { opacity: 0.6 }]}
+                      style={[styles.btn, { backgroundColor: gymTheme.accent }, isBusy && { opacity: 0.6 }]}
                       onPress={() => hire(app)}
                       disabled={isBusy}
                     >

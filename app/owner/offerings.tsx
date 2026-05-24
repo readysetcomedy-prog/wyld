@@ -12,6 +12,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { Select } from '@/components/Select';
 import {
   BillingPeriod,
@@ -98,6 +99,7 @@ const toCents = (s: string): number | null => {
 
 export default function OwnerOfferings() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
 
   const [offerings, setOfferings] = useState<Offering[] | null>(null);
@@ -311,7 +313,7 @@ export default function OwnerOfferings() {
             <Pressable
               key={v}
               onPress={() => setView(v)}
-              style={[styles.viewBtn, view === v && styles.viewBtnActive]}
+              style={[styles.viewBtn, view === v && { backgroundColor: gymTheme.primary }]}
             >
               <Text style={[styles.viewBtnText, view === v && styles.viewBtnTextActive]}>
                 {v === 'offerings' ? 'Offerings' : 'Packages'}
@@ -321,7 +323,7 @@ export default function OwnerOfferings() {
         </View>
         {view === 'offerings' && !oForm ? (
           <Pressable
-            style={styles.btn}
+            style={[styles.btn, { backgroundColor: gymTheme.accent }]}
             onPress={() =>
               setOForm({
                 name: '',
@@ -342,7 +344,7 @@ export default function OwnerOfferings() {
         ) : null}
         {view === 'packages' && !pForm ? (
           <Pressable
-            style={styles.btn}
+            style={[styles.btn, { backgroundColor: gymTheme.accent }]}
             onPress={() =>
               setPForm({
                 name: '',
@@ -463,7 +465,7 @@ export default function OwnerOfferings() {
                       <Text style={styles.iconBtnText}>×</Text>
                     </Pressable>
                   </View>
-                  <Text style={styles.termPreview}>{termPreview(oForm, t)}</Text>
+                  <Text style={[styles.termPreview, { color: gymTheme.primary }]}>{termPreview(oForm, t)}</Text>
                 </View>
               ))}
               <Pressable
@@ -523,7 +525,7 @@ export default function OwnerOfferings() {
                       })
                     }
                   >
-                    <View style={[styles.checkBox, on && styles.checkBoxOn]}>
+                    <View style={[styles.checkBox, on && { backgroundColor: gymTheme.accent, borderColor: gymTheme.accent }]}>
                       {on ? <Text style={styles.checkMark}>✓</Text> : null}
                     </View>
                     <Text style={styles.checkLabel}>
@@ -610,7 +612,7 @@ export default function OwnerOfferings() {
                     </Text>
                   ) : null}
                 </View>
-                <Text style={styles.cardPrice}>
+                <Text style={[styles.cardPrice, { color: gymTheme.primary }]}>
                   {dollars(o.price_cents)}
                   <Text style={styles.cardUnit}>{periodUnitLabel(o.billing_period)}</Text>
                 </Text>
@@ -663,7 +665,7 @@ export default function OwnerOfferings() {
                       .join(' + ') || 'No offerings attached'}
                   </Text>
                 </View>
-                <Text style={styles.cardPrice}>
+                <Text style={[styles.cardPrice, { color: gymTheme.primary }]}>
                   {dollars(p.price_cents)}
                   <Text style={styles.cardUnit}>{periodUnitLabel(p.billing_period)}</Text>
                 </Text>
@@ -859,9 +861,10 @@ function FormButtons({
   onCancel: () => void;
   onDelete?: () => void;
 }) {
+  const gymTheme = useGymTheme();
   return (
     <View style={styles.formButtons}>
-      <Pressable style={styles.btn} onPress={onSave} disabled={saving}>
+      <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={onSave} disabled={saving}>
         <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
       </Pressable>
       <Pressable style={styles.btnGhost} onPress={onCancel}>

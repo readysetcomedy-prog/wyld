@@ -42,7 +42,6 @@ const TABS: Tab[] = [
   { label: 'Bookings', href: '/owner/bookings', gated: 'bookings_enabled' },
   { label: 'Members', href: '/owner/members' },
   { label: 'Employees', href: '/owner/employees', gated: 'employees_enabled' },
-  { label: 'Schedule', href: '/owner/schedule', gated: 'schedule_enabled' },
   { label: 'Applications', href: '/owner/applications', gated: 'applications_enabled' },
   { label: 'Store', href: '/owner/store', gated: 'store_enabled' },
   { label: 'Marketing', href: '/owner/marketing', gated: 'marketing_enabled' },

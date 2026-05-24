@@ -14,6 +14,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { expandEvents, GymEvent, EventOccurrence } from '@/lib/events';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { DateTimeField } from '@/components/DateTimeField';
@@ -108,6 +109,7 @@ const EMPTY_FORM = (seed?: Date, locationId?: string | null): FormState => {
 
 export default function OwnerCalendar() {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -416,7 +418,7 @@ export default function OwnerCalendar() {
 
       {!form ? (
         <Pressable
-          style={styles.btn}
+          style={[styles.btn, { backgroundColor: gymTheme.accent }]}
           onPress={() => setForm(EMPTY_FORM(selectedDay, locFilter))}
         >
           <Text style={styles.btnText}>+ Add to calendar</Text>
@@ -449,7 +451,10 @@ export default function OwnerCalendar() {
               <Pressable
                 key={opt.value}
                 onPress={() => setForm({ ...form, event_type: opt.value })}
-                style={[styles.typePill, form.event_type === opt.value && styles.typePillActive]}
+                style={[
+                  styles.typePill,
+                  form.event_type === opt.value && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary },
+                ]}
               >
                 <Text
                   style={[
@@ -543,7 +548,7 @@ export default function OwnerCalendar() {
           ) : null}
 
           <View style={styles.formButtons}>
-            <Pressable style={styles.btn} onPress={saveEvent} disabled={saving}>
+            <Pressable style={[styles.btn, { backgroundColor: gymTheme.accent }]} onPress={saveEvent} disabled={saving}>
               <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
             </Pressable>
             <Pressable style={styles.btnGhost} onPress={() => setForm(null)}>
@@ -569,7 +574,7 @@ export default function OwnerCalendar() {
         onWeekPress={(ws) => setSelectedDay(ws)}
         compact={!isWide}
         primary={theme.colors.charcoal}
-        accent={theme.colors.wyldPurple}
+        accent={gymTheme.accent}
       />
 
       {/* Week heading (hidden while searching) */}
@@ -733,7 +738,7 @@ export default function OwnerCalendar() {
                 </ScrollView>
                 <View style={styles.modalButtons}>
                   <Pressable
-                    style={styles.btn}
+                    style={[styles.btn, { backgroundColor: gymTheme.accent }]}
                     onPress={() => {
                       setForm(EMPTY_FORM(dayModal, locFilter));
                       setSelectedDay(dayModal);
