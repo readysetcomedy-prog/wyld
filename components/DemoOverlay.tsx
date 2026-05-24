@@ -1,12 +1,10 @@
 // Global overlay for the demo-accounts dev tool. Renders nothing on native.
-// Two pieces:
-//   1. A draggable "D" badge — visible when the user is demo-authorized AND
-//      has the toggle on, OR when a stashed original session exists.
-//   2. A "Return to my account" banner — visible whenever a stashed session
-//      exists, so a demo session can be exited from anywhere in the app.
+// Just a draggable "D" badge — visible when the user is demo-authorized AND
+// has the toggle on, OR when a stashed original session exists so a demo
+// session can still get back to the switcher.
 
 import { useEffect, useRef, useState } from 'react';
-import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import {
@@ -15,7 +13,6 @@ import {
   useStashedSession,
   getBadgePos,
   setBadgePos,
-  returnToSelf,
 } from '@/lib/demoMode';
 import { theme } from '@/lib/theme';
 
@@ -102,35 +99,9 @@ function DemoOverlayWeb() {
 
   const showBadge =
     !!profile && (((authorized === true) && on) || !!stash);
-  const showBanner = !!stash;
 
   return (
     <>
-      {showBanner ? (
-        <View style={styles.banner} pointerEvents="box-none">
-          <View style={styles.bannerInner}>
-            <Text style={styles.bannerText}>
-              Signed in as a demo account
-              {stash?.email ? <Text style={styles.bannerEmail}> — your account: {stash.email}</Text> : null}
-            </Text>
-            <Pressable
-              style={styles.bannerBtn}
-              onPress={async () => {
-                try {
-                  await returnToSelf();
-                } catch {}
-                // Full reload so the restored session takes effect, and land
-                // on the demo switcher so the user can pick another account.
-                if (typeof window !== 'undefined') window.location.href = '/demo-switch';
-                else router.replace('/demo-switch' as never);
-              }}
-            >
-              <Text style={styles.bannerBtnText}>Return to my account</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
       {showBadge ? (
         <View
           // @ts-expect-error — react-native-web accepts DOM event handlers
@@ -166,36 +137,4 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   badgeText: { color: '#fff', fontWeight: '900', fontSize: 22 },
-
-  banner: {
-    position: 'fixed' as any,
-    left: 0, right: 0, top: 0,
-    zIndex: 9998,
-    alignItems: 'center',
-  },
-  bannerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fbbf24',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    maxWidth: '100%',
-    flexWrap: 'wrap',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  bannerText: { color: '#1f2937', fontWeight: '700', fontSize: 13 },
-  bannerEmail: { fontWeight: '500' },
-  bannerBtn: {
-    backgroundColor: '#1f2937',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  bannerBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 });

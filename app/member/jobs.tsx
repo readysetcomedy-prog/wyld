@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type Posting = {
   id: string;
@@ -28,85 +30,80 @@ type Posting = {
 
 export default function MemberJobs() {
   const { session, profile } = useAuth();
-  const [postings, setPostings] = useState<Posting[] | null>(null);
   const [appliedTo, setAppliedTo] = useState<Set<string>>(new Set());
   const [memberOf, setMemberOf] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [openCard, setOpenCard] = useState<string | null>(null);
   const [coverNote, setCoverNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [submittedJustNow, setSubmittedJustNow] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const { data: postingRows } = await supabase
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  // Viewer state (which postings they already applied to, which gyms
+  // they're already a member of) — small per-user sets, eagerly loaded.
+  useEffect(() => {
+    if (!session?.user) return;
+    Promise.all([
+      supabase.from('gym_job_applications').select('posting_id').eq('user_id', session.user.id),
+      supabase.from('gym_memberships').select('gym_id').eq('member_id', session.user.id),
+    ]).then(([{ data: apps }, { data: mems }]) => {
+      setAppliedTo(new Set(((apps as any[]) ?? []).map((a) => a.posting_id)));
+      setMemberOf(new Set(((mems as any[]) ?? []).map((m) => m.gym_id)));
+    });
+  }, [session?.user?.id]);
+
+  // Paginated query across every open posting. Search hits the title
+  // server-side; role / location names + gym city/state are matched
+  // client-side against the page (good enough since each page is
+  // bounded). Role and location names are resolved per page via two
+  // batch queries.
+  const loadPage = useCallback(async (from: number, to: number) => {
+    let q = supabase
       .from('gym_job_postings')
       .select(
         'id, gym_id, title, role_id, location_id, description, employment_type, compensation, created_at, gym:gyms(id, name, slug, city, state)'
       )
-      .eq('status', 'open')
-      .order('created_at', { ascending: false });
-    const rows = ((postingRows as any) ?? []) as Posting[];
+      .eq('status', 'open');
+    if (debouncedSearch) {
+      const p = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
+      q = q.or(`title.ilike.${p},description.ilike.${p}`);
+    }
+    const { data } = await q.order('created_at', { ascending: false }).range(from, to);
+    const rows = (((data as any[]) ?? [])) as Posting[];
+    if (rows.length === 0) return [];
 
-    // Resolve role names and location labels in batch.
     const roleIds = Array.from(new Set(rows.map((r) => r.role_id).filter(Boolean))) as string[];
     const locIds = Array.from(new Set(rows.map((r) => r.location_id).filter(Boolean))) as string[];
-    const roleMap = new Map<string, string>();
-    const locMap = new Map<string, string>();
-    if (roleIds.length) {
-      const { data: rs } = await supabase
-        .from('gym_roles')
-        .select('id, name')
-        .in('id', roleIds);
-      ((rs as any) ?? []).forEach((r: any) => roleMap.set(r.id, r.name));
-    }
-    if (locIds.length) {
-      const { data: ls } = await supabase
-        .from('gym_locations')
-        .select('id, label')
-        .in('id', locIds);
-      ((ls as any) ?? []).forEach((l: any) => locMap.set(l.id, l.label));
-    }
+    const [{ data: rs }, { data: ls }] = await Promise.all([
+      roleIds.length
+        ? supabase.from('gym_roles').select('id, name').in('id', roleIds)
+        : Promise.resolve({ data: [] as any[] }),
+      locIds.length
+        ? supabase.from('gym_locations').select('id, label').in('id', locIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const roleMap = new Map<string, string>(((rs as any[]) ?? []).map((r) => [r.id, r.name]));
+    const locMap = new Map<string, string>(((ls as any[]) ?? []).map((l) => [l.id, l.label]));
     rows.forEach((r) => {
       r.role_name = r.role_id ? roleMap.get(r.role_id) ?? null : null;
       r.location_label = r.location_id ? locMap.get(r.location_id) ?? null : null;
     });
-    setPostings(rows);
+    return rows;
+  }, [debouncedSearch]);
 
-    if (session?.user) {
-      const [{ data: apps }, { data: mems }] = [
-        await supabase
-          .from('gym_job_applications')
-          .select('posting_id')
-          .eq('user_id', session.user.id),
-        await supabase
-          .from('gym_memberships')
-          .select('gym_id')
-          .eq('member_id', session.user.id),
-      ];
-      setAppliedTo(new Set(((apps as any) ?? []).map((a: any) => a.posting_id)));
-      setMemberOf(new Set(((mems as any) ?? []).map((m: any) => m.gym_id)));
-    }
-  }, [session?.user?.id]);
+  const { items: postings, loading, hasMore, loadMore } = useInfiniteList<Posting>({
+    pageSize: 30,
+    load: loadPage,
+    deps: [debouncedSearch],
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const filtered = useMemo(() => {
-    if (!postings) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return postings;
-    return postings.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        (p.role_name ?? '').toLowerCase().includes(q) ||
-        p.gym.name.toLowerCase().includes(q) ||
-        (p.gym.city ?? '').toLowerCase().includes(q) ||
-        (p.gym.state ?? '').toLowerCase().includes(q) ||
-        (p.employment_type ?? '').toLowerCase().includes(q)
-    );
-  }, [postings, search]);
+  const filtered = postings ?? [];
 
   async function apply(p: Posting) {
     if (!session?.user || !profile) return;
@@ -255,6 +252,7 @@ export default function MemberJobs() {
               </View>
             );
           })}
+          <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
         </View>
       )}
     </View>

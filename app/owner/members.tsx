@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { useGymTheme } from '@/lib/gymTheme';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type Membership = {
   id: string;
@@ -43,68 +45,88 @@ export default function OwnerMembers() {
   const gymTheme = useGymTheme();
   const gymId = profile?.gym_id ?? null;
 
-  const [rows, setRows] = useState<Membership[] | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [openMember, setOpenMember] = useState<Membership | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Employee-detection lookup. Employees per gym are bounded enough to
+  // load eagerly; member counts are not.
+  const [empUserIds, setEmpUserIds] = useState<Set<string>>(new Set());
+  const [empEmails, setEmpEmails] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!gymId) return;
-    // Pull memberships joined to profile data, plus a separate query for
-    // which of them are also employees here (so we can badge / route).
-    const [{ data: mems }, { data: emps }] = await Promise.all([
-      supabase
-        .from('gym_memberships')
-        .select('id, member_id, gym_id, status, joined_at, notes, member:profiles(id, email, full_name, avatar_url)')
-        .eq('gym_id', gymId)
-        .order('joined_at', { ascending: false }),
-      supabase
-        .from('gym_employees')
-        .select('user_id, email')
-        .eq('gym_id', gymId),
-    ]);
-    const empUserIds = new Set(((emps as any[]) ?? []).map((e) => e.user_id).filter(Boolean));
-    const empEmails = new Set(((emps as any[]) ?? []).map((e) => (e.email ?? '').toLowerCase()).filter(Boolean));
-    setRows(((mems as any[]) ?? []).map((r) => ({
-      ...r,
-      is_employee: empUserIds.has(r.member_id) || empEmails.has((r.member?.email ?? '').toLowerCase()),
-    })));
+    supabase
+      .from('gym_employees')
+      .select('user_id, email')
+      .eq('gym_id', gymId)
+      .then(({ data }) => {
+        setEmpUserIds(new Set(((data as any[]) ?? []).map((e) => e.user_id).filter(Boolean)));
+        setEmpEmails(new Set(((data as any[]) ?? []).map((e) => (e.email ?? '').toLowerCase()).filter(Boolean)));
+      });
   }, [gymId]);
 
-  useEffect(() => { load(); }, [load]);
+  // Debounce the search box so each keystroke doesn't fire a new query
+  // (each search edit resets the paginated list — see deps below).
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
 
-  const filtered = useMemo(() => {
-    if (!rows) return null;
-    const s = search.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      if (!s) return true;
-      return (
-        (r.member.full_name ?? '').toLowerCase().includes(s) ||
-        r.member.email.toLowerCase().includes(s)
-      );
-    });
-  }, [rows, search, statusFilter]);
+  // Server-side paginated load. Search/status are pushed into the query so
+  // even gyms with thousands of members never have to ship more than one
+  // page to the client.
+  const loadPage = useCallback(async (from: number, to: number) => {
+    if (!gymId) return [];
+    let q = supabase
+      .from('gym_memberships')
+      .select('id, member_id, gym_id, status, joined_at, notes, member:profiles(id, email, full_name, avatar_url)')
+      .eq('gym_id', gymId);
+    if (statusFilter !== 'all') q = q.eq('status', statusFilter);
+    if (debouncedSearch) {
+      // Foreign-table search needs server-side filtering on the joined
+      // table. profiles.full_name ILIKE OR profiles.email ILIKE.
+      const pattern = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
+      q = q.or(`full_name.ilike.${pattern},email.ilike.${pattern}`, { foreignTable: 'profiles' });
+    }
+    const { data } = await q.order('joined_at', { ascending: false }).range(from, to);
+    const rows = (data as any[]) ?? [];
+    // When searching, the join filter can return memberships whose
+    // member didn't match (because we requested all memberships and the
+    // foreign filter only nulled-out the join). Drop those.
+    return rows
+      .filter((r) => !debouncedSearch || r.member)
+      .map((r) => ({
+        ...r,
+        is_employee: empUserIds.has(r.member_id) || empEmails.has((r.member?.email ?? '').toLowerCase()),
+      })) as Membership[];
+  }, [gymId, statusFilter, debouncedSearch, empUserIds, empEmails]);
+
+  const { items: filtered, loading, hasMore, loadMore, reload } = useInfiniteList<Membership>({
+    pageSize: 50,
+    load: loadPage,
+    deps: [gymId, statusFilter, debouncedSearch, empUserIds.size, empEmails.size],
+  });
 
   async function updateStatus(m: Membership, status: string) {
     await supabase.from('gym_memberships').update({ status }).eq('id', m.id);
-    await load();
+    reload();
     setOpenMember((cur) => cur && cur.id === m.id ? { ...cur, status } : cur);
   }
 
   async function saveNotes(m: Membership, notes: string) {
     await supabase.from('gym_memberships').update({ notes: notes || null }).eq('id', m.id);
     setOpenMember((cur) => cur && cur.id === m.id ? { ...cur, notes } : cur);
-    setRows((prev) => prev ? prev.map((r) => r.id === m.id ? { ...r, notes } : r) : prev);
+    reload();
   }
 
   async function removeMembership(m: Membership) {
     if (typeof window !== 'undefined' && !window.confirm(`Remove ${m.member.full_name || m.member.email} from your gym?`)) return;
     await supabase.from('gym_memberships').delete().eq('id', m.id);
     setOpenMember(null);
-    load();
+    reload();
   }
 
   async function addAsEmployee(m: Membership) {
@@ -118,7 +140,7 @@ export default function OwnerMembers() {
     });
     if (error) { setErr(error.message); return; }
     setOpenMember(null);
-    load();
+    reload();
     router.push('/owner/employees' as never);
   }
 
@@ -173,9 +195,9 @@ export default function OwnerMembers() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No members match.</Text>
           <Text style={styles.emptyBody}>
-            {rows && rows.length === 0
-              ? 'Members will appear here as people join your gym.'
-              : 'Try clearing the search or status filter.'}
+            {debouncedSearch || statusFilter !== 'all'
+              ? 'Try clearing the search or status filter.'
+              : 'Members will appear here as people join your gym.'}
           </Text>
         </View>
       ) : (
@@ -214,6 +236,7 @@ export default function OwnerMembers() {
               </View>
             </Pressable>
           ))}
+          <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
         </View>
       )}
 
@@ -230,7 +253,7 @@ export default function OwnerMembers() {
         visible={addOpen}
         gymId={gymId}
         onClose={() => setAddOpen(false)}
-        onAdded={() => { setAddOpen(false); load(); }}
+        onAdded={() => { setAddOpen(false); reload(); }}
       />
     </View>
   );

@@ -12,6 +12,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { expandEvents, GymEvent, EventOccurrence } from '@/lib/events';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type Booking = {
   id: string;
@@ -34,61 +36,95 @@ export default function OwnerBookings() {
   const { profile } = useAuth();
   const gymId = profile?.gym_id ?? null;
   const [events, setEvents] = useState<GymEvent[] | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsEnabled, setBookingsEnabled] = useState<boolean | null>(null);
   const [filter, setFilter] = useState('');
+  const [debouncedFilter, setDebouncedFilter] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  // Stat counts come from head-only count queries so they reflect totals
+  // across the full bookings table, not just the loaded page.
+  const [stats, setStats] = useState<{ total: number; today: number; uniqueMembers: number }>({
+    total: 0, today: 0, uniqueMembers: 0,
+  });
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedFilter(filter.trim()), 250);
+    return () => clearTimeout(id);
+  }, [filter]);
+
+  // Bounded data — module flag + event definitions for this gym.
+  useEffect(() => {
     if (!gymId) return;
-    const [{ data: m }, { data: evs }] = await Promise.all([
-      supabase
-        .from('gym_modules')
-        .select('bookings_enabled')
-        .eq('gym_id', gymId)
-        .maybeSingle(),
-      supabase
-        .from('gym_events')
-        .select('*')
-        .eq('gym_id', gymId)
-        .order('starts_at'),
-    ]);
-    setBookingsEnabled(!!(m as any)?.bookings_enabled);
-    const eventRows = (evs as GymEvent[]) ?? [];
-    setEvents(eventRows);
+    Promise.all([
+      supabase.from('gym_modules').select('bookings_enabled').eq('gym_id', gymId).maybeSingle(),
+      supabase.from('gym_events').select('*').eq('gym_id', gymId).order('starts_at'),
+    ]).then(([{ data: m }, { data: evs }]) => {
+      setBookingsEnabled(!!(m as any)?.bookings_enabled);
+      setEvents((evs as GymEvent[]) ?? []);
+    });
+  }, [gymId]);
 
-    if (eventRows.length === 0) {
-      setBookings([]);
-      return;
-    }
-    const ids = eventRows.map((e) => e.id);
+  // Server-side paginated bookings query, scoped to upcoming
+  // occurrences (today onwards) and ordered by occurrence date so the
+  // soonest items show first. Profile names are joined in per-page.
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const loadPage = useCallback(async (from: number, to: number) => {
+    if (!gymId || !events) return [];
+    const ids = events.map((e) => e.id);
+    if (ids.length === 0) return [];
     const { data: bks } = await supabase
       .from('gym_event_bookings')
       .select('id, event_id, occurrence_date, member_id, created_at')
       .in('event_id', ids)
-      .order('created_at', { ascending: false });
-    const memberIds = Array.from(new Set((bks ?? []).map((b: any) => b.member_id)));
+      .gte('occurrence_date', todayKey)
+      .order('occurrence_date', { ascending: true })
+      .range(from, to);
+    const rows = ((bks as any[]) ?? []);
+    const memberIds = Array.from(new Set(rows.map((b) => b.member_id)));
     const { data: profiles } = memberIds.length
-      ? await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', memberIds)
+      ? await supabase.from('profiles').select('id, full_name, email').in('id', memberIds)
       : { data: [] as any[] };
     const nameMap = new Map<string, { name: string; email: string }>(
-      (profiles ?? []).map((p: any) => [p.id, { name: p.full_name || p.email, email: p.email }])
+      ((profiles as any[]) ?? []).map((p) => [p.id, { name: p.full_name || p.email, email: p.email }])
     );
-    setBookings(
-      (bks ?? []).map((b: any) => ({
-        ...b,
-        member_name: nameMap.get(b.member_id)?.name || 'Member',
-        member_email: nameMap.get(b.member_id)?.email || '',
-      }))
-    );
-  }, [gymId]);
+    return rows.map((b) => ({
+      ...b,
+      member_name: nameMap.get(b.member_id)?.name || 'Member',
+      member_email: nameMap.get(b.member_id)?.email || '',
+    })) as Booking[];
+  }, [gymId, events, todayKey]);
 
+  const { items: bookings, loading, hasMore, loadMore, reload } = useInfiniteList<Booking>({
+    pageSize: 200,
+    load: loadPage,
+    deps: [gymId, events?.length ?? 0, todayKey],
+  });
+
+  // Stats are aggregate over the full bookings table for this gym,
+  // computed via head-only count queries (cheap) rather than from the
+  // paginated rows.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!gymId || !events) return;
+    const ids = events.map((e) => e.id);
+    if (ids.length === 0) {
+      setStats({ total: 0, today: 0, uniqueMembers: 0 });
+      return;
+    }
+    Promise.all([
+      supabase.from('gym_event_bookings').select('id', { count: 'exact', head: true })
+        .in('event_id', ids).gte('occurrence_date', todayKey),
+      supabase.from('gym_event_bookings').select('id', { count: 'exact', head: true })
+        .in('event_id', ids).eq('occurrence_date', todayKey),
+      supabase.from('gym_event_bookings').select('member_id')
+        .in('event_id', ids).gte('occurrence_date', todayKey),
+    ]).then(([total, today, members]) => {
+      const unique = new Set(((members.data as any[]) ?? []).map((r) => r.member_id)).size;
+      setStats({
+        total: total.count ?? 0,
+        today: today.count ?? 0,
+        uniqueMembers: unique,
+      });
+    });
+  }, [gymId, events, todayKey, bookings?.length]);
 
   async function cancelBooking(b: Booking) {
     if (typeof window !== 'undefined' && !window.confirm(`Cancel ${b.member_name}'s booking?`)) {
@@ -96,15 +132,12 @@ export default function OwnerBookings() {
     }
     setErr(null);
     const { error } = await supabase.from('gym_event_bookings').delete().eq('id', b.id);
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-    load();
+    if (error) { setErr(error.message); return; }
+    reload();
   }
 
   const rows = useMemo<Row[]>(() => {
-    if (!events) return [];
+    if (!events || !bookings) return [];
     const occ = expandEvents(events, HORIZON_DAYS);
     const byKey = new Map<string, EventOccurrence>();
     occ.forEach((o) => byKey.set(`${o.event.id}|${o.dateKey}`, o));
@@ -126,8 +159,12 @@ export default function OwnerBookings() {
     return result;
   }, [events, bookings]);
 
+  // Client-side filter applies to whatever pages are currently loaded
+  // — typing a name with thousands of bookings still works because the
+  // initial 200-row page loads instantly and the sentinel pulls more
+  // as the user scrolls past the in-memory matches.
   const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
+    const q = debouncedFilter.toLowerCase();
     if (!q) return rows;
     return rows
       .map((r) => ({
@@ -140,25 +177,7 @@ export default function OwnerBookings() {
         ),
       }))
       .filter((r) => r.bookings.length > 0);
-  }, [rows, filter]);
-
-  const totalBookings = useMemo(
-    () => rows.reduce((acc, r) => acc + r.bookings.length, 0),
-    [rows]
-  );
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const todayBookings = useMemo(
-    () =>
-      rows
-        .filter((r) => r.occ.dateKey === todayKey)
-        .reduce((acc, r) => acc + r.bookings.length, 0),
-    [rows, todayKey]
-  );
-  const uniqueMembers = useMemo(() => {
-    const set = new Set<string>();
-    rows.forEach((r) => r.bookings.forEach((b) => set.add(b.member_id)));
-    return set.size;
-  }, [rows]);
+  }, [rows, debouncedFilter]);
 
   const byDay = useMemo(() => {
     const m: Record<string, Row[]> = {};
@@ -201,9 +220,9 @@ export default function OwnerBookings() {
       </View>
 
       <View style={styles.statsRow}>
-        <Stat label="Upcoming" value={totalBookings} />
-        <Stat label="Today" value={todayBookings} />
-        <Stat label="Unique members" value={uniqueMembers} />
+        <Stat label="Upcoming" value={stats.total} />
+        <Stat label="Today" value={stats.today} />
+        <Stat label="Unique members" value={stats.uniqueMembers} />
       </View>
 
       <TextInput
@@ -294,6 +313,7 @@ export default function OwnerBookings() {
           </View>
         ))
       )}
+      <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
     </ScrollView>
   );
 }

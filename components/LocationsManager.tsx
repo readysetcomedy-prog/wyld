@@ -34,6 +34,11 @@ export type GymLocation = {
   state: string | null;
   zip: string | null;
   display_order: number;
+  // Whether members at this gym's other locations can use this one
+  // (e.g. drop in / book classes here). Off by default.
+  allow_visiting_members: boolean;
+  // Optional per-visit surcharge for visiting members, in cents.
+  visiting_fee_cents: number;
   contacts: LocationContact[];
 };
 
@@ -359,6 +364,53 @@ export function LocationsManager({
               </Pressable>
             </View>
           </View>
+
+          {multiLocationEnabled && locations.length > 1 ? (
+            <View style={styles.visitingBlock}>
+              <Text style={styles.subTitle}>Cross-location access</Text>
+              <Text style={styles.dim}>
+                Let members from your other locations also use this one — free
+                or with a per-visit charge.
+              </Text>
+              <Pressable
+                style={styles.checkRow}
+                onPress={() =>
+                  updateLocation(loc.id, { allow_visiting_members: !loc.allow_visiting_members })
+                }
+              >
+                <View style={[styles.checkBox, loc.allow_visiting_members && styles.checkBoxOn]}>
+                  {loc.allow_visiting_members ? <Text style={styles.checkMark}>✓</Text> : null}
+                </View>
+                <Text style={styles.checkLabel}>
+                  Allow members from our other locations to use this one
+                </Text>
+              </Pressable>
+
+              {loc.allow_visiting_members ? (
+                <View style={styles.feeRow}>
+                  <Text style={styles.feeLabel}>Per-visit fee (USD)</Text>
+                  <TextInput
+                    value={loc.visiting_fee_cents > 0 ? (loc.visiting_fee_cents / 100).toFixed(2) : ''}
+                    onChangeText={(v) => {
+                      const cleaned = v.replace(/[^0-9.]/g, '');
+                      setLocations(
+                        locations.map((l) =>
+                          l.id === loc.id
+                            ? { ...l, visiting_fee_cents: Math.round((Number(cleaned) || 0) * 100) }
+                            : l,
+                        ),
+                      );
+                    }}
+                    onBlur={() => updateLocation(loc.id, { visiting_fee_cents: loc.visiting_fee_cents })}
+                    placeholder="0.00 (free)"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                    style={[styles.input, { maxWidth: 140 }]}
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ))}
 
@@ -538,4 +590,26 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   btnSmallText: { color: theme.colors.charcoal, fontWeight: '700', fontSize: 13 },
+
+  visitingBlock: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    gap: 8,
+  },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  checkBox: {
+    width: 22, height: 22, borderRadius: 5,
+    borderWidth: 1, borderColor: theme.colors.border,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkBoxOn: { backgroundColor: theme.colors.wyldPurple, borderColor: theme.colors.wyldPurple },
+  checkMark: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  checkLabel: { flex: 1, fontSize: 13, color: theme.colors.charcoal, fontWeight: '600' },
+  feeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  feeLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
 });

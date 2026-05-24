@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import { theme } from '@/lib/theme';
 import { Role } from '@/lib/auth';
 import { Roster, RolesEditor } from '@/app/owner/employees';
 import { SubTabsPage } from '@/components/SubTabs';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type Profile = {
   id: string;
@@ -86,33 +88,50 @@ function AllProfiles({
   wyldGymId: string | null;
   onAdded: () => void;
 }) {
-  const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [wyldEmails, setWyldEmails] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const { data: profileRows } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, role')
-      .order('created_at', { ascending: false });
-    setProfiles((profileRows as Profile[]) ?? []);
-    if (wyldGymId) {
-      const { data: employeeRows } = await supabase
-        .from('gym_employees')
-        .select('email')
-        .eq('gym_id', wyldGymId);
-      setWyldEmails(
-        new Set(((employeeRows as any[]) ?? []).map((r) => r.email.toLowerCase()))
-      );
-    } else {
-      setWyldEmails(new Set());
-    }
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  // WyLD employees set is small (bounded by org headcount), load once
+  // per Wyld-gym change. Reloaded after a successful "Add as WyLD
+  // employee" so the badge flips immediately.
+  const loadWyldEmails = useCallback(async () => {
+    if (!wyldGymId) { setWyldEmails(new Set()); return; }
+    const { data } = await supabase
+      .from('gym_employees')
+      .select('email')
+      .eq('gym_id', wyldGymId);
+    setWyldEmails(new Set(((data as any[]) ?? []).map((r) => r.email.toLowerCase())));
   }, [wyldGymId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { loadWyldEmails(); }, [loadWyldEmails]);
+
+  // Server-side paginated profile fetch with search pushed into the
+  // ilike. A platform with 1M profiles never has to ship more than one
+  // page to the client.
+  const loadPage = useCallback(async (from: number, to: number) => {
+    let q = supabase
+      .from('profiles')
+      .select('id, email, full_name, role');
+    if (debouncedSearch) {
+      const p = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
+      q = q.or(`email.ilike.${p},full_name.ilike.${p}`);
+    }
+    const { data } = await q.order('created_at', { ascending: false }).range(from, to);
+    return ((data as Profile[]) ?? []);
+  }, [debouncedSearch]);
+
+  const { items: profiles, loading, hasMore, loadMore, reload } = useInfiniteList<Profile>({
+    pageSize: 50,
+    load: loadPage,
+    deps: [debouncedSearch],
+  });
 
   async function promote(p: Profile) {
     if (!wyldGymId) return;
@@ -123,25 +142,11 @@ function AllProfiles({
       email: p.email.toLowerCase(),
       full_name: p.full_name || p.email,
     });
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-    await load();
+    if (error) { setErr(error.message); return; }
+    await loadWyldEmails();
+    reload();
     onAdded();
   }
-
-  const filtered = useMemo(() => {
-    if (!profiles) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return profiles;
-    return profiles.filter(
-      (p) =>
-        p.email.toLowerCase().includes(q) ||
-        (p.full_name ?? '').toLowerCase().includes(q) ||
-        ROLE_LABEL[p.role].toLowerCase().includes(q)
-    );
-  }, [profiles, search]);
 
   if (profiles === null) return <ActivityIndicator color={theme.colors.charcoal} />;
 
@@ -155,11 +160,11 @@ function AllProfiles({
         style={styles.search}
       />
       {err ? <Text style={styles.err}>{err}</Text> : null}
-      {filtered.length === 0 ? (
+      {profiles.length === 0 ? (
         <Text style={styles.dim}>No matches.</Text>
       ) : (
         <View style={styles.list}>
-          {filtered.map((p) => {
+          {profiles.map((p) => {
             const isWyld = wyldEmails.has(p.email.toLowerCase());
             return (
               <View key={p.id} style={styles.row}>
@@ -182,6 +187,7 @@ function AllProfiles({
               </View>
             );
           })}
+          <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
         </View>
       )}
     </View>

@@ -59,10 +59,13 @@ export type PricingModel = {
 export type Feature = { key: string; label: string; flag: string | null };
 
 // Features with flag === null are always-on (every gym pays for them). The
-// rest map to a gym_modules boolean column.
+// rest map to a gym_modules boolean column. Setup fees are NOT charged
+// per-item for always-on features — the top-level base_setup_fee_cents
+// covers the one-time onboarding cost. Toggleable items have their setup
+// fee charged the first time they're turned on at a gym.
 export const FEATURES: Feature[] = [
   { key: 'base', label: 'Base platform', flag: null },
-  { key: 'website', label: 'Website', flag: null },
+  { key: 'website', label: 'Website', flag: 'website_enabled' },
   { key: 'multi_location_enabled', label: 'Multiple locations', flag: 'multi_location_enabled' },
   { key: 'calendar_enabled', label: 'Calendar / Schedule page', flag: 'calendar_enabled' },
   { key: 'store_enabled', label: 'Store', flag: 'store_enabled' },
@@ -181,10 +184,17 @@ export function computePendingSetupFees(
     lines.push({ fee_key: 'base', label: 'Account setup', cents: model.base_setup_fee_cents });
   }
   for (const f of FEATURES) {
-    if (f.flag !== null && !active.has(f.key)) continue;
+    // Always-on features (flag === null) — their setup is part of the
+    // base account setup fee. Don't bill a separate per-item setup fee
+    // for them or every gym would pay duplicate onboarding charges
+    // every time they sign up.
+    if (f.flag === null) continue;
+    // Toggleable feature: only charge the setup fee when the gym
+    // actually has it turned on AND hasn't already paid for it.
+    if (!active.has(f.key)) continue;
+    if (paidKeys.has(f.key)) continue;
     const fee = model.items[f.key]?.setup_fee_cents ?? 0;
     if (fee <= 0) continue;
-    if (paidKeys.has(f.key)) continue;
     lines.push({ fee_key: f.key, label: f.label, cents: fee });
   }
   return { lines, totalCents: lines.reduce((s, l) => s + l.cents, 0) };
