@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import {
   View,
   Text,
@@ -510,7 +512,6 @@ function Postings({ gymId }: { gymId: string }) {
 }
 
 function Applications({ gymId }: { gymId: string }) {
-  const [apps, setApps] = useState<Application[] | null>(null);
   const [postingsById, setPostingsById] = useState<Record<string, Posting>>({});
   const [rolesById, setRolesById] = useState<Record<string, Role>>({});
   const [filter, setFilter] = useState<'all' | AppStatus>('all');
@@ -519,41 +520,57 @@ function Applications({ gymId }: { gymId: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string>('');
 
-  const load = useCallback(async () => {
-    const { data: a } = await supabase
-      .from('gym_job_applications')
-      .select('*')
-      .eq('gym_id', gymId);
-    const { data: ps } = await supabase
-      .from('gym_job_postings')
-      .select('*')
-      .eq('gym_id', gymId);
-    const { data: rs } = await supabase
-      .from('gym_roles')
-      .select('id, name')
-      .eq('gym_id', gymId);
-
-    const list = ((a as Application[]) ?? []).slice().sort((x, y) => {
-      const r = appStatusRank(x.status) - appStatusRank(y.status);
-      if (r !== 0) return r;
-      return (y.applied_at || '').localeCompare(x.applied_at || '');
+  // Bounded per gym — postings + roles always load eagerly so the table
+  // joins below can resolve names without a per-row lookup.
+  useEffect(() => {
+    Promise.all([
+      supabase.from('gym_job_postings').select('*').eq('gym_id', gymId),
+      supabase.from('gym_roles').select('id, name').eq('gym_id', gymId),
+    ]).then(([{ data: ps }, { data: rs }]) => {
+      const pmap: Record<string, Posting> = {};
+      ((ps as Posting[]) ?? []).forEach((p) => { pmap[p.id] = p; });
+      const rmap: Record<string, Role> = {};
+      ((rs as Role[]) ?? []).forEach((r) => { rmap[r.id] = r; });
+      setPostingsById(pmap);
+      setRolesById(rmap);
     });
-    const pmap: Record<string, Posting> = {};
-    ((ps as Posting[]) ?? []).forEach((p) => {
-      pmap[p.id] = p;
-    });
-    const rmap: Record<string, Role> = {};
-    ((rs as Role[]) ?? []).forEach((r) => {
-      rmap[r.id] = r;
-    });
-    setApps(list);
-    setPostingsById(pmap);
-    setRolesById(rmap);
   }, [gymId]);
 
+  // Paginated server-side load. Status filter is pushed into the query,
+  // ordering by applied_at desc so the most recent applicants always
+  // sit at the top of the first page.
+  const loadPage = useCallback(async (from: number, to: number) => {
+    let q = supabase.from('gym_job_applications').select('*').eq('gym_id', gymId);
+    if (filter !== 'all') q = q.eq('status', filter);
+    const { data } = await q.order('applied_at', { ascending: false }).range(from, to);
+    return ((data as Application[]) ?? []);
+  }, [gymId, filter]);
+
+  const { items: apps, loading: appsLoading, hasMore: appsHasMore, loadMore: loadMoreApps, reload: load } =
+    useInfiniteList<Application>({ pageSize: 50, load: loadPage, deps: [gymId, filter] });
+
+  // Status-pivot counts via cheap head-only queries so the filter chips
+  // can show real totals even though the row list itself is paginated.
+  const [counts, setCounts] = useState<Record<'all' | AppStatus, number>>({
+    all: 0, new: 0, reviewing: 0, hired: 0, rejected: 0, withdrawn: 0,
+  });
   useEffect(() => {
-    load();
-  }, [load]);
+    const statuses: AppStatus[] = ['new', 'reviewing', 'hired', 'rejected', 'withdrawn'];
+    Promise.all([
+      supabase.from('gym_job_applications').select('id', { count: 'exact', head: true }).eq('gym_id', gymId),
+      ...statuses.map((s) =>
+        supabase.from('gym_job_applications').select('id', { count: 'exact', head: true }).eq('gym_id', gymId).eq('status', s),
+      ),
+    ]).then((results) => {
+      const [allRes, ...statusResults] = results;
+      const next: Record<'all' | AppStatus, number> = {
+        all: allRes.count ?? 0,
+        new: 0, reviewing: 0, hired: 0, rejected: 0, withdrawn: 0,
+      };
+      statuses.forEach((s, i) => { next[s] = statusResults[i].count ?? 0; });
+      setCounts(next);
+    });
+  }, [gymId, apps?.length]);
 
   function flashNote(msg: string) {
     setNote(msg);
@@ -626,22 +643,10 @@ function Applications({ gymId }: { gymId: string }) {
     load();
   }
 
-  const filtered = useMemo(() => {
-    if (!apps) return null;
-    if (filter === 'all') return apps;
-    return apps.filter((a) => a.status === filter);
-  }, [apps, filter]);
+  // apps is already server-filtered by status when filter !== 'all'.
+  const filtered = apps;
 
   if (apps === null) return <ActivityIndicator color={theme.colors.wyldPurple} />;
-
-  const counts: Record<'all' | AppStatus, number> = {
-    all: apps.length,
-    new: apps.filter((a) => a.status === 'new').length,
-    reviewing: apps.filter((a) => a.status === 'reviewing').length,
-    hired: apps.filter((a) => a.status === 'hired').length,
-    rejected: apps.filter((a) => a.status === 'rejected').length,
-    withdrawn: apps.filter((a) => a.status === 'withdrawn').length,
-  };
 
   const chips: { key: 'all' | AppStatus; label: string }[] = [
     { key: 'all', label: `All (${counts.all})` },
@@ -677,7 +682,7 @@ function Applications({ gymId }: { gymId: string }) {
 
       {filtered && filtered.length === 0 ? (
         <Text style={styles.dim}>
-          {apps.length === 0
+          {counts.all === 0
             ? 'No applications yet. Once your postings are Open, applicants will show up here.'
             : 'No applications match this filter.'}
         </Text>
@@ -770,6 +775,7 @@ function Applications({ gymId }: { gymId: string }) {
               </View>
             );
           })}
+          <LoadMoreSentinel loading={appsLoading} hasMore={appsHasMore} onLoadMore={loadMoreApps} />
         </View>
       )}
     </View>

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import {
   View,
   Text,
@@ -74,7 +76,6 @@ export default function OwnerStore() {
   const { profile } = useAuth();
   const gymId = profile?.gym_id ?? null;
 
-  const [products, setProducts] = useState<Product[] | null>(null);
   const [locations, setLocations] = useState<Loc[]>([]);
   const [multiLocation, setMultiLocation] = useState(false);
   const [storeEnabled, setStoreEnabled] = useState<boolean | null>(null);
@@ -82,77 +83,59 @@ export default function OwnerStore() {
 
   const [view, setView] = useState<'products' | 'inventory'>('products');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [locFilter, setLocFilter] = useState<string | null>(null); // null = all
-  const [visible, setVisible] = useState(PAGE);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
 
   const [form, setForm] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!gymId) return;
-    const [{ data: m }, { data: prods, error }, { data: locs }] = await Promise.all([
-      supabase
-        .from('gym_modules')
-        .select('store_enabled, store_visible, multi_location_enabled')
-        .eq('gym_id', gymId)
-        .maybeSingle(),
-      supabase.from('gym_products').select('*').eq('gym_id', gymId).order('display_order'),
-      supabase
-        .from('gym_locations')
-        .select('id, label')
-        .eq('gym_id', gymId)
-        .order('display_order'),
-    ]);
-    setStoreEnabled(!!(m as any)?.store_enabled);
-    setStoreVisible(!!(m as any)?.store_visible);
-    setMultiLocation(!!(m as any)?.multi_location_enabled);
-    setLocations((locs as Loc[]) ?? []);
-    if (error) setErr(error.message);
-    setProducts((prods as Product[]) ?? []);
+    Promise.all([
+      supabase.from('gym_modules').select('store_enabled, store_visible, multi_location_enabled').eq('gym_id', gymId).maybeSingle(),
+      supabase.from('gym_locations').select('id, label').eq('gym_id', gymId).order('display_order'),
+    ]).then(([{ data: m }, { data: locs }]) => {
+      setStoreEnabled(!!(m as any)?.store_enabled);
+      setStoreVisible(!!(m as any)?.store_visible);
+      setMultiLocation(!!(m as any)?.multi_location_enabled);
+      setLocations((locs as Loc[]) ?? []);
+    });
   }, [gymId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  // Infinite scroll on web.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const onScroll = () => {
-      const nearBottom =
-        window.innerHeight + window.scrollY >= document.body.offsetHeight - 600;
-      if (nearBottom) setVisible((v) => v + PAGE);
-    };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    setVisible(PAGE);
-  }, [search, locFilter, view]);
-
-  const filtered = useMemo(() => {
-    let list = products ?? [];
-    if (locFilter) list = list.filter((p) => p.location_id === locFilter);
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((p) => {
-        const price = p.price_cents != null ? (p.price_cents / 100).toFixed(2) : '';
-        return (
-          p.name.toLowerCase().includes(q) ||
-          (p.sku ?? '').toLowerCase().includes(q) ||
-          (p.category ?? '').toLowerCase().includes(q) ||
-          (p.description ?? '').toLowerCase().includes(q) ||
-          price.includes(q)
-        );
-      });
+  // Paginated product fetch — a busy gym's catalog can run into the
+  // thousands of SKUs once apparel + supps + bundles are in. Search and
+  // location filter are pushed into the server query so even a 10k-SKU
+  // catalog only ships one page at a time.
+  const loadPage = useCallback(async (from: number, to: number) => {
+    if (!gymId) return [];
+    let q = supabase
+      .from('gym_products')
+      .select('*')
+      .eq('gym_id', gymId);
+    if (locFilter) q = q.eq('location_id', locFilter);
+    if (debouncedSearch) {
+      const p = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
+      q = q.or(`name.ilike.${p},sku.ilike.${p},category.ilike.${p},description.ilike.${p}`);
     }
-    return list;
-  }, [products, search, locFilter]);
+    const { data, error } = await q.order('display_order').range(from, to);
+    if (error) setErr(error.message);
+    return ((data as Product[]) ?? []);
+  }, [gymId, locFilter, debouncedSearch]);
 
-  const shown = filtered.slice(0, visible);
+  const { items: products, loading: prodsLoading, hasMore: prodsHasMore, loadMore: loadMoreProducts, reload: load } =
+    useInfiniteList<Product>({ pageSize: 50, load: loadPage, deps: [gymId, locFilter, debouncedSearch] });
+
+  const filtered = products ?? [];
+
+  // Server already pages — render the loaded items directly.
+  const shown = filtered;
 
   async function uploadImage() {
     if (!gymId || !form) return;
@@ -230,15 +213,12 @@ export default function OwnerStore() {
   }
 
   async function togglePublished(p: Product) {
-    setProducts((products ?? []).map((x) => (x.id === p.id ? { ...x, published: !p.published } : x)));
     const { error } = await supabase
       .from('gym_products')
       .update({ published: !p.published })
       .eq('id', p.id);
-    if (error) {
-      setErr(error.message);
-      load();
-    }
+    if (error) setErr(error.message);
+    load();
   }
 
   async function toggleStoreVisible(v: boolean) {
@@ -254,11 +234,13 @@ export default function OwnerStore() {
     }
   }
 
-  // Inventory inline edits — update local + persist.
+  // Inventory inline edits — persist and reload so the row reflects
+  // canonical state. (Hook owns the list; we don't track an optimistic
+  // local copy here.)
   async function updateInventory(id: string, patch: { inventory_qty?: number | null; cost_cents?: number | null }) {
-    setProducts((products ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x)));
     const { error } = await supabase.from('gym_products').update(patch).eq('id', id);
     if (error) setErr(error.message);
+    else load();
   }
 
   function edit(p: Product) {
@@ -595,11 +577,7 @@ export default function OwnerStore() {
                 </View>
               ))}
             </View>
-            {visible < filtered.length ? (
-              <Pressable style={styles.loadMore} onPress={() => setVisible((v) => v + PAGE)}>
-                <Text style={styles.loadMoreText}>Load more</Text>
-              </Pressable>
-            ) : null}
+            <LoadMoreSentinel loading={prodsLoading} hasMore={prodsHasMore} onLoadMore={loadMoreProducts} />
           </>
         )
       ) : null}
@@ -666,11 +644,7 @@ export default function OwnerStore() {
                 </View>
               );
             })}
-            {visible < filtered.length ? (
-              <Pressable style={styles.loadMore} onPress={() => setVisible((v) => v + PAGE)}>
-                <Text style={styles.loadMoreText}>Load more</Text>
-              </Pressable>
-            ) : null}
+            <LoadMoreSentinel loading={prodsLoading} hasMore={prodsHasMore} onLoadMore={loadMoreProducts} />
           </View>
         )
       ) : null}

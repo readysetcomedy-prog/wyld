@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { useGymSite } from '@/components/GymSiteContext';
 import { supabase } from '@/lib/supabase';
+import { useInfiniteList } from '@/hooks/useInfiniteList';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 type Posting = {
   id: string;
@@ -36,95 +38,53 @@ export default function Careers() {
   const primary = site.theme.primary_color;
   const accent = site.theme.accent_color;
 
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [postings, setPostings] = useState<Posting[]>([]);
 
   const locId = site.currentLocation?.id ?? null;
 
-  useEffect(() => {
-    if (!site.modules.applications_enabled) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setLoadError(null);
-
-      // Fetch the postings first.
-      const { data: postingRows, error: postErr } = await supabase
-        .from('gym_job_postings')
-        .select(
-          'id, gym_id, title, role_id, location_id, description, employment_type, compensation, status, display_order, created_at'
-        )
-        .eq('gym_id', site.gym.id)
-        .eq('status', 'open')
-        .order('display_order', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: false });
-
-      if (cancelled) return;
-      if (postErr) {
-        setLoadError(postErr.message);
-        setLoading(false);
-        return;
-      }
-
-      let rows = (postingRows ?? []) as any[];
-
-      // If a current location is set in the URL, show only postings for that
-      // location or "all locations" (location_id IS NULL).
-      if (locId) {
-        rows = rows.filter(
-          (r) => r.location_id == null || r.location_id === locId
-        );
-      }
-
-      // Fetch role names and location labels via separate selects, then merge.
-      const roleIds = Array.from(
-        new Set(rows.map((r) => r.role_id).filter((v): v is string => !!v))
-      );
-      const locIds = Array.from(
-        new Set(rows.map((r) => r.location_id).filter((v): v is string => !!v))
-      );
-
-      let rolesMap: Record<string, string> = {};
-      if (roleIds.length > 0) {
-        const { data: roleRows } = await supabase
-          .from('gym_roles')
-          .select('id, name')
-          .in('id', roleIds);
-        if (cancelled) return;
-        (roleRows ?? []).forEach((r: any) => {
-          rolesMap[r.id] = r.name;
-        });
-      }
-
-      let locsMap: Record<string, string> = {};
-      if (locIds.length > 0) {
-        const { data: locRows } = await supabase
-          .from('gym_locations')
-          .select('id, label')
-          .in('id', locIds);
-        if (cancelled) return;
-        (locRows ?? []).forEach((l: any) => {
-          locsMap[l.id] = l.label;
-        });
-      }
-
-      const merged: Posting[] = rows.map((r) => ({
-        ...r,
-        role_name: r.role_id ? rolesMap[r.role_id] ?? null : null,
-        location_label: r.location_id ? locsMap[r.location_id] ?? null : null,
-      }));
-
-      setPostings(merged);
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const loadPage = useCallback(async (from: number, to: number) => {
+    if (!site.modules.applications_enabled) return [];
+    setLoadError(null);
+    let q = supabase
+      .from('gym_job_postings')
+      .select(
+        'id, gym_id, title, role_id, location_id, description, employment_type, compensation, status, display_order, created_at'
+      )
+      .eq('gym_id', site.gym.id)
+      .eq('status', 'open');
+    // Show postings for the current location OR "all locations" rows.
+    if (locId) q = q.or(`location_id.is.null,location_id.eq.${locId}`);
+    const { data, error } = await q
+      .order('display_order', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) { setLoadError(error.message); return []; }
+    const rows = ((data ?? []) as any[]);
+    const roleIds = Array.from(new Set(rows.map((r) => r.role_id).filter((v): v is string => !!v)));
+    const locIds = Array.from(new Set(rows.map((r) => r.location_id).filter((v): v is string => !!v)));
+    const [{ data: roleRows }, { data: locRows }] = await Promise.all([
+      roleIds.length
+        ? supabase.from('gym_roles').select('id, name').in('id', roleIds)
+        : Promise.resolve({ data: [] as any[] }),
+      locIds.length
+        ? supabase.from('gym_locations').select('id, label').in('id', locIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const rolesMap = new Map<string, string>(((roleRows as any[]) ?? []).map((r) => [r.id, r.name]));
+    const locsMap = new Map<string, string>(((locRows as any[]) ?? []).map((l) => [l.id, l.label]));
+    return rows.map((r) => ({
+      ...r,
+      role_name: r.role_id ? rolesMap.get(r.role_id) ?? null : null,
+      location_label: r.location_id ? locsMap.get(r.location_id) ?? null : null,
+    })) as Posting[];
   }, [site.modules.applications_enabled, site.gym.id, locId]);
+
+  const { items: postingsList, loading, hasMore, loadMore } = useInfiniteList<Posting>({
+    pageSize: 30,
+    load: loadPage,
+    deps: [site.modules.applications_enabled, site.gym.id, locId],
+  });
+  const postings = postingsList ?? [];
 
   // Module disabled: graceful, branded message.
   if (!site.modules.applications_enabled) {
@@ -155,7 +115,7 @@ export default function Careers() {
       <Text style={[styles.title, { color: primary }]}>{headline}</Text>
       <Text style={styles.intro}>{intro}</Text>
 
-      {loading ? (
+      {postingsList === null ? (
         <ActivityIndicator color={accent} style={{ marginTop: 24 }} />
       ) : loadError ? (
         <Text style={styles.errorBlock}>Couldn't load openings: {loadError}</Text>
@@ -178,6 +138,7 @@ export default function Careers() {
               accent={accent}
             />
           ))}
+          <LoadMoreSentinel loading={loading} hasMore={hasMore} onLoadMore={loadMore} />
         </View>
       )}
     </View>

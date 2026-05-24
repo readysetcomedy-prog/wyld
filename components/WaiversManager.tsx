@@ -44,6 +44,9 @@ export function WaiversManager({ gymId }: { gymId: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [sigsFor, setSigsFor] = useState<string | null>(null);
   const [sigs, setSigs] = useState<Sig[]>([]);
+  const [sigsHasMore, setSigsHasMore] = useState(false);
+  const [sigsLoading, setSigsLoading] = useState(false);
+  const SIGS_PAGE = 100;
 
   const load = useCallback(async () => {
     const [{ data: w }, { data: o }] = await Promise.all([
@@ -140,13 +143,35 @@ export function WaiversManager({ gymId }: { gymId: string }) {
       setSigsFor(null);
       return;
     }
+    setSigsLoading(true);
     const { data } = await supabase
       .from('gym_waiver_signatures')
       .select('id, participant_name, signed_at, member_id')
       .eq('waiver_id', waiverId)
-      .order('signed_at', { ascending: false });
-    setSigs((data as Sig[]) ?? []);
+      .order('signed_at', { ascending: false })
+      .range(0, SIGS_PAGE);
+    const rows = ((data as Sig[]) ?? []);
+    setSigs(rows.slice(0, SIGS_PAGE));
+    setSigsHasMore(rows.length > SIGS_PAGE);
     setSigsFor(waiverId);
+    setSigsLoading(false);
+  }
+
+  async function loadMoreSigs() {
+    if (!sigsFor || sigsLoading || !sigsHasMore) return;
+    setSigsLoading(true);
+    const from = sigs.length;
+    const to = from + SIGS_PAGE;
+    const { data } = await supabase
+      .from('gym_waiver_signatures')
+      .select('id, participant_name, signed_at, member_id')
+      .eq('waiver_id', sigsFor)
+      .order('signed_at', { ascending: false })
+      .range(from, to);
+    const rows = ((data as Sig[]) ?? []);
+    setSigs((prev) => [...prev, ...rows.slice(0, SIGS_PAGE)]);
+    setSigsHasMore(rows.length > SIGS_PAGE);
+    setSigsLoading(false);
   }
 
   if (waivers === null) return <ActivityIndicator color={theme.colors.charcoal} />;
@@ -295,14 +320,27 @@ export function WaiversManager({ gymId }: { gymId: string }) {
                 </View>
                 {sigsFor === w.id ? (
                   <View style={styles.sigList}>
-                    {sigs.length === 0 ? (
+                    {sigs.length === 0 && !sigsLoading ? (
                       <Text style={styles.dim}>No one has signed this waiver yet.</Text>
                     ) : (
-                      sigs.map((s) => (
-                        <Text key={s.id} style={styles.sigRow}>
-                          {s.participant_name} — {new Date(s.signed_at).toLocaleDateString()}
-                        </Text>
-                      ))
+                      <>
+                        {sigs.map((s) => (
+                          <Text key={s.id} style={styles.sigRow}>
+                            {s.participant_name} — {new Date(s.signed_at).toLocaleDateString()}
+                          </Text>
+                        ))}
+                        {sigsHasMore ? (
+                          <Pressable
+                            style={styles.smallBtn}
+                            disabled={sigsLoading}
+                            onPress={loadMoreSigs}
+                          >
+                            <Text style={styles.smallBtnText}>
+                              {sigsLoading ? 'Loading…' : 'Load more'}
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                      </>
                     )}
                   </View>
                 ) : null}
