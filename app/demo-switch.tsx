@@ -77,13 +77,15 @@ export default function DemoSwitch() {
       router.back();
       return;
     }
+    setErr(null);
     try {
       await returnToSelf();
-      // Stay on /demo-switch so the user can pick another account. A full
-      // reload re-runs auth context so the restored session is in effect.
-      if (typeof window !== 'undefined') window.location.href = '/demo-switch';
+      // refreshSession replaced the auth state — full reload so every
+      // consumer (AuthProvider, cached queries) sees the admin again.
+      if (typeof window !== 'undefined') window.location.href = '/dashboard';
+      else router.replace('/dashboard' as never);
     } catch (e: any) {
-      setErr(e?.message ?? 'Failed to restore session');
+      setErr(e?.message ?? 'Could not restore your account session.');
     }
   }
 

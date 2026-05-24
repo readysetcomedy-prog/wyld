@@ -1,7 +1,9 @@
 // Global overlay for the demo-accounts dev tool. Renders nothing on native.
 // Just a draggable "D" badge — visible when the user is demo-authorized AND
 // has the toggle on, OR when a stashed original session exists so a demo
-// session can still get back to the switcher.
+// session can still get back to the switcher. Returning to the real
+// account lives on /demo-switch (the button on that page); no overlay
+// banner — explicit request from the user, it was in the way.
 
 import { useEffect, useRef, useState } from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';

@@ -175,7 +175,7 @@ export default function Website() {
         supabase
           .from('gym_modules')
           .select(
-            'gym_id, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled'
+            'gym_id, website_enabled, news_enabled, faq_enabled, calendar_enabled, store_enabled, about_enabled, services_enabled, contact_enabled, news_visible, faq_visible, store_visible, multi_location_enabled, applications_enabled'
           )
           .eq('gym_id', gymId)
           .maybeSingle(),
@@ -395,10 +395,10 @@ export default function Website() {
   const visiblePages: PageKey[] = PAGE_KEYS.filter((k) => {
     if (k === 'news') return modules.news_enabled || pages.news != null;
     if (k === 'faq') return modules.faq_enabled || pages.faq != null;
-    // Careers page only renders on the public site when applications_enabled
-    // is on. Still editable here as long as the owner already has content
-    // for it (so they can prep before flipping the module).
-    if (k === 'careers') return modules.applications_enabled || pages.careers != null;
+    // Careers is always editable here so owners can prep content before
+    // they flip applications_enabled on. The PUBLIC site still respects
+    // the module flag — the public Careers route renders a "not enabled"
+    // card when the module is off.
     return true;
   });
 
