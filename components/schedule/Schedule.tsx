@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { useAuth } from '@/lib/auth';
 import { TimePicker } from './TimePicker';
 import { ShiftEditModal } from './ShiftEditModal';
@@ -42,6 +43,7 @@ type Props = {
 
 export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
   const { session } = useAuth();
+  const gymTheme = useGymTheme();
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
   const currentUserId = session?.user?.id ?? '';
@@ -538,7 +540,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                 <View style={styles.bell}><Text style={styles.bellText}>{pendingCount}</Text></View>
               ) : null}
             </Pressable>
-            <Pressable style={[styles.iconBtn, styles.iconBtnPrimary]} onPress={() => setShowRotation(true)}>
+            <Pressable style={[styles.iconBtn, { backgroundColor: gymTheme.accent, borderColor: gymTheme.accent }]} onPress={() => setShowRotation(true)}>
               <Text style={[styles.iconBtnText, { color: '#fff' }]}>Rotation</Text>
             </Pressable>
           </View>
@@ -547,18 +549,18 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
 
       {/* View toggle */}
       <View style={styles.toggleRow}>
-        <Pressable style={[styles.toggleBtn, viewMode === 'month' && styles.toggleBtnActive]} onPress={() => setViewMode('month')}>
-          <Text style={[styles.toggleText, viewMode === 'month' && styles.toggleTextActive]}>Month</Text>
+        <Pressable style={[styles.toggleBtn, viewMode === 'month' && { borderBottomColor: gymTheme.primary }]} onPress={() => setViewMode('month')}>
+          <Text style={[styles.toggleText, viewMode === 'month' && { color: gymTheme.primary }]}>Month</Text>
         </Pressable>
-        <Pressable style={[styles.toggleBtn, viewMode === 'day' && styles.toggleBtnActive]} onPress={() => setViewMode('day')}>
-          <Text style={[styles.toggleText, viewMode === 'day' && styles.toggleTextActive]}>Day</Text>
+        <Pressable style={[styles.toggleBtn, viewMode === 'day' && { borderBottomColor: gymTheme.primary }]} onPress={() => setViewMode('day')}>
+          <Text style={[styles.toggleText, viewMode === 'day' && { color: gymTheme.primary }]}>Day</Text>
         </Pressable>
-        <Pressable style={[styles.toggleBtn, detailView && styles.toggleBtnActive]} onPress={() => setDetailView((v) => !v)}>
-          <Text style={[styles.toggleText, detailView && styles.toggleTextActive]}>Detail</Text>
+        <Pressable style={[styles.toggleBtn, detailView && { borderBottomColor: gymTheme.primary }]} onPress={() => setDetailView((v) => !v)}>
+          <Text style={[styles.toggleText, detailView && { color: gymTheme.primary }]}>Detail</Text>
         </Pressable>
         {mode === 'view' && (
-          <Pressable style={[styles.toggleBtn, mineOnly && styles.toggleBtnActive]} onPress={() => setMineOnly((v) => !v)}>
-            <Text style={[styles.toggleText, mineOnly && styles.toggleTextActive]}>Mine</Text>
+          <Pressable style={[styles.toggleBtn, mineOnly && { borderBottomColor: gymTheme.primary }]} onPress={() => setMineOnly((v) => !v)}>
+            <Text style={[styles.toggleText, mineOnly && { color: gymTheme.primary }]}>Mine</Text>
           </Pressable>
         )}
       </View>
@@ -588,7 +590,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
       <View style={styles.filterBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBarContent}>
           <Pressable
-            style={[styles.filterChip, roleFilter === null && styles.filterChipActive]}
+            style={[styles.filterChip, roleFilter === null && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary }]}
             onPress={() => { setRoleFilter(null); persistRoleFilter(null); }}
           >
             <Text style={[styles.filterChipText, roleFilter === null && styles.filterChipTextActive]}>All Roles</Text>
@@ -596,7 +598,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
           {allRoles.map((r) => (
             <Pressable
               key={r}
-              style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
+              style={[styles.filterChip, roleFilter === r && { backgroundColor: gymTheme.primary, borderColor: gymTheme.primary }]}
               onPress={() => {
                 const next = r === roleFilter ? null : r;
                 setRoleFilter(next);
@@ -640,7 +642,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
       ) : null}
 
       {pendingSwap && (
-        <View style={[styles.banner, styles.bannerPurple]}>
+        <View style={[styles.banner, { backgroundColor: gymTheme.primary }]}>
           <Text style={[styles.bannerText, { color: '#fff' }]}>
             Swap mode: tap another shift to swap employees
           </Text>
@@ -681,7 +683,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                         style={[
                           styles.dayCell, { width: CELL_PCT },
                           !inMonth && styles.dayCellOther,
-                          isToday && styles.dayCellToday,
+                          isToday && { borderColor: gymTheme.primary, borderWidth: 2 },
                         ]}
                       >
                         <View style={styles.dayCellTop}>
@@ -721,7 +723,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                                         key={s.id}
                                         style={[
                                           styles.chip,
-                                          isMine && styles.chipMine,
+                                          isMine && { backgroundColor: gymTheme.primary },
                                           swap === 'source' && styles.chipSwapSource,
                                           swap === 'target' && styles.chipSwapTarget,
                                         ]}
@@ -836,7 +838,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
               <Pressable onPress={() => setViewDate(new Date())}>
                 <Text style={styles.monthLabel}>{formatDateLabel(viewDate)}</Text>
                 {viewDateStr === todayDateStr && (
-                  <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>Today</Text></View>
+                  <View style={[styles.todayBadge, { backgroundColor: gymTheme.accent }]}><Text style={styles.todayBadgeText}>Today</Text></View>
                 )}
               </Pressable>
               <Pressable onPress={nextDay} style={styles.navBtn}><Text style={styles.navBtnText}>›</Text></Pressable>
@@ -941,7 +943,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                           </Text>
                         </View>
                       ) : (
-                        <Pressable style={styles.pickupBtn} onPress={() => openPickup(viewDateStr, loc)}>
+                        <Pressable style={[styles.pickupBtn, { backgroundColor: gymTheme.accent }]} onPress={() => openPickup(viewDateStr, loc)}>
                           <Text style={styles.pickupBtnText}>Request Pickup</Text>
                         </Pressable>
                       )}
@@ -1015,7 +1017,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
                       <Text style={styles.empItemName}>{e.full_name}</Text>
                       {e.position ? <Text style={styles.empItemPos}>{e.position}</Text> : null}
                     </View>
-                    {selectedEmployee?.id === e.id && <View style={styles.empItemCheck} />}
+                    {selectedEmployee?.id === e.id && <View style={[styles.empItemCheck, { backgroundColor: gymTheme.accent }]} />}
                   </Pressable>
                 ))}
             </ScrollView>
@@ -1034,7 +1036,7 @@ export function Schedule({ gymId, gymName, mode, myEmployeeId }: Props) {
             <ScrollView>
               {DELETE_REASONS.filter((r) => r !== 'Error in Entry').map((r) => (
                 <Pressable key={r} style={styles.reasonRow} onPress={() => setAbsenceReason(r)}>
-                  <View style={[styles.radio, absenceReason === r && styles.radioActive]} />
+                  <View style={[styles.radio, absenceReason === r && { borderColor: gymTheme.accent, backgroundColor: gymTheme.accent }]} />
                   <Text style={[styles.reasonText, absenceReason === r && styles.reasonTextActive]}>{r}</Text>
                 </Pressable>
               ))}

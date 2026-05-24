@@ -13,6 +13,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
+import { useGymTheme } from '@/lib/gymTheme';
 import { Select } from '@/components/Select';
 import { useInfiniteList } from '@/hooks/useInfiniteList';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
@@ -72,6 +73,7 @@ export function MessagesView({
   onUnreadChange?: (count: number) => void;
 }) {
   const { profile } = useAuth();
+  const gymTheme = useGymTheme();
   const myId = profile?.id ?? null;
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -506,7 +508,7 @@ export function MessagesView({
             disabled={creatingAdminThread}
             onPress={startAdminThread}
           >
-            <Text style={styles.startAdminText}>+ Message WyLD support</Text>
+            <Text style={[styles.startAdminText, { color: gymTheme.accent }]}>+ Message WyLD support</Text>
           </Pressable>
         ) : null}
         {visibleThreads.length === 0 && matchingContacts.length === 0 ? (
@@ -533,7 +535,7 @@ export function MessagesView({
                     >
                       {t.otherName}
                     </Text>
-                    {t.unread ? <View style={styles.unreadDot} /> : null}
+                    {t.unread ? <View style={[styles.unreadDot, { backgroundColor: gymTheme.accent }]} /> : null}
                   </View>
                   <Text style={styles.threadSub} numberOfLines={1}>
                     {t.subject || labelForKind(t.kind)} ·{' '}
@@ -577,7 +579,7 @@ export function MessagesView({
       <View style={[styles.pane, !isWide && styles.paneNarrow]}>
         {!isWide && active ? (
           <Pressable onPress={() => setActiveId(null)} style={styles.backRow}>
-            <Text style={styles.backRowText}>‹ Conversations</Text>
+            <Text style={[styles.backRowText, { color: gymTheme.primary }]}>‹ Conversations</Text>
           </Pressable>
         ) : null}
         {!active ? (
@@ -634,7 +636,7 @@ export function MessagesView({
                       <View
                         style={[
                           styles.bubble,
-                          fromMe ? styles.bubbleMe : styles.bubbleThem,
+                          fromMe ? [styles.bubbleMe, { backgroundColor: gymTheme.accent }] : styles.bubbleThem,
                         ]}
                       >
                         <Text style={fromMe ? styles.bubbleTextMe : styles.bubbleTextThem}>
@@ -671,7 +673,7 @@ export function MessagesView({
                 <Pressable
                   onPress={send}
                   disabled={sending || !composing.trim()}
-                  style={[styles.sendBtn, (sending || !composing.trim()) && { opacity: 0.5 }]}
+                  style={[styles.sendBtn, { backgroundColor: gymTheme.accent }, (sending || !composing.trim()) && { opacity: 0.5 }]}
                 >
                   <Text style={styles.sendBtnText}>{sending ? 'Sending…' : 'Send'}</Text>
                 </Pressable>
