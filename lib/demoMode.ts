@@ -115,45 +115,79 @@ export function useStashedSession(): StashedSession | null {
   return s;
 }
 
-// Stash the *current* session, sign out, sign in as the demo email.
+// Stash the *current* session, then sign in as the demo email.
+//
+// CRITICAL: refresh the admin's session FIRST so the tokens we stash are
+// freshly minted. The SDK auto-refreshes the access_token periodically,
+// which rotates the refresh_token; if we stashed an older refresh_token
+// it'd already be in the rotation/reuse-detection window by the time
+// the user clicked Return, producing the 400 invalid_grant we were
+// hitting in production.
+//
+// We deliberately don't call signOut() before signInWithPassword:
+// signInWithPassword replaces the local session by itself, and any
+// server-side side effects of signOut have caused trouble in the past.
 export async function switchToDemo(email: string): Promise<void> {
-  const { data } = await supabase.auth.getSession();
-  const current = data.session;
-  // Only stash if it's not already a demo session — never overwrite the
-  // real one when bouncing between demo accounts.
   const existing = getStashedSession();
-  if (current && !existing) {
-    setStashedSession({
-      access_token: current.access_token,
-      refresh_token: current.refresh_token,
-      email: current.user?.email ?? null,
-    });
+  if (!existing) {
+    // Force a refresh to get the freshest possible refresh_token before
+    // we hand control to the demo session.
+    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+    const current = refreshed?.session ?? (await supabase.auth.getSession()).data.session;
+    if (refreshErr) {
+      // Non-fatal — we'll fall back to whatever getSession() returns,
+      // which is still better than nothing.
+      // eslint-disable-next-line no-console
+      console.warn('[demoMode] refresh before stash failed:', refreshErr.message);
+    }
+    if (current) {
+      setStashedSession({
+        access_token: current.access_token,
+        refresh_token: current.refresh_token,
+        email: current.user?.email ?? null,
+      });
+    }
   }
-  await supabase.auth.signOut({ scope: 'local' });
   const { error } = await supabase.auth.signInWithPassword({ email, password: 'demo' });
   if (error) throw error;
 }
 
-// Restore the previously stashed session.
+// Restore the previously stashed admin session.
 //
-// We stash both tokens but the access_token is short-lived (~1h) so by
-// the time the user clicks "Return to my account" it's almost always
-// expired. Use refreshSession() with the stashed refresh_token to mint
-// a fresh session directly — that's what the SDK does internally for
-// auto-refresh, and it works whether or not the access_token is dead.
+// Uses refreshSession() with the stashed refresh_token to mint a fresh
+// session. Because switchToDemo refreshed *before* stashing, this
+// refresh_token has never been used — it should be accepted by the
+// Supabase auth server.
 //
-// Important: we only clear the stash AFTER a successful refresh. If
-// the refresh fails (refresh_token revoked or expired) we keep the
-// stash so the user can retry / inspect the error, and we re-throw so
-// the caller can surface it instead of silently dumping the user to
-// the sign-in page.
+// Safety net for failures: when refreshSession is called with a bad
+// token, the SDK clears the current session as a side effect — which
+// would dump the user out of their demo session and bounce them to
+// /sign-in via the auth guard. We capture the current demo session
+// FIRST and setSession() back to it on failure so the user stays
+// where they are and sees the error inline, instead of being silently
+// kicked.
 export async function returnToSelf(): Promise<void> {
   const stash = getStashedSession();
   if (!stash) throw new Error('No stashed session to restore');
+
+  // Snapshot the current (demo) session so we can roll back if the
+  // refresh fails.
+  const { data: currentData } = await supabase.auth.getSession();
+  const currentSession = currentData.session;
+
   const { error } = await supabase.auth.refreshSession({
     refresh_token: stash.refresh_token,
   });
-  if (error) throw error;
+  if (error) {
+    if (currentSession) {
+      // Best-effort restore so the demo session keeps working.
+      await supabase.auth.setSession({
+        access_token: currentSession.access_token,
+        refresh_token: currentSession.refresh_token,
+      });
+    }
+    throw error;
+  }
   setStashedSession(null);
 }
 
