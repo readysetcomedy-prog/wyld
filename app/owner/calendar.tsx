@@ -317,6 +317,11 @@ export default function OwnerCalendar() {
   }
 
   function editEvent(e: GymEvent) {
+    // The form lives at the top of the page; every edit entry point —
+    // the day modal, the per-event Edit button down in the list, or any
+    // future caller — needs to scroll the viewport up to it. Centralize
+    // the flag here so we don't have to remember at each call site.
+    wantScroll.current = true;
     setForm({
       id: e.id,
       title: e.title,
