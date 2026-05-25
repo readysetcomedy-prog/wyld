@@ -337,6 +337,19 @@ export function Roster({
     deps: [gymId],
   });
 
+  // Realtime — any roster change for this gym refreshes the list.
+  useEffect(() => {
+    if (!gymId) return;
+    const sub = supabase
+      .channel(`gym-employees-${gymId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'gym_employees',
+        filter: `gym_id=eq.${gymId}`,
+      }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [gymId, load]);
+
   function openNew() {
     setErr(null);
     setForm(emptyForm());

@@ -103,37 +103,51 @@ function Overview() {
     milestonesDone: number;
   } | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const [
-        { data: expensesAll },
-        { data: contributors },
-        { data: milestonesOpen },
-        { data: milestonesDone },
-      ] = await Promise.all([
-        supabase.from('startup_expenses').select('amount_cents, status, contributor_id'),
-        supabase.from('startup_contributors').select('id, equity_percent'),
-        supabase.from('startup_milestones').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('startup_milestones').select('id', { count: 'exact', head: true }).eq('status', 'done'),
-      ]);
-      const exp = ((expensesAll as any[]) ?? []);
-      const totalContributed = exp.reduce((s, e) => s + (e.amount_cents ?? 0), 0);
-      const paidBack = exp.filter((e) => e.status === 'reimbursed').reduce((s, e) => s + (e.amount_cents ?? 0), 0);
-      const stillOwed = totalContributed - paidBack;
-      const con = ((contributors as any[]) ?? []);
-      const equityAllocated = con.reduce((s, c) => s + Number(c.equity_percent ?? 0), 0);
-      setStats({
-        totalContributed,
-        paidBack,
-        stillOwed,
-        expenseCount: exp.length,
-        contributorCount: con.length,
-        equityAllocated,
-        milestonesOpen: (milestonesOpen as any)?.count ?? 0,
-        milestonesDone: (milestonesDone as any)?.count ?? 0,
-      });
-    })();
+  const load = useCallback(async () => {
+    const [
+      { data: expensesAll },
+      { data: contributors },
+      { data: milestonesOpen },
+      { data: milestonesDone },
+    ] = await Promise.all([
+      supabase.from('startup_expenses').select('amount_cents, status, contributor_id'),
+      supabase.from('startup_contributors').select('id, equity_percent'),
+      supabase.from('startup_milestones').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      supabase.from('startup_milestones').select('id', { count: 'exact', head: true }).eq('status', 'done'),
+    ]);
+    const exp = ((expensesAll as any[]) ?? []);
+    const totalContributed = exp.reduce((s, e) => s + (e.amount_cents ?? 0), 0);
+    const paidBack = exp.filter((e) => e.status === 'reimbursed').reduce((s, e) => s + (e.amount_cents ?? 0), 0);
+    const stillOwed = totalContributed - paidBack;
+    const con = ((contributors as any[]) ?? []);
+    const equityAllocated = con.reduce((s, c) => s + Number(c.equity_percent ?? 0), 0);
+    setStats({
+      totalContributed,
+      paidBack,
+      stillOwed,
+      expenseCount: exp.length,
+      contributorCount: con.length,
+      equityAllocated,
+      milestonesOpen: (milestonesOpen as any)?.count ?? 0,
+      milestonesDone: (milestonesDone as any)?.count ?? 0,
+    });
   }, []);
+  useEffect(() => { load(); }, [load]);
+
+  // Realtime — every input that feeds the rollups (expenses,
+  // contributors, milestones) should refresh the overview live.
+  useEffect(() => {
+    const sub = supabase
+      .channel('startup-overview')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_expenses' },
+        () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_contributors' },
+        () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_milestones' },
+        () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [load]);
 
   if (!stats) return <ActivityIndicator color={theme.colors.wyldPurple} />;
 
@@ -207,11 +221,34 @@ function Expenses() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [form, setForm] = useState<Partial<Expense> | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Contributor pool for the editor's "Paid by" dropdown. Loaded once
+  // here (not inside the editor) so a freshly-opened "+ Log expense"
+  // modal already has the options ready, and kept current via realtime
+  // so a contributor added in another tab shows up without a reload.
+  const [contributors, setContributors] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
     return () => clearTimeout(id);
   }, [search]);
+
+  const loadContributors = useCallback(async () => {
+    const { data } = await supabase
+      .from('startup_contributors')
+      .select('id, name')
+      .order('name');
+    setContributors(((data as any[]) ?? []).map((c) => ({ id: c.id, name: c.name })));
+  }, []);
+  useEffect(() => { loadContributors(); }, [loadContributors]);
+
+  useEffect(() => {
+    const sub = supabase
+      .channel('startup-contribs-for-expenses')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_contributors' },
+        () => loadContributors())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [loadContributors]);
 
   const loadPage = useCallback(async (from: number, to: number) => {
     let q = supabase
@@ -231,6 +268,17 @@ function Expenses() {
     load: loadPage,
     deps: [statusFilter, debouncedSearch],
   });
+
+  // Realtime — any expense insert/update/delete (from another tab,
+  // another admin, or our own RPC writes) refreshes the list.
+  useEffect(() => {
+    const sub = supabase
+      .channel('startup-expenses-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_expenses' },
+        () => reload())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [reload]);
 
   return (
     <View style={styles.tabRoot}>
@@ -306,6 +354,7 @@ function Expenses() {
 
       <ExpenseEditor
         form={form}
+        contributors={contributors}
         onClose={() => setForm(null)}
         onSaved={() => { setForm(null); reload(); }}
         setErr={setErr}
@@ -315,18 +364,22 @@ function Expenses() {
 }
 
 function ExpenseEditor({
-  form, onClose, onSaved, setErr,
+  form, contributors, onClose, onSaved, setErr,
 }: {
   form: Partial<Expense> | null;
+  contributors: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
   setErr: (s: string | null) => void;
 }) {
-  const [contributors, setContributors] = useState<{ id: string; name: string }[]>([]);
   const [draft, setDraft] = useState<Partial<Expense>>({});
   const [saving, setSaving] = useState(false);
   const [amountStr, setAmountStr] = useState('');
 
+  // Re-initialize the draft whenever the modal is opened (or the row
+  // it's editing changes). Keying off `form` itself — not `form?.id`
+  // — so a fresh-create payload (form = {}, id = undefined) still
+  // triggers re-init when the modal toggles from closed to open.
   useEffect(() => {
     if (!form) return;
     setDraft({
@@ -335,19 +388,7 @@ function ExpenseEditor({
       status: form.status ?? 'unreimbursed',
     });
     setAmountStr(form.amount_cents != null ? centsToStr(form.amount_cents) : '');
-  }, [form?.id]);
-
-  // Pull contributors so the "Paid by" dropdown has its options.
-  useEffect(() => {
-    if (!form) return;
-    supabase
-      .from('startup_contributors')
-      .select('id, name')
-      .order('name')
-      .then(({ data }) => {
-        setContributors(((data as any[]) ?? []).map((c) => ({ id: c.id, name: c.name })));
-      });
-  }, [form?.id]);
+  }, [form]);
 
   if (!form) return null;
 
@@ -563,6 +604,19 @@ function Contributors() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Realtime — contributors AND expenses both feed this view's totals,
+  // so subscribe to both.
+  useEffect(() => {
+    const sub = supabase
+      .channel('startup-contributors-view')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_contributors' },
+        () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_expenses' },
+        () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [load]);
+
   const totalEquity = (rows ?? []).reduce((s, r) => s + Number(r.equity_percent ?? 0), 0);
   const totalCash = Array.from(totals.values()).reduce((s, t) => s + t.contributed, 0);
   const totalPaidBack = Array.from(totals.values()).reduce((s, t) => s + t.paidBack, 0);
@@ -649,7 +703,7 @@ function ContributorEditor({
     if (!form) return;
     setDraft(form);
     setEquityStr(form.equity_percent != null ? String(form.equity_percent) : '');
-  }, [form?.id]);
+  }, [form]);
 
   if (!form) return null;
 
@@ -784,6 +838,15 @@ function Milestones() {
   }, [filter]);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const sub = supabase
+      .channel('startup-milestones')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'startup_milestones' },
+        () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [load]);
+
   async function toggle(m: Milestone) {
     const nextStatus = m.status === 'done' ? 'open' : 'done';
     await supabase
@@ -866,7 +929,7 @@ function MilestoneEditor({
   const [draft, setDraft] = useState<Partial<Milestone>>({});
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (form) setDraft(form); }, [form?.id]);
+  useEffect(() => { if (form) setDraft(form); }, [form]);
   if (!form) return null;
 
   async function save() {

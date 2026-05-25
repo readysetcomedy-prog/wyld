@@ -110,6 +110,20 @@ export default function OwnerMembers() {
     deps: [gymId, statusFilter, debouncedSearch, empUserIds.size, empEmails.size],
   });
 
+  // Realtime — any membership change for this gym (new join, status flip,
+  // notes edit, removal) refreshes the list.
+  useEffect(() => {
+    if (!gymId) return;
+    const sub = supabase
+      .channel(`gym-memberships-${gymId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'gym_memberships',
+        filter: `gym_id=eq.${gymId}`,
+      }, () => reload())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [gymId, reload]);
+
   async function updateStatus(m: Membership, status: string) {
     await supabase.from('gym_memberships').update({ status }).eq('id', m.id);
     reload();
