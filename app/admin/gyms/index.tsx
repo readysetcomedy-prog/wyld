@@ -101,6 +101,15 @@ export default function GymsList() {
     deps: [debouncedSearch],
   });
 
+  useEffect(() => {
+    const sub = supabase
+      .channel('admin-gyms-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gyms' },
+        () => reload())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [reload]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>

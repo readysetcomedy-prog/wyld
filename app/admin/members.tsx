@@ -133,6 +133,15 @@ function AllProfiles({
     deps: [debouncedSearch],
   });
 
+  useEffect(() => {
+    const sub = supabase
+      .channel('admin-profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' },
+        () => reload())
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [reload]);
+
   async function promote(p: Profile) {
     if (!wyldGymId) return;
     setErr(null);
