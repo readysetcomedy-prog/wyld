@@ -11,7 +11,6 @@ import {
   View, Text, Pressable, StyleSheet, ActivityIndicator, TextInput, Modal, ScrollView,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 
 type Employee = { id: string; full_name: string; position: string | null };
@@ -113,6 +112,26 @@ export function TimeCardsManager({ gymId }: { gymId: string }) {
   }, [gymId, periodStart, periodEnd]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime — any clock-in / clock-out / manager edit on this gym's
+  // time card refreshes the view immediately, no manual reload needed.
+  useEffect(() => {
+    if (!gymId) return;
+    const sub = supabase
+      .channel(`tc-mgr-${gymId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'time_card_entries',
+          filter: `gym_id=eq.${gymId}`,
+        },
+        () => load(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [gymId, load]);
 
   const entriesByEmp = useMemo(() => {
     const m = new Map<string, Entry[]>();

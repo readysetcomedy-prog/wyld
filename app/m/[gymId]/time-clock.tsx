@@ -112,26 +112,73 @@ export default function TimeClock() {
   const { items: history, loading, hasMore, loadMore, reload: reloadHistory } =
     useInfiniteList<Entry>({ pageSize: 30, load: loadHistory, deps: [employeeId] });
 
+  // Re-fetch the open entry directly from the table (don't trust the
+  // RPC's return shape — keeps the timer state honest).
+  const refetchOpen = useCallback(async () => {
+    if (!employeeId) return;
+    const { data } = await supabase
+      .from('time_card_entries')
+      .select('id, clock_in_at, clock_out_at, location_id, notes, edited_at')
+      .eq('employee_id', employeeId)
+      .is('clock_out_at', null)
+      .order('clock_in_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setOpenEntry((data as Entry) ?? null);
+  }, [employeeId]);
+
+  // Realtime: any insert / update on this employee's own time card
+  // refreshes both the open-shift card and the history below.
+  useEffect(() => {
+    if (!employeeId) return;
+    const sub = supabase
+      .channel(`tc-self-${employeeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'time_card_entries',
+          filter: `employee_id=eq.${employeeId}`,
+        },
+        () => { refetchOpen(); reloadHistory(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [employeeId, refetchOpen, reloadHistory]);
+
   async function clockIn() {
     setErr(null);
     setBusy(true);
-    const { data, error } = await supabase.rpc('time_card_clock_in', {
+    const { error } = await supabase.rpc('time_card_clock_in', {
       p_gym_id: gymId,
       p_location_id: chosenLoc,
     });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
-    setOpenEntry(data as Entry);
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[time-clock] clockIn failed', error);
+      setErr(error.message);
+      return;
+    }
+    // Don't trust the RPC return — re-fetch from the table.
+    await refetchOpen();
     reloadHistory();
   }
 
   async function clockOut() {
     setErr(null);
     setBusy(true);
-    const { data, error } = await supabase.rpc('time_card_clock_out', { p_gym_id: gymId });
+    const { error } = await supabase.rpc('time_card_clock_out', { p_gym_id: gymId });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
-    setOpenEntry(null);
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[time-clock] clockOut failed', error);
+      setErr(error.message);
+      return;
+    }
+    // Don't trust the RPC return — re-fetch from the table.
+    await refetchOpen();
     reloadHistory();
   }
 
