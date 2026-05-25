@@ -20,8 +20,24 @@ import { supabase } from '@/lib/supabase';
 import { theme } from '@/lib/theme';
 import { SubTabsPage } from '@/components/SubTabs';
 import { Select } from '@/components/Select';
+import { DateTimeField } from '@/components/DateTimeField';
 import { useInfiniteList } from '@/hooks/useInfiniteList';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+
+// YYYY-MM-DD <-> Date helpers. DB stores dates as ISO date strings;
+// DateTimeField works with JS Dates. Conversion goes through midnight
+// local so a date typed as "2026-05-25" round-trips cleanly.
+function dateStrToDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  // Normalize 'YYYY-MM-DD' to local midnight (avoid UTC -1 day rendering).
+  const d = new Date(s + (s.length === 10 ? 'T00:00:00' : ''));
+  return isNaN(d.getTime()) ? null : d;
+}
+function dateToStr(d: Date | null | undefined): string | null {
+  if (!d) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyShort = (cents: number) =>
@@ -52,12 +68,10 @@ const EXPENSE_CATEGORIES = [
 const STATUS_COLORS: Record<string, string> = {
   unreimbursed: '#B45309',
   reimbursed: '#15803D',
-  company_paid: theme.colors.wyldPurple,
 };
 const STATUS_LABELS: Record<string, string> = {
   unreimbursed: 'Owed',
   reimbursed: 'Reimbursed',
-  company_paid: 'Company paid',
 };
 
 export default function AdminStartUp() {
@@ -79,9 +93,9 @@ export default function AdminStartUp() {
 
 function Overview() {
   const [stats, setStats] = useState<{
-    cashIn: number;
-    cashOut: number;
-    unreimbursed: number;
+    totalContributed: number;
+    paidBack: number;
+    stillOwed: number;
     expenseCount: number;
     contributorCount: number;
     equityAllocated: number;
@@ -97,23 +111,21 @@ function Overview() {
         { data: milestonesOpen },
         { data: milestonesDone },
       ] = await Promise.all([
-        supabase.from('startup_expenses').select('amount_cents, status'),
-        supabase.from('startup_contributors').select('cash_contributed_cents, equity_percent'),
+        supabase.from('startup_expenses').select('amount_cents, status, contributor_id'),
+        supabase.from('startup_contributors').select('id, equity_percent'),
         supabase.from('startup_milestones').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         supabase.from('startup_milestones').select('id', { count: 'exact', head: true }).eq('status', 'done'),
       ]);
       const exp = ((expensesAll as any[]) ?? []);
-      const cashOut = exp.reduce((s, e) => s + (e.amount_cents ?? 0), 0);
-      const unreimbursed = exp
-        .filter((e) => e.status === 'unreimbursed')
-        .reduce((s, e) => s + (e.amount_cents ?? 0), 0);
+      const totalContributed = exp.reduce((s, e) => s + (e.amount_cents ?? 0), 0);
+      const paidBack = exp.filter((e) => e.status === 'reimbursed').reduce((s, e) => s + (e.amount_cents ?? 0), 0);
+      const stillOwed = totalContributed - paidBack;
       const con = ((contributors as any[]) ?? []);
-      const cashIn = con.reduce((s, c) => s + (c.cash_contributed_cents ?? 0), 0);
       const equityAllocated = con.reduce((s, c) => s + Number(c.equity_percent ?? 0), 0);
       setStats({
-        cashIn,
-        cashOut,
-        unreimbursed,
+        totalContributed,
+        paidBack,
+        stillOwed,
         expenseCount: exp.length,
         contributorCount: con.length,
         equityAllocated,
@@ -125,16 +137,14 @@ function Overview() {
 
   if (!stats) return <ActivityIndicator color={theme.colors.wyldPurple} />;
 
-  const cashRemaining = stats.cashIn - stats.cashOut;
   const equityFree = Math.max(0, 100 - stats.equityAllocated);
 
   return (
     <View style={styles.overviewWrap}>
       <View style={styles.statGrid}>
-        <StatCard label="Cash in (contributors)" value={moneyShort(stats.cashIn)} tone="good" />
-        <StatCard label="Cash out (expenses)" value={moneyShort(stats.cashOut)} tone="warn" />
-        <StatCard label="Net cash" value={moneyShort(cashRemaining)} tone={cashRemaining >= 0 ? 'good' : 'bad'} />
-        <StatCard label="Still owed to contributors" value={moneyShort(stats.unreimbursed)} tone={stats.unreimbursed > 0 ? 'warn' : 'good'} />
+        <StatCard label="Total contributed" value={moneyShort(stats.totalContributed)} tone="good" />
+        <StatCard label="Paid back to contributors" value={moneyShort(stats.paidBack)} tone="good" />
+        <StatCard label="Still owed to contributors" value={moneyShort(stats.stillOwed)} tone={stats.stillOwed > 0 ? 'warn' : 'good'} />
         <StatCard label="Expenses logged" value={String(stats.expenseCount)} />
         <StatCard label="Contributors" value={String(stats.contributorCount)} />
         <StatCard
@@ -179,14 +189,13 @@ function StatCard({
 
 type Expense = {
   id: string;
-  paid_by_user_id: string | null;
-  paid_by_label: string | null;
-  paid_by: { full_name: string | null; email: string } | null;
+  contributor_id: string | null;
+  contributor: { id: string; name: string } | null;
   description: string;
   category: string | null;
   amount_cents: number;
   paid_at: string;
-  status: 'unreimbursed' | 'reimbursed' | 'company_paid';
+  status: 'unreimbursed' | 'reimbursed';
   reimbursed_at: string | null;
   notes: string | null;
   receipt_url: string | null;
@@ -207,14 +216,14 @@ function Expenses() {
   const loadPage = useCallback(async (from: number, to: number) => {
     let q = supabase
       .from('startup_expenses')
-      .select('*, paid_by:profiles!startup_expenses_paid_by_user_id_fkey(full_name, email)');
+      .select('id, contributor_id, description, category, amount_cents, paid_at, status, reimbursed_at, notes, receipt_url, contributor:startup_contributors(id, name)');
     if (statusFilter !== 'all') q = q.eq('status', statusFilter);
     if (debouncedSearch) {
       const p = `%${debouncedSearch.replace(/[%_]/g, '\\$&')}%`;
-      q = q.or(`description.ilike.${p},category.ilike.${p},paid_by_label.ilike.${p}`);
+      q = q.or(`description.ilike.${p},category.ilike.${p}`);
     }
     const { data } = await q.order('paid_at', { ascending: false }).range(from, to);
-    return ((data as Expense[]) ?? []);
+    return ((data as any[]) ?? []) as Expense[];
   }, [statusFilter, debouncedSearch]);
 
   const { items: expenses, loading, hasMore, loadMore, reload } = useInfiniteList<Expense>({
@@ -227,7 +236,7 @@ function Expenses() {
     <View style={styles.tabRoot}>
       <View style={styles.barRow}>
         <View style={styles.chipRow}>
-          {(['all', 'unreimbursed', 'reimbursed', 'company_paid'] as const).map((s) => (
+          {(['all', 'unreimbursed', 'reimbursed'] as const).map((s) => (
             <Pressable
               key={s}
               style={[styles.chip, statusFilter === s && styles.chipOn]}
@@ -279,9 +288,9 @@ function Expenses() {
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={styles.rowName} numberOfLines={1}>{e.description}</Text>
                 <Text style={styles.rowMeta} numberOfLines={1}>
-                  {e.paid_by?.full_name || e.paid_by?.email || e.paid_by_label || 'Unknown payer'}
+                  {e.contributor?.name || 'No contributor'}
                   {e.category ? `  ·  ${e.category}` : ''}
-                  {`  ·  ${new Date(e.paid_at).toLocaleDateString()}`}
+                  {`  ·  ${new Date(e.paid_at + 'T00:00:00').toLocaleDateString()}`}
                 </Text>
                 {e.notes ? <Text style={styles.rowNote} numberOfLines={1}>📝 {e.notes}</Text> : null}
               </View>
@@ -313,7 +322,7 @@ function ExpenseEditor({
   onSaved: () => void;
   setErr: (s: string | null) => void;
 }) {
-  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  const [contributors, setContributors] = useState<{ id: string; name: string }[]>([]);
   const [draft, setDraft] = useState<Partial<Expense>>({});
   const [saving, setSaving] = useState(false);
   const [amountStr, setAmountStr] = useState('');
@@ -322,25 +331,21 @@ function ExpenseEditor({
     if (!form) return;
     setDraft({
       ...form,
-      paid_at: form.paid_at ?? new Date().toISOString().slice(0, 10),
+      paid_at: form.paid_at ?? dateToStr(new Date())!,
       status: form.status ?? 'unreimbursed',
     });
     setAmountStr(form.amount_cents != null ? centsToStr(form.amount_cents) : '');
   }, [form?.id]);
 
-  // Pull the admin pool so the payer dropdown can target a real user.
+  // Pull contributors so the "Paid by" dropdown has its options.
   useEffect(() => {
     if (!form) return;
     supabase
-      .from('profiles')
-      .select('id, full_name, email')
-      .in('role', ['admin', 'gym_employee'])
-      .order('full_name')
-      .limit(500)
+      .from('startup_contributors')
+      .select('id, name')
+      .order('name')
       .then(({ data }) => {
-        setUsers(((data as any[]) ?? []).map((u) => ({
-          id: u.id, name: u.full_name || u.email,
-        })));
+        setContributors(((data as any[]) ?? []).map((c) => ({ id: c.id, name: c.name })));
       });
   }, [form?.id]);
 
@@ -350,19 +355,19 @@ function ExpenseEditor({
     setSaving(true);
     setErr(null);
     const payload: any = {
-      paid_by_user_id: draft.paid_by_user_id ?? null,
-      paid_by_label: draft.paid_by_label?.trim() || null,
+      contributor_id: draft.contributor_id ?? null,
       description: (draft.description ?? '').trim(),
       category: draft.category ?? null,
       amount_cents: dollarsToCents(amountStr),
       paid_at: draft.paid_at,
       status: draft.status ?? 'unreimbursed',
-      reimbursed_at: draft.status === 'reimbursed' ? (draft.reimbursed_at ?? new Date().toISOString().slice(0, 10)) : null,
+      reimbursed_at: draft.status === 'reimbursed' ? (draft.reimbursed_at ?? dateToStr(new Date())) : null,
       notes: draft.notes?.trim() || null,
       receipt_url: draft.receipt_url?.trim() || null,
     };
     if (!payload.description) { setErr('Description is required.'); setSaving(false); return; }
     if (!payload.amount_cents) { setErr('Amount must be greater than zero.'); setSaving(false); return; }
+    if (!payload.contributor_id) { setErr('Pick a contributor — add them on the Contributors tab first if they\'re not in the list.'); setSaving(false); return; }
 
     const { error } = form!.id
       ? await supabase.from('startup_expenses').update(payload).eq('id', form!.id)
@@ -410,32 +415,29 @@ function ExpenseEditor({
                 />
               </Field>
               <Field label="Date" style={{ flex: 1 }}>
-                <TextInput
-                  value={draft.paid_at ?? ''}
-                  onChangeText={(v) => setDraft({ ...draft, paid_at: v })}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  style={modalStyles.input}
+                <DateTimeField
+                  mode="date"
+                  value={dateStrToDate(draft.paid_at ?? null)}
+                  onChange={(d) => setDraft({ ...draft, paid_at: dateToStr(d) ?? undefined })}
                 />
               </Field>
             </View>
 
-            <Field label="Paid by — pick a user">
+            <Field label="Paid by (contributor)">
               <Select
                 ariaLabel="Paid by"
-                value={draft.paid_by_user_id ?? ''}
-                onChange={(v) => setDraft({ ...draft, paid_by_user_id: v || null })}
-                options={[{ value: '', label: '(none — use free text below)' }, ...users.map((u) => ({ value: u.id, label: u.name }))]}
+                value={draft.contributor_id ?? ''}
+                onChange={(v) => setDraft({ ...draft, contributor_id: v || null })}
+                options={[
+                  { value: '', label: '— pick a contributor —' },
+                  ...contributors.map((c) => ({ value: c.id, label: c.name })),
+                ]}
               />
-            </Field>
-            <Field label="…or free-text payer (vendor name, etc.)">
-              <TextInput
-                value={draft.paid_by_label ?? ''}
-                onChangeText={(v) => setDraft({ ...draft, paid_by_label: v })}
-                placeholder="e.g. Stripe invoice, John (cofounder cash)"
-                placeholderTextColor={theme.colors.textSecondary}
-                style={modalStyles.input}
-              />
+              {contributors.length === 0 ? (
+                <Text style={modalStyles.hint}>
+                  No contributors yet. Add one on the Contributors tab first.
+                </Text>
+              ) : null}
             </Field>
 
             <Field label="Category">
@@ -453,12 +455,21 @@ function ExpenseEditor({
                 value={draft.status ?? 'unreimbursed'}
                 onChange={(v) => setDraft({ ...draft, status: v as any })}
                 options={[
-                  { value: 'unreimbursed', label: 'Owed (still need to pay this person back)' },
+                  { value: 'unreimbursed', label: 'Owed (still need to pay this contributor back)' },
                   { value: 'reimbursed', label: 'Reimbursed (we paid them back)' },
-                  { value: 'company_paid', label: 'Company paid directly (no reimbursement needed)' },
                 ]}
               />
             </Field>
+
+            {draft.status === 'reimbursed' ? (
+              <Field label="Reimbursed on">
+                <DateTimeField
+                  mode="date"
+                  value={dateStrToDate(draft.reimbursed_at ?? null)}
+                  onChange={(d) => setDraft({ ...draft, reimbursed_at: dateToStr(d) ?? undefined })}
+                />
+              </Field>
+            ) : null}
 
             <Field label="Receipt URL (optional)">
               <TextInput
@@ -515,29 +526,53 @@ type Contributor = {
   joined_at: string | null;
 };
 
+// Derived totals per contributor — never typed in, always rolled up
+// from logged expenses. `contributed` is everything they've paid out
+// of pocket; `paidBack` is the subset already reimbursed; `stillOwed`
+// is the difference.
+type Totals = { contributed: number; paidBack: number; stillOwed: number };
+
 function Contributors() {
   const [rows, setRows] = useState<Contributor[] | null>(null);
+  const [totals, setTotals] = useState<Map<string, Totals>>(new Map());
   const [form, setForm] = useState<Partial<Contributor> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('startup_contributors')
-      .select('*')
-      .order('display_order')
-      .order('created_at');
-    setRows((data as Contributor[]) ?? []);
+    const [{ data: contribs }, { data: exps }] = await Promise.all([
+      supabase
+        .from('startup_contributors')
+        .select('*')
+        .order('display_order')
+        .order('created_at'),
+      supabase
+        .from('startup_expenses')
+        .select('contributor_id, amount_cents, status'),
+    ]);
+    setRows((contribs as Contributor[]) ?? []);
+    const map = new Map<string, Totals>();
+    ((exps as any[]) ?? []).forEach((e) => {
+      if (!e.contributor_id) return;
+      const t = map.get(e.contributor_id) ?? { contributed: 0, paidBack: 0, stillOwed: 0 };
+      t.contributed += e.amount_cents;
+      if (e.status === 'reimbursed') t.paidBack += e.amount_cents;
+      t.stillOwed = t.contributed - t.paidBack;
+      map.set(e.contributor_id, t);
+    });
+    setTotals(map);
   }, []);
   useEffect(() => { load(); }, [load]);
 
   const totalEquity = (rows ?? []).reduce((s, r) => s + Number(r.equity_percent ?? 0), 0);
-  const totalCash = (rows ?? []).reduce((s, r) => s + (r.cash_contributed_cents ?? 0), 0);
+  const totalCash = Array.from(totals.values()).reduce((s, t) => s + t.contributed, 0);
+  const totalPaidBack = Array.from(totals.values()).reduce((s, t) => s + t.paidBack, 0);
 
   return (
     <View style={styles.tabRoot}>
       <View style={styles.barRow}>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryItem}>Total cash: <Text style={styles.summaryStrong}>{money(totalCash)}</Text></Text>
+          <Text style={styles.summaryItem}>Total contributed: <Text style={styles.summaryStrong}>{money(totalCash)}</Text></Text>
+          <Text style={styles.summaryItem}>Paid back: <Text style={styles.summaryStrong}>{money(totalPaidBack)}</Text></Text>
           <Text style={styles.summaryItem}>Equity allocated: <Text style={[styles.summaryStrong, totalEquity > 100 && { color: theme.colors.danger }]}>{totalEquity.toFixed(2)}%</Text></Text>
         </View>
         <Pressable style={styles.primaryBtn} onPress={() => setForm({})}>
@@ -552,28 +587,39 @@ function Contributors() {
       ) : rows.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No contributors yet.</Text>
-          <Text style={styles.emptyBody}>Add founders, investors, advisors, or anyone else who's put cash or equity into WyLD.</Text>
+          <Text style={styles.emptyBody}>Add founders, investors, advisors, or anyone else who's put cash or equity into WyLD. Their contribution amount comes from the expenses you log against them.</Text>
         </View>
       ) : (
         <View style={styles.list}>
-          {rows.map((c) => (
-            <Pressable key={c.id} style={styles.row} onPress={() => setForm(c)}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.rowName}>{c.name}</Text>
-                <Text style={styles.rowMeta}>
-                  {c.role || 'Contributor'}
-                  {c.joined_at ? `  ·  joined ${new Date(c.joined_at).toLocaleDateString()}` : ''}
-                </Text>
-                {c.notes ? <Text style={styles.rowNote} numberOfLines={1}>📝 {c.notes}</Text> : null}
-              </View>
-              <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                <Text style={styles.rowAmount}>{money(c.cash_contributed_cents)}</Text>
-                {c.equity_percent != null ? (
-                  <Text style={styles.equityPill}>{Number(c.equity_percent).toFixed(2)}% equity</Text>
-                ) : null}
-              </View>
-            </Pressable>
-          ))}
+          {rows.map((c) => {
+            const t = totals.get(c.id) ?? { contributed: 0, paidBack: 0, stillOwed: 0 };
+            return (
+              <Pressable key={c.id} style={styles.row} onPress={() => setForm(c)}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.rowName}>{c.name}</Text>
+                  <Text style={styles.rowMeta}>
+                    {c.role || 'Contributor'}
+                    {c.joined_at ? `  ·  joined ${new Date(c.joined_at + 'T00:00:00').toLocaleDateString()}` : ''}
+                  </Text>
+                  {c.notes ? <Text style={styles.rowNote} numberOfLines={1}>📝 {c.notes}</Text> : null}
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                  <Text style={styles.rowAmount}>{money(t.contributed)}</Text>
+                  <Text style={styles.contributorSub}>
+                    Paid back: <Text style={styles.summaryStrong}>{money(t.paidBack)}</Text>
+                  </Text>
+                  {t.stillOwed > 0 ? (
+                    <Text style={[styles.contributorSub, { color: '#B45309' }]}>
+                      Owed: <Text style={{ fontWeight: '800' }}>{money(t.stillOwed)}</Text>
+                    </Text>
+                  ) : null}
+                  {c.equity_percent != null ? (
+                    <Text style={styles.equityPill}>{Number(c.equity_percent).toFixed(2)}% equity</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
@@ -596,14 +642,12 @@ function ContributorEditor({
   setErr: (s: string | null) => void;
 }) {
   const [draft, setDraft] = useState<Partial<Contributor>>({});
-  const [cashStr, setCashStr] = useState('');
   const [equityStr, setEquityStr] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!form) return;
     setDraft(form);
-    setCashStr(form.cash_contributed_cents ? centsToStr(form.cash_contributed_cents) : '');
     setEquityStr(form.equity_percent != null ? String(form.equity_percent) : '');
   }, [form?.id]);
 
@@ -616,7 +660,6 @@ function ContributorEditor({
       user_id: draft.user_id ?? null,
       name: (draft.name ?? '').trim(),
       role: draft.role?.trim() || null,
-      cash_contributed_cents: dollarsToCents(cashStr),
       equity_percent: equityStr.trim() ? Number(equityStr) : null,
       notes: draft.notes?.trim() || null,
       joined_at: draft.joined_at || null,
@@ -664,35 +707,25 @@ function ContributorEditor({
                 style={modalStyles.input}
               />
             </Field>
-            <View style={modalStyles.row}>
-              <Field label="Cash contributed (USD)" style={{ flex: 1 }}>
-                <TextInput
-                  value={cashStr}
-                  onChangeText={(v) => setCashStr(cleanNum(v))}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  style={modalStyles.input}
-                />
-              </Field>
-              <Field label="Equity (%)" style={{ flex: 1 }}>
-                <TextInput
-                  value={equityStr}
-                  onChangeText={(v) => setEquityStr(cleanNum(v))}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  style={modalStyles.input}
-                />
-              </Field>
-            </View>
-            <Field label="Joined (date)">
+            <Field label="Equity (%)">
               <TextInput
-                value={draft.joined_at ?? ''}
-                onChangeText={(v) => setDraft({ ...draft, joined_at: v })}
-                placeholder="YYYY-MM-DD"
+                value={equityStr}
+                onChangeText={(v) => setEquityStr(cleanNum(v))}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
                 placeholderTextColor={theme.colors.textSecondary}
                 style={modalStyles.input}
+              />
+              <Text style={modalStyles.hint}>
+                Cash contributed is calculated automatically from the expenses
+                you log against this contributor.
+              </Text>
+            </Field>
+            <Field label="Joined (date)">
+              <DateTimeField
+                mode="date"
+                value={dateStrToDate(draft.joined_at ?? null)}
+                onChange={(d) => setDraft({ ...draft, joined_at: dateToStr(d) ?? undefined })}
               />
             </Field>
             <Field label="Notes">
@@ -804,7 +837,7 @@ function Milestones() {
                 <Text style={[styles.rowName, m.status === 'done' && styles.strike]}>{m.title}</Text>
                 {m.description ? <Text style={styles.rowMeta}>{m.description}</Text> : null}
                 {m.target_date ? (
-                  <Text style={styles.rowMeta}>Target {new Date(m.target_date).toLocaleDateString()}</Text>
+                  <Text style={styles.rowMeta}>Target {new Date(m.target_date + 'T00:00:00').toLocaleDateString()}</Text>
                 ) : null}
               </Pressable>
             </View>
@@ -890,12 +923,10 @@ function MilestoneEditor({
               />
             </Field>
             <Field label="Target date (optional)">
-              <TextInput
-                value={draft.target_date ?? ''}
-                onChangeText={(v) => setDraft({ ...draft, target_date: v })}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={theme.colors.textSecondary}
-                style={modalStyles.input}
+              <DateTimeField
+                mode="date"
+                value={dateStrToDate(draft.target_date ?? null)}
+                onChange={(d) => setDraft({ ...draft, target_date: dateToStr(d) ?? undefined })}
               />
             </Field>
             <View style={modalStyles.actionRow}>
@@ -992,6 +1023,7 @@ const styles = StyleSheet.create({
     color: theme.colors.wyldPurple, backgroundColor: '#f3effe',
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
   },
+  contributorSub: { fontSize: 11, color: theme.colors.textSecondary, fontVariant: ['tabular-nums'] as any },
 
   checkBox: {
     width: 26, height: 26, borderRadius: 6,
@@ -1035,6 +1067,7 @@ const modalStyles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 9, fontSize: 14,
     color: theme.colors.charcoal, backgroundColor: '#fff',
   },
+  hint: { fontSize: 11, color: theme.colors.textSecondary, lineHeight: 16, marginTop: 4 },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   saveBtn: {
     flex: 1, backgroundColor: theme.colors.wyldPurple,

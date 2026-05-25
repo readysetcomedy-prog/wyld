@@ -30,3 +30,14 @@ curl -s -X POST \
 ```
 
 A `[]` response means success (DDL returns no rows).
+
+## Dates: always use a picker
+
+Anywhere a user enters a date or date+time — on the owner dashboard,
+admin pages, member portal, public gym site, schedule, time clock,
+expenses, milestones, anything — render a picker, never a plain text
+input. The picker must work on desktop browsers, mobile browsers, AND
+native (iOS/Android). The shared `components/DateTimeField` covers
+this; use `mode='date'` for date-only fields and the default
+`mode='datetime'` for date+time. If you find a `<TextInput>` taking
+free-text date strings somewhere, replace it.
