@@ -65,9 +65,11 @@ const EXPENSE_CATEGORIES = [
   'Other',
 ];
 
+// Red = we still owe money, green = paid back. Intentionally NOT amber/
+// brown so it doesn't read as a gym brand color leaking into admin.
 const STATUS_COLORS: Record<string, string> = {
-  unreimbursed: '#B45309',
-  reimbursed: '#15803D',
+  unreimbursed: '#DC2626',  // red-600
+  reimbursed: '#15803D',    // green-700
 };
 const STATUS_LABELS: Record<string, string> = {
   unreimbursed: 'Owed',
@@ -185,7 +187,7 @@ function StatCard({
   const accent =
     tone === 'good' ? '#15803D'
     : tone === 'bad' ? theme.colors.danger
-    : tone === 'warn' ? '#B45309'
+    : tone === 'warn' ? '#DC2626'
     : theme.colors.textSecondary;
   return (
     <View style={styles.statCard}>
@@ -663,7 +665,7 @@ function Contributors() {
                     Paid back: <Text style={styles.summaryStrong}>{money(t.paidBack)}</Text>
                   </Text>
                   {t.stillOwed > 0 ? (
-                    <Text style={[styles.contributorSub, { color: '#B45309' }]}>
+                    <Text style={[styles.contributorSub, { color: '#DC2626' }]}>
                       Owed: <Text style={{ fontWeight: '800' }}>{money(t.stillOwed)}</Text>
                     </Text>
                   ) : null}
